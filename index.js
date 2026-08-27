@@ -47,8 +47,35 @@ client.once("ready", () => {
     console.log(`🤖 Bot online como ${client.user.tag}`);
 });
 
-// Executar comandos Slash
+// Interações
 client.on("interactionCreate", async interaction => {
+
+    // 🔘 Botões
+    if (interaction.isButton()) {
+        const comando = client.commands.get("daily");
+
+        if (
+            comando &&
+            typeof comando.handleButton === "function"
+        ) {
+            try {
+                await comando.handleButton(interaction);
+            } catch (erro) {
+                console.error(erro);
+
+                if (!interaction.replied && !interaction.deferred) {
+                    await interaction.reply({
+                        content: "❌ Ocorreu um erro ao processar o botão.",
+                        ephemeral: true
+                    });
+                }
+            }
+        }
+
+        return;
+    }
+
+    // Slash Commands
     if (!interaction.isChatInputCommand()) return;
 
     const comando = client.commands.get(interaction.commandName);
