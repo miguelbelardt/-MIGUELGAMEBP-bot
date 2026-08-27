@@ -3,28 +3,38 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
-const database = require("../database/database");
+const { getSaldo } = require("../database/database");
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("atm")
-        .setDescription("Veja seu saldo de moedas. 💰"),
+        .setDescription("Veja seu saldo de moedas 💰"),
 
     async execute(interaction) {
         const userId = interaction.user.id;
 
-        const saldo = database.getSaldo(userId);
+        try {
+            const saldo = await getSaldo(userId);
 
-        const embed = new EmbedBuilder()
-            .setTitle("🏦 ATM")
-            .setDescription(
-                `💳 **Conta de ${interaction.user.username}**\n\n` +
-                `💰 Saldo: **${saldo} moedas**`
-            )
-            .setColor("#2ecc71");
+            const embed = new EmbedBuilder()
+                .setTitle("🏦 ATM")
+                .setDescription(
+                    `💳 **${interaction.user.username}**, seu saldo é:\n\n` +
+                    `💰 **${saldo} moedas**`
+                )
+                .setColor("Green");
 
-        await interaction.reply({
-            embeds: [embed]
-        });
+            await interaction.reply({
+                embeds: [embed]
+            });
+
+        } catch (erro) {
+            console.error("Erro no ATM:", erro);
+
+            await interaction.reply({
+                content: "❌ Não foi possível consultar seu saldo.",
+                ephemeral: true
+            });
+        }
     }
 };
