@@ -7,7 +7,7 @@ const pool = new Pool({
     }
 });
 
-// Criar tabela de usuários
+// Criar tabela e corrigir saldos antigos
 async function inicializarBanco() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -16,16 +16,33 @@ async function inicializarBanco() {
         )
     `);
 
+    // Corrigir usuários antigos que ficaram com saldo NULL
+    await pool.query(`
+        UPDATE usuarios
+        SET saldo = 0
+        WHERE saldo IS NULL
+    `);
+
     console.log("💾 Banco de dados conectado e tabela pronta!");
 }
 
-// Criar usuário se ainda não existir
+// Criar usuário se não existir
 async function criarUsuario(userId) {
     await pool.query(
         `
         INSERT INTO usuarios (id, saldo)
         VALUES ($1, 0)
         ON CONFLICT (id) DO NOTHING
+        `,
+        [userId]
+    );
+
+    // Garantir que o saldo nunca fique NULL
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET saldo = 0
+        WHERE id = $1 AND saldo IS NULL
         `,
         [userId]
     );
@@ -36,7 +53,11 @@ async function getSaldo(userId) {
     await criarUsuario(userId);
 
     const resultado = await pool.query(
-        "SELECT saldo FROM usuarios WHERE id = $1",
+        `
+        SELECT COALESCE(saldo, 0) AS saldo
+        FROM usuarios
+        WHERE id = $1
+        `,
         [userId]
     );
 
@@ -50,7 +71,7 @@ async function alterarSaldo(userId, quantidade) {
     await pool.query(
         `
         UPDATE usuarios
-        SET saldo = saldo + $1
+        SET saldo = COALESCE(saldo, 0) + $1
         WHERE id = $2
         `,
         [quantidade, userId]
