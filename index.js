@@ -4,6 +4,7 @@ const {
     Collection
 } = require("discord.js");
 
+const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
@@ -73,5 +74,18 @@ client.on("interactionCreate", async interaction => {
     }
 });
 
-// Token
+// 🌐 Servidor HTTP para o Render
+const PORT = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "text/plain"
+    });
+
+    res.end("MIGUELGAMEBP-bot está online! 🤖");
+}).listen(PORT, "0.0.0.0", () => {
+    console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
+});
+
+// 🔑 Token
 client.login(process.env.DISCORD_TOKEN);
