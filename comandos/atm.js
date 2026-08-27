@@ -3,14 +3,17 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
+const database = require("../database/database");
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("atm")
         .setDescription("Veja seu saldo de moedas. 💰"),
 
     async execute(interaction) {
-        // Por enquanto, saldo inicial
-        const saldo = 0;
+        const userId = interaction.user.id;
+
+        const saldo = database.getSaldo(userId);
 
         const embed = new EmbedBuilder()
             .setTitle("🏦 ATM")
