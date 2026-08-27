@@ -7,6 +7,9 @@ const {
 const fs = require("fs");
 const path = require("path");
 
+// 👑 ID DO DONO DO BOT
+const DONO_ID = "1124140396516225044";
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
