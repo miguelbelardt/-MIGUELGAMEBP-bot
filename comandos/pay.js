@@ -31,7 +31,6 @@ module.exports = {
         const destinatario = interaction.options.getUser("usuario");
         const quantidade = interaction.options.getInteger("quantidade");
 
-        // ❌ Não pode pagar para si mesmo
         if (destinatario.id === remetenteId) {
             return interaction.reply({
                 content: "❌ Você não pode enviar moedas para si mesmo.",
@@ -39,7 +38,6 @@ module.exports = {
             });
         }
 
-        // ❌ Não pode pagar bots
         if (destinatario.bot) {
             return interaction.reply({
                 content: "❌ Você não pode enviar moedas para um bot.",
@@ -48,42 +46,51 @@ module.exports = {
         }
 
         try {
-            const saldo = await getSaldo(remetenteId);
+            const saldoRemetente = await getSaldo(remetenteId);
 
-            // ❌ Saldo insuficiente
-            if (saldo < quantidade) {
+            if (saldoRemetente < quantidade) {
                 return interaction.reply({
                     content:
-                        `❌ Você não tem moedas suficientes.\n` +
-                        `💰 Seu saldo: **${saldo} moedas**\n` +
-                        `💸 Tentativa: **${quantidade} moedas**`,
+                        `❌ Saldo insuficiente.\n\n` +
+                        `💰 Seu saldo: **${saldoRemetente} moedas**\n` +
+                        `💸 Você tentou enviar: **${quantidade} moedas**`,
                     ephemeral: true
                 });
             }
 
-            // 💸 Retira do remetente
+            // Retira do remetente
             await alterarSaldo(remetenteId, -quantidade);
 
-            // 💰 Adiciona ao destinatário
-            await alterarSaldo(destinatario.id, quantidade);
+            try {
+                // Adiciona ao destinatário
+                await alterarSaldo(destinatario.id, quantidade);
+            } catch (erroDestino) {
+                // Se falhar, devolve o dinheiro ao remetente
+                await alterarSaldo(remetenteId, quantidade);
+                throw erroDestino;
+            }
+
+            const novoSaldo = await getSaldo(remetenteId);
 
             const embed = new EmbedBuilder()
-                .setTitle("💸 PAGAMENTO")
+                .setTitle("💸 PAGAMENTO REALIZADO")
                 .setDescription(
-                    `💰 ${interaction.user} enviou **${quantidade} moedas** para ${destinatario}!\n\n` +
-                    `💳 Seu novo saldo: **${saldo - quantidade} moedas**`
+                    `${interaction.user} enviou **${quantidade} moedas** para ${destinatario}.\n\n` +
+                    `💰 Seu novo saldo: **${novoSaldo} moedas**`
                 )
                 .setColor("Green");
 
-            await interaction.reply({
+            return interaction.reply({
                 embeds: [embed]
             });
 
         } catch (erro) {
-            console.error("Erro no PAY:", erro);
+            console.error("❌ Erro no PAY:", erro);
 
-            await interaction.reply({
-                content: "❌ Não foi possível realizar o pagamento.",
+            return interaction.reply({
+                content:
+                    "❌ Não foi possível realizar o pagamento agora. " +
+                    "Tente novamente mais tarde.",
                 ephemeral: true
             });
         }
