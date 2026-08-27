@@ -3,46 +3,23 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
+const database = require("../database/database");
+
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName("pay")
-        .setDescription("Envie moedas para outro usuário. 💸")
-        .addUserOption(option =>
-            option
-                .setName("usuario")
-                .setDescription("Usuário que receberá as moedas")
-                .setRequired(true)
-        )
-        .addIntegerOption(option =>
-            option
-                .setName("quantidade")
-                .setDescription("Quantidade de moedas para enviar")
-                .setMinValue(1)
-                .setRequired(true)
-        ),
+        .setName("atm")
+        .setDescription("Veja seu saldo de moedas. 💰"),
 
     async execute(interaction) {
-        const usuario = interaction.options.getUser("usuario");
-        const quantidade = interaction.options.getInteger("quantidade");
+        const userId = interaction.user.id;
 
-        if (usuario.id === interaction.user.id) {
-            return interaction.reply({
-                content: "❌ Você não pode enviar moedas para você mesmo.",
-                ephemeral: true
-            });
-        }
-
-        if (usuario.bot) {
-            return interaction.reply({
-                content: "❌ Você não pode enviar moedas para um bot.",
-                ephemeral: true
-            });
-        }
+        const saldo = database.getSaldo(userId);
 
         const embed = new EmbedBuilder()
-            .setTitle("💸 Transferência")
+            .setTitle("🏦 ATM")
             .setDescription(
-                `**${interaction.user.username}** enviou **${quantidade} moedas** para **${usuario.username}**.`
+                `💳 **Conta de ${interaction.user.username}**\n\n` +
+                `💰 Saldo: **${saldo} moedas**`
             )
             .setColor("#2ecc71");
 
