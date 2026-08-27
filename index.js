@@ -46,6 +46,13 @@ for (const arquivo of arquivosComandos) {
 // Quando o bot estiver online
 client.once("ready", () => {
     console.log(`🤖 Bot online como ${client.user.tag}`);
+
+    // 🎮 Status do bot
+    client.user.setActivity("Minecraft", {
+        type: 0
+    });
+
+    console.log("🎮 Status definido: Jogando Minecraft");
 });
 
 // Interações
