@@ -7,6 +7,7 @@ const {
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { inicializarBanco } = require("./database/database");
 
 // 👑 ID DO DONO DO BOT
 const DONO_ID = "1124140396516225044";
@@ -114,5 +115,17 @@ http.createServer((req, res) => {
     console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
 });
 
-// 🔑 Token
-client.login(process.env.DISCORD_TOKEN);
+// 💾 Inicializar banco e conectar o bot
+async function iniciar() {
+    try {
+        await inicializarBanco();
+        console.log("💾 Banco de dados inicializado!");
+
+        await client.login(process.env.DISCORD_TOKEN);
+    } catch (erro) {
+        console.error("❌ Erro ao iniciar o bot:", erro);
+        process.exit(1);
+    }
+}
+
+iniciar();
