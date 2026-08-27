@@ -1,99 +1,66 @@
-const fs = require("fs");
-const path = require("path");
+const { Pool } = require("pg");
 
-const databasePath = path.join(__dirname, "data.json");
-
-let data = {};
-
-if (fs.existsSync(databasePath)) {
-    try {
-        data = JSON.parse(fs.readFileSync(databasePath, "utf8"));
-    } catch (error) {
-        console.error("❌ Erro ao carregar o banco de dados:", error);
-        data = {};
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
     }
+});
+
+// Criar tabela de usuários
+async function inicializarBanco() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id VARCHAR(30) PRIMARY KEY,
+            saldo BIGINT NOT NULL DEFAULT 0
+        )
+    `);
+
+    console.log("💾 Banco de dados conectado e tabela pronta!");
 }
 
-function salvar() {
-    fs.writeFileSync(
-        databasePath,
-        JSON.stringify(data, null, 2),
-        "utf8"
+// Criar usuário se ainda não existir
+async function criarUsuario(userId) {
+    await pool.query(
+        `
+        INSERT INTO usuarios (id, saldo)
+        VALUES ($1, 0)
+        ON CONFLICT (id) DO NOTHING
+        `,
+        [userId]
     );
 }
 
-function criarUsuario(userId) {
-    if (!data[userId]) {
-        data[userId] = {
-            saldo: 0,
-            ultimoDaily: 0,
-            notificacaoDaily: false
-        };
+// Pegar saldo
+async function getSaldo(userId) {
+    await criarUsuario(userId);
 
-        salvar();
-    }
+    const resultado = await pool.query(
+        "SELECT saldo FROM usuarios WHERE id = $1",
+        [userId]
+    );
 
-    return data[userId];
+    return Number(resultado.rows[0].saldo);
 }
 
-function getSaldo(userId) {
-    return criarUsuario(userId).saldo;
-}
+// Alterar saldo
+async function alterarSaldo(userId, quantidade) {
+    await criarUsuario(userId);
 
-function adicionarSaldo(userId, quantidade) {
-    const usuario = criarUsuario(userId);
-
-    usuario.saldo += quantidade;
-
-    salvar();
-
-    return usuario.saldo;
-}
-
-function removerSaldo(userId, quantidade) {
-    const usuario = criarUsuario(userId);
-
-    if (usuario.saldo < quantidade) {
-        return false;
-    }
-
-    usuario.saldo -= quantidade;
-
-    salvar();
-
-    return true;
-}
-
-function getUltimoDaily(userId) {
-    return criarUsuario(userId).ultimoDaily;
-}
-
-function setUltimoDaily(userId, tempo) {
-    const usuario = criarUsuario(userId);
-
-    usuario.ultimoDaily = tempo;
-
-    salvar();
-}
-
-function getNotificacaoDaily(userId) {
-    return criarUsuario(userId).notificacaoDaily;
-}
-
-function setNotificacaoDaily(userId, ativado) {
-    const usuario = criarUsuario(userId);
-
-    usuario.notificacaoDaily = ativado;
-
-    salvar();
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET saldo = saldo + $1
+        WHERE id = $2
+        `,
+        [quantidade, userId]
+    );
 }
 
 module.exports = {
+    pool,
+    inicializarBanco,
+    criarUsuario,
     getSaldo,
-    adicionarSaldo,
-    removerSaldo,
-    getUltimoDaily,
-    setUltimoDaily,
-    getNotificacaoDaily,
-    setNotificacaoDaily
+    alterarSaldo
 };
