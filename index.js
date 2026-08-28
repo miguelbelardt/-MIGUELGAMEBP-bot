@@ -149,17 +149,14 @@ client.on("messageCreate", async message => {
 
     if (!conteudo) return;
 
-    // Aceita M ou m
     if (conteudo.charAt(0).toLowerCase() !== PREFIXO) {
         return;
     }
 
-    // Remove o M/m
     const depoisDoPrefixo = conteudo.slice(1).trim();
 
     if (!depoisDoPrefixo) return;
 
-    // Separa comando e argumentos
     const partes = depoisDoPrefixo.split(/\s+/);
     const nomeComando = partes.shift().toLowerCase();
 
@@ -182,16 +179,13 @@ client.on("messageCreate", async message => {
                 description:
                     `Olá! 👋\n` +
                     `Aqui você encontra informações sobre como usar o bot.\n\n` +
-
                     `🔤 **PREFIXO**\n` +
                     `O prefixo do bot é \`M\` ou \`m\`.\n\n` +
-
                     `Você pode usar:\n` +
                     `\`M ajuda\`\n` +
                     `\`m ajuda\`\n` +
                     `\`Majuda\`\n` +
                     `\`majuda\`\n\n` +
-
                     `📋 **COMANDOS**\n` +
                     `Use o botão abaixo para visualizar todos os comandos disponíveis.`
             };
@@ -253,10 +247,6 @@ client.on("messageCreate", async message => {
         return;
     }
 
-    // =================================================
-    // ⚠️ COMANDO AINDA SEM SUPORTE POR PREFIXO
-    // =================================================
-
     console.log(
         `⚠️ O comando ${nomeComando} ainda não possui suporte por prefixo.`
     );
@@ -269,7 +259,11 @@ client.on("messageCreate", async message => {
 client.on("interactionCreate", async interaction => {
 
     console.log(
-        `📩 Interação recebida: ${interaction.commandName || interaction.customId || "desconhecida"}`
+        `📩 Interação recebida: ${
+            interaction.commandName ||
+            interaction.customId ||
+            "desconhecida"
+        }`
     );
 
     // =================================================
@@ -278,7 +272,10 @@ client.on("interactionCreate", async interaction => {
 
     if (interaction.isButton()) {
 
-        // Botão do Daily
+        // -----------------------------
+        // DAILY
+        // -----------------------------
+
         if (interaction.customId === "daily_notificar") {
             const comando = client.commands.get("daily");
 
@@ -306,7 +303,10 @@ client.on("interactionCreate", async interaction => {
             return;
         }
 
-        // Botão da Central de Ajuda
+        // -----------------------------
+        // CENTRAL DE AJUDA
+        // -----------------------------
+
         if (interaction.customId === "ajuda_comandos") {
             const comando = client.commands.get("ajuda");
 
@@ -325,6 +325,73 @@ client.on("interactionCreate", async interaction => {
                     if (!interaction.replied && !interaction.deferred) {
                         await interaction.reply({
                             content: "❌ Ocorreu um erro ao processar o botão.",
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
+
+            return;
+        }
+
+        // -----------------------------
+        // 🎨 EMBED
+        // -----------------------------
+
+        if (interaction.customId.startsWith("embed_")) {
+            const comando = client.commands.get("embed");
+
+            if (
+                comando &&
+                typeof comando.handleButton === "function"
+            ) {
+                try {
+                    await comando.handleButton(interaction);
+                } catch (erro) {
+                    console.error(
+                        "❌ Erro no botão do embed:",
+                        erro
+                    );
+
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: "❌ Ocorreu um erro ao processar o botão do embed.",
+                            ephemeral: true
+                        });
+                    }
+                }
+            }
+
+            return;
+        }
+
+        return;
+    }
+
+    // =================================================
+    // 📝 MODAIS
+    // =================================================
+
+    if (interaction.isModalSubmit()) {
+
+        if (interaction.customId.startsWith("embed_modal_")) {
+            const comando = client.commands.get("embed");
+
+            if (
+                comando &&
+                typeof comando.handleModal === "function"
+            ) {
+                try {
+                    await comando.handleModal(interaction);
+                } catch (erro) {
+                    console.error(
+                        "❌ Erro no modal do embed:",
+                        erro
+                    );
+
+                    if (!interaction.replied && !interaction.deferred) {
+                        await interaction.reply({
+                            content: "❌ Ocorreu um erro ao processar o formulário.",
                             ephemeral: true
                         });
                     }
