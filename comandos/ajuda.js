@@ -1,5 +1,3 @@
-Nome do arquivo: "comandos/ajuda.js"
-
 const {
     SlashCommandBuilder,
     EmbedBuilder,
