@@ -9,8 +9,26 @@ const fs = require("fs");
 const path = require("path");
 const { inicializarBanco } = require("./database/database");
 
-// 🌐 Servidor HTTP para o Render
-// Inicia primeiro para o Render detectar a porta imediatamente.
+// =====================================================
+// 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
+// =====================================================
+
+process.on("unhandledRejection", erro => {
+    console.error("❌ UNHANDLED REJECTION:", erro);
+});
+
+process.on("uncaughtException", erro => {
+    console.error("❌ UNCAUGHT EXCEPTION:", erro);
+});
+
+process.on("warning", aviso => {
+    console.warn("⚠️ NODE WARNING:", aviso);
+});
+
+// =====================================================
+// 🌐 SERVIDOR HTTP PARA O RENDER
+// =====================================================
+
 const PORT = process.env.PORT || 3000;
 
 const servidor = http.createServer((req, res) => {
@@ -25,8 +43,15 @@ servidor.listen(PORT, "0.0.0.0", () => {
     console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
 });
 
+// =====================================================
 // 👑 ID DO DONO DO BOT
+// =====================================================
+
 const DONO_ID = "1124140396516225044";
+
+// =====================================================
+// 🤖 CLIENTE DISCORD
+// =====================================================
 
 const client = new Client({
     intents: [
@@ -36,34 +61,43 @@ const client = new Client({
     ]
 });
 
-// Coleção de comandos
+// =====================================================
+// 📦 COLEÇÃO DE COMANDOS
+// =====================================================
+
 client.commands = new Collection();
 
 // Pasta dos comandos
 const comandosPath = path.join(__dirname, "comandos");
 
-// Carregar todos os arquivos .js da pasta comandos
+// Carregar todos os arquivos .js
 const arquivosComandos = fs
     .readdirSync(comandosPath)
     .filter(arquivo => arquivo.endsWith(".js"));
 
 for (const arquivo of arquivosComandos) {
-    const caminho = path.join(comandosPath, arquivo);
-    const comando = require(caminho);
+    try {
+        const caminho = path.join(comandosPath, arquivo);
+        const comando = require(caminho);
 
-    if ("data" in comando && "execute" in comando) {
-        client.commands.set(comando.data.name, comando);
-        console.log(`✅ Comando carregado: ${comando.data.name}`);
-    } else {
-        console.log(`⚠️ Comando inválido: ${arquivo}`);
+        if ("data" in comando && "execute" in comando) {
+            client.commands.set(comando.data.name, comando);
+            console.log(`✅ Comando carregado: ${comando.data.name}`);
+        } else {
+            console.log(`⚠️ Comando inválido: ${arquivo}`);
+        }
+    } catch (erro) {
+        console.error(`❌ Erro ao carregar ${arquivo}:`, erro);
     }
 }
 
-// Quando o bot estiver online
+// =====================================================
+// 🟢 BOT ONLINE
+// =====================================================
+
 client.once("ready", () => {
     console.log(`🤖 Bot online como ${client.user.tag}`);
 
-    // 🎮 Status do bot
     client.user.setActivity("Minecraft", {
         type: 0
     });
@@ -71,7 +105,10 @@ client.once("ready", () => {
     console.log("🎮 Status definido: Jogando Minecraft");
 });
 
-// Erros do cliente Discord
+// =====================================================
+// 🔌 EVENTOS DE CONEXÃO DO DISCORD
+// =====================================================
+
 client.on("error", erro => {
     console.error("❌ Erro no cliente Discord:", erro);
 });
@@ -80,10 +117,37 @@ client.on("warn", aviso => {
     console.warn("⚠️ Aviso do Discord:", aviso);
 });
 
-// Interações
+client.on("shardDisconnect", (evento, shardId) => {
+    console.error(
+        `🔴 Discord desconectou o shard ${shardId}.`,
+        evento
+    );
+});
+
+client.on("shardReconnecting", shardId => {
+    console.log(`🔄 Tentando reconectar o shard ${shardId}...`);
+});
+
+client.on("shardResume", (replayedEvents, shardId) => {
+    console.log(
+        `🟢 Conexão restaurada no shard ${shardId}. Eventos recuperados: ${replayedEvents}`
+    );
+});
+
+// =====================================================
+// 📩 INTERAÇÕES
+// =====================================================
+
 client.on("interactionCreate", async interaction => {
 
-    // 🔘 Botões
+    console.log(
+        `📩 Interação recebida: ${interaction.commandName || "botão"}`
+    );
+
+    // =================================================
+    // 🔘 BOTÕES
+    // =================================================
+
     if (interaction.isButton()) {
         const comando = client.commands.get("daily");
 
@@ -94,7 +158,7 @@ client.on("interactionCreate", async interaction => {
             try {
                 await comando.handleButton(interaction);
             } catch (erro) {
-                console.error(erro);
+                console.error("❌ Erro no botão:", erro);
 
                 if (!interaction.replied && !interaction.deferred) {
                     await interaction.reply({
@@ -108,17 +172,33 @@ client.on("interactionCreate", async interaction => {
         return;
     }
 
-    // Slash Commands
+    // =================================================
+    // 💬 SLASH COMMANDS
+    // =================================================
+
     if (!interaction.isChatInputCommand()) return;
 
     const comando = client.commands.get(interaction.commandName);
 
-    if (!comando) return;
+    if (!comando) {
+        console.log(
+            `⚠️ Comando não encontrado: ${interaction.commandName}`
+        );
+        return;
+    }
 
     try {
         await comando.execute(interaction);
+
+        console.log(
+            `✅ Comando executado: /${interaction.commandName}`
+        );
+
     } catch (erro) {
-        console.error(erro);
+        console.error(
+            `❌ Erro no comando /${interaction.commandName}:`,
+            erro
+        );
 
         if (interaction.replied || interaction.deferred) {
             await interaction.followUp({
@@ -134,13 +214,17 @@ client.on("interactionCreate", async interaction => {
     }
 });
 
-// 💾 Inicializar banco e conectar o bot
+// =====================================================
+// 💾 BANCO + LOGIN DO DISCORD
+// =====================================================
+
 async function iniciar() {
     try {
         console.log("🚀 Iniciando bot...");
 
         console.log("💾 Conectando ao banco...");
         await inicializarBanco();
+
         console.log("💾 Banco de dados inicializado!");
 
         console.log("🔑 Tentando conectar ao Discord...");
@@ -148,6 +232,7 @@ async function iniciar() {
         await client.login(process.env.DISCORD_TOKEN);
 
         console.log("🔑 Login do Discord concluído!");
+
     } catch (erro) {
         console.error("❌ Erro ao iniciar o bot:", erro);
         process.exit(1);
