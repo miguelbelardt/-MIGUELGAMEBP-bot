@@ -221,7 +221,40 @@ client.on("messageCreate", async message => {
     }
 
     // =================================================
-    // ⚠️ OUTROS COMANDOS
+    // 🔤 EXECUTAR COMANDO POR PREFIXO
+    // =================================================
+
+    if (typeof comando.handlePrefix === "function") {
+        try {
+            await comando.handlePrefix(message, partes);
+
+            console.log(
+                `✅ Comando por prefixo executado: ${message.content}`
+            );
+
+        } catch (erro) {
+            console.error(
+                `❌ Erro no comando por prefixo ${nomeComando}:`,
+                erro
+            );
+
+            try {
+                await message.reply(
+                    "❌ Ocorreu um erro ao executar esse comando."
+                );
+            } catch (erroResposta) {
+                console.error(
+                    "❌ Não foi possível enviar a mensagem de erro:",
+                    erroResposta
+                );
+            }
+        }
+
+        return;
+    }
+
+    // =================================================
+    // ⚠️ COMANDO AINDA SEM SUPORTE POR PREFIXO
     // =================================================
 
     console.log(
