@@ -8,10 +8,11 @@ const {
 
 const {
     getSaldo,
-    alterarSaldo
+    alterarSaldo,
+    getUltimoDaily,
+    salvarUltimoDaily
 } = require("../database/database");
 
-const cooldowns = new Map();
 const notificacoes = new Set();
 const timersNotificacao = new Map();
 
@@ -53,23 +54,76 @@ function sortearRecompensa() {
     return Math.floor(Math.random() * (25000 - 20001 + 1)) + 20001;
 }
 
+// =====================================================
+// ⏰ FORMATAR HORÁRIO
+// =====================================================
+
+function formatarHorario(timestamp) {
+    return new Date(timestamp).toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+    });
+}
+
+// =====================================================
+// ⏳ INFORMAÇÃO DO COOLDOWN
+// =====================================================
+
+function calcularTempoRestante(ultimoDaily) {
+    const proximoDaily = ultimoDaily + COOLDOWN;
+    const restante = proximoDaily - Date.now();
+
+    return {
+        proximoDaily,
+        restante
+    };
+}
+
+// =====================================================
+// 🔔 BOTÃO DE NOTIFICAÇÃO
+// =====================================================
+
+function criarBotaoNotificacao(ativa = false) {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId("daily_notificar")
+                .setLabel(
+                    ativa
+                        ? "🔔 Notificação ativada"
+                        : "🔔 Me notificar amanhã"
+                )
+                .setStyle(
+                    ativa
+                        ? ButtonStyle.Success
+                        : ButtonStyle.Primary
+                )
+                .setDisabled(ativa)
+        );
+}
+
+// =====================================================
+// 💬 SLASH COMMAND
+// =====================================================
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("daily")
         .setDescription("Resgate sua recompensa diária! 💰"),
 
-    // =====================================================
-    // 💬 SLASH COMMAND
-    // =====================================================
-
     async execute(interaction) {
         const userId = interaction.user.id;
-        const agora = Date.now();
 
-        if (cooldowns.has(userId)) {
-            const ultimoDaily = cooldowns.get(userId);
-            const proximoDaily = ultimoDaily + COOLDOWN;
-            const restante = proximoDaily - agora;
+        const ultimoDaily = await getUltimoDaily(userId);
+
+        if (ultimoDaily) {
+            const { proximoDaily, restante } =
+                calcularTempoRestante(ultimoDaily);
 
             if (restante > 0) {
                 const horas = Math.floor(
@@ -84,44 +138,17 @@ module.exports = {
                     (restante % (1000 * 60)) / 1000
                 );
 
-                const dataProximoDaily = new Date(proximoDaily);
-
-                const horario = dataProximoDaily.toLocaleString("pt-BR", {
-                    timeZone: "America/Sao_Paulo",
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit"
-                });
-
                 const embed = new EmbedBuilder()
                     .setTitle("⏳ DAILY")
                     .setDescription(
                         `Você já pegou seu daily!\n\n` +
                         `🕐 Próximo daily em **${horas}h ${minutos}min ${segundos}s**.\n` +
-                        `📅 Disponível em **${horario}**.`
+                        `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
                     );
 
-                const notificacaoAtiva = notificacoes.has(userId);
-
-                const botao = new ButtonBuilder()
-                    .setCustomId("daily_notificar")
-                    .setLabel(
-                        notificacaoAtiva
-                            ? "🔔 Notificação ativada"
-                            : "🔔 Me notificar"
-                    )
-                    .setStyle(
-                        notificacaoAtiva
-                            ? ButtonStyle.Success
-                            : ButtonStyle.Primary
-                    )
-                    .setDisabled(notificacaoAtiva);
-
-                const row = new ActionRowBuilder()
-                    .addComponents(botao);
+                const row = criarBotaoNotificacao(
+                    notificacoes.has(userId)
+                );
 
                 return interaction.reply({
                     embeds: [embed],
@@ -129,30 +156,16 @@ module.exports = {
                     ephemeral: true
                 });
             }
-
-            cooldowns.delete(userId);
         }
 
-        cooldowns.set(userId, agora);
-
-        // 💰 Sorteia a recompensa
+        const agora = Date.now();
         const recompensa = sortearRecompensa();
 
         await alterarSaldo(userId, recompensa);
+        await salvarUltimoDaily(userId, agora);
 
         const novoSaldo = await getSaldo(userId);
-
-        const proximoDaily = new Date(agora + COOLDOWN);
-
-        const horario = proximoDaily.toLocaleString("pt-BR", {
-            timeZone: "America/Sao_Paulo",
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit"
-        });
+        const proximoDaily = agora + COOLDOWN;
 
         const embed = new EmbedBuilder()
             .setTitle("🎁 DAILY")
@@ -160,19 +173,13 @@ module.exports = {
                 `Parabéns, ${interaction.user}!\n\n` +
                 `🎲 Você ganhou **${recompensa} moedas**!\n` +
                 `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
-                `🕐 Seu próximo daily estará disponível em **${horario}**.`
+                `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
             )
             .setFooter({
                 text: "Volte amanhã para tentar a sorte novamente!"
             });
 
-        const botao = new ButtonBuilder()
-            .setCustomId("daily_notificar")
-            .setLabel("🔔 Me notificar amanhã")
-            .setStyle(ButtonStyle.Primary);
-
-        const row = new ActionRowBuilder()
-            .addComponents(botao);
+        const row = criarBotaoNotificacao();
 
         await interaction.reply({
             embeds: [embed],
@@ -186,13 +193,13 @@ module.exports = {
 
     async handlePrefix(message) {
         const userId = message.author.id;
-        const agora = Date.now();
 
         try {
-            if (cooldowns.has(userId)) {
-                const ultimoDaily = cooldowns.get(userId);
-                const proximoDaily = ultimoDaily + COOLDOWN;
-                const restante = proximoDaily - agora;
+            const ultimoDaily = await getUltimoDaily(userId);
+
+            if (ultimoDaily) {
+                const { proximoDaily, restante } =
+                    calcularTempoRestante(ultimoDaily);
 
                 if (restante > 0) {
                     const horas = Math.floor(
@@ -207,74 +214,33 @@ module.exports = {
                         (restante % (1000 * 60)) / 1000
                     );
 
-                    const dataProximoDaily = new Date(proximoDaily);
-
-                    const horario = dataProximoDaily.toLocaleString("pt-BR", {
-                        timeZone: "America/Sao_Paulo",
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit"
-                    });
-
                     const embed = new EmbedBuilder()
                         .setTitle("⏳ DAILY")
                         .setDescription(
                             `Você já pegou seu daily!\n\n` +
                             `🕐 Próximo daily em **${horas}h ${minutos}min ${segundos}s**.\n` +
-                            `📅 Disponível em **${horario}**.`
+                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
                         );
 
-                    const notificacaoAtiva = notificacoes.has(userId);
-
-                    const botao = new ButtonBuilder()
-                        .setCustomId("daily_notificar")
-                        .setLabel(
-                            notificacaoAtiva
-                                ? "🔔 Notificação ativada"
-                                : "🔔 Me notificar"
-                        )
-                        .setStyle(
-                            notificacaoAtiva
-                                ? ButtonStyle.Success
-                                : ButtonStyle.Primary
-                        )
-                        .setDisabled(notificacaoAtiva);
-
-                    const row = new ActionRowBuilder()
-                        .addComponents(botao);
+                    const row = criarBotaoNotificacao(
+                        notificacoes.has(userId)
+                    );
 
                     return message.reply({
                         embeds: [embed],
                         components: [row]
                     });
                 }
-
-                cooldowns.delete(userId);
             }
 
-            cooldowns.set(userId, agora);
-
-            // 💰 Sorteia a recompensa
+            const agora = Date.now();
             const recompensa = sortearRecompensa();
 
             await alterarSaldo(userId, recompensa);
+            await salvarUltimoDaily(userId, agora);
 
             const novoSaldo = await getSaldo(userId);
-
-            const proximoDaily = new Date(agora + COOLDOWN);
-
-            const horario = proximoDaily.toLocaleString("pt-BR", {
-                timeZone: "America/Sao_Paulo",
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit"
-            });
+            const proximoDaily = agora + COOLDOWN;
 
             const embed = new EmbedBuilder()
                 .setTitle("🎁 DAILY")
@@ -282,19 +248,13 @@ module.exports = {
                     `Parabéns, ${message.author}!\n\n` +
                     `🎲 Você ganhou **${recompensa} moedas**!\n` +
                     `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
-                    `🕐 Seu próximo daily estará disponível em **${horario}**.`
+                    `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
                 )
                 .setFooter({
                     text: "Volte amanhã para tentar a sorte novamente!"
                 });
 
-            const botao = new ButtonBuilder()
-                .setCustomId("daily_notificar")
-                .setLabel("🔔 Me notificar amanhã")
-                .setStyle(ButtonStyle.Primary);
-
-            const row = new ActionRowBuilder()
-                .addComponents(botao);
+            const row = criarBotaoNotificacao();
 
             await message.reply({
                 embeds: [embed],
@@ -326,22 +286,23 @@ module.exports = {
             });
         }
 
-        const ultimoDaily = cooldowns.get(userId);
+        const ultimoDaily = await getUltimoDaily(userId);
 
         if (!ultimoDaily) {
             return interaction.reply({
-                content: "❌ Você ainda não precisa de uma notificação. Use o `/daily` quando estiver disponível.",
+                content:
+                    "❌ Você ainda não precisa de uma notificação. Use o `/daily` quando estiver disponível.",
                 ephemeral: true
             });
         }
 
-        const agora = Date.now();
-        const proximoDaily = ultimoDaily + COOLDOWN;
-        const restante = proximoDaily - agora;
+        const { proximoDaily, restante } =
+            calcularTempoRestante(ultimoDaily);
 
         if (restante <= 0) {
             return interaction.reply({
-                content: "🎁 Seu daily já está disponível! Use `/daily`.",
+                content:
+                    "🎁 Seu daily já está disponível! Use `/daily`.",
                 ephemeral: true
             });
         }
