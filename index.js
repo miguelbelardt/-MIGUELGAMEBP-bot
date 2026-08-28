@@ -9,6 +9,22 @@ const fs = require("fs");
 const path = require("path");
 const { inicializarBanco } = require("./database/database");
 
+// 🌐 Servidor HTTP para o Render
+// Inicia primeiro para o Render detectar a porta imediatamente.
+const PORT = process.env.PORT || 3000;
+
+const servidor = http.createServer((req, res) => {
+    res.writeHead(200, {
+        "Content-Type": "text/plain"
+    });
+
+    res.end("MIGUELGAMEBP-bot está online! 🤖");
+});
+
+servidor.listen(PORT, "0.0.0.0", () => {
+    console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
+});
+
 // 👑 ID DO DONO DO BOT
 const DONO_ID = "1124140396516225044";
 
@@ -116,19 +132,6 @@ client.on("interactionCreate", async interaction => {
             });
         }
     }
-});
-
-// 🌐 Servidor HTTP para o Render
-const PORT = process.env.PORT || 3000;
-
-http.createServer((req, res) => {
-    res.writeHead(200, {
-        "Content-Type": "text/plain"
-    });
-
-    res.end("MIGUELGAMEBP-bot está online! 🤖");
-}).listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
 });
 
 // 💾 Inicializar banco e conectar o bot
