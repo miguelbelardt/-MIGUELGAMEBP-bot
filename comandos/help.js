@@ -12,31 +12,9 @@ module.exports = {
         .setDescription("Abra a Central de Ajuda 📚"),
 
     async execute(interaction) {
-        const embed = new EmbedBuilder()
-            .setTitle("📚 CENTRAL DE AJUDA")
-            .setDescription(
-                `Olá! 👋\n` +
-                `Aqui você encontra informações sobre como usar o bot.\n\n` +
+        const embed = criarEmbedAjuda();
 
-                `🔤 **PREFIXO**\n` +
-                `O prefixo do bot é \`M\` ou \`m\`.\n\n` +
-
-                `Você pode usar:\n` +
-                `\`M ajuda\`\n` +
-                `\`m ajuda\`\n` +
-                `\`Majuda\`\n` +
-                `\`majuda\`\n` +
-                `\`M help\`\n` +
-                `\`m help\`\n\n` +
-
-                `📋 **COMANDOS**\n` +
-                `Clique no botão abaixo para visualizar todos os comandos disponíveis.`
-            );
-
-        const botao = new ButtonBuilder()
-            .setCustomId("ajuda_comandos")
-            .setLabel("📋 Ver comandos")
-            .setStyle(ButtonStyle.Primary);
+        const botao = criarBotao();
 
         const row = new ActionRowBuilder()
             .addComponents(botao);
@@ -48,36 +26,24 @@ module.exports = {
     },
 
     async handlePrefix(message) {
-        const args = message.content.trim().split(/\s+/);
-        const comando = args[1]?.toLowerCase();
+        const conteudo = message.content.trim();
+        const texto = conteudo.toLowerCase();
 
-        if (comando !== "help") return;
+        // Aceita:
+        // M help
+        // m help
+        // Mhelp
+        // mhelp
 
-        const embed = new EmbedBuilder()
-            .setTitle("📚 CENTRAL DE AJUDA")
-            .setDescription(
-                `Olá! 👋\n` +
-                `Aqui você encontra informações sobre como usar o bot.\n\n` +
+        const ehHelp =
+            texto === "m help" ||
+            texto === "mhelp";
 
-                `🔤 **PREFIXO**\n` +
-                `O prefixo do bot é \`M\` ou \`m\`.\n\n` +
+        if (!ehHelp) return;
 
-                `Você pode usar:\n` +
-                `\`M ajuda\`\n` +
-                `\`m ajuda\`\n` +
-                `\`Majuda\`\n` +
-                `\`majuda\`\n` +
-                `\`M help\`\n` +
-                `\`m help\`\n\n` +
+        const embed = criarEmbedAjuda();
 
-                `📋 **COMANDOS**\n` +
-                `Clique no botão abaixo para visualizar todos os comandos disponíveis.`
-            );
-
-        const botao = new ButtonBuilder()
-            .setCustomId("ajuda_comandos")
-            .setLabel("📋 Ver comandos")
-            .setStyle(ButtonStyle.Primary);
+        const botao = criarBotao();
 
         const row = new ActionRowBuilder()
             .addComponents(botao);
@@ -111,3 +77,43 @@ module.exports = {
         });
     }
 };
+
+// =====================================================
+// 📚 EMBED DA CENTRAL DE AJUDA
+// =====================================================
+
+function criarEmbedAjuda() {
+    return new EmbedBuilder()
+        .setTitle("📚 CENTRAL DE AJUDA")
+        .setDescription(
+            `Olá! 👋\n` +
+            `Aqui você encontra informações sobre como usar o bot.\n\n` +
+
+            `🔤 **PREFIXO**\n` +
+            `O prefixo do bot é \`M\` ou \`m\`.\n\n` +
+
+            `Você pode usar:\n` +
+            `\`M ajuda\`\n` +
+            `\`m ajuda\`\n` +
+            `\`Majuda\`\n` +
+            `\`majuda\`\n` +
+            `\`M help\`\n` +
+            `\`m help\`\n` +
+            `\`Mhelp\`\n` +
+            `\`mhelp\`\n\n` +
+
+            `📋 **COMANDOS**\n` +
+            `Clique no botão abaixo para visualizar todos os comandos disponíveis.`
+        );
+}
+
+// =====================================================
+// 📋 BOTÃO
+// =====================================================
+
+function criarBotao() {
+    return new ButtonBuilder()
+        .setCustomId("ajuda_comandos")
+        .setLabel("📋 Ver comandos")
+        .setStyle(ButtonStyle.Primary);
+}
