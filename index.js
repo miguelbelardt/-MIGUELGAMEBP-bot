@@ -55,6 +55,15 @@ client.once("ready", () => {
     console.log("🎮 Status definido: Jogando Minecraft");
 });
 
+// Erros do cliente Discord
+client.on("error", erro => {
+    console.error("❌ Erro no cliente Discord:", erro);
+});
+
+client.on("warn", aviso => {
+    console.warn("⚠️ Aviso do Discord:", aviso);
+});
+
 // Interações
 client.on("interactionCreate", async interaction => {
 
@@ -125,10 +134,17 @@ http.createServer((req, res) => {
 // 💾 Inicializar banco e conectar o bot
 async function iniciar() {
     try {
+        console.log("🚀 Iniciando bot...");
+
+        console.log("💾 Conectando ao banco...");
         await inicializarBanco();
         console.log("💾 Banco de dados inicializado!");
 
+        console.log("🔑 Tentando conectar ao Discord...");
+
         await client.login(process.env.DISCORD_TOKEN);
+
+        console.log("🔑 Login do Discord concluído!");
     } catch (erro) {
         console.error("❌ Erro ao iniciar o bot:", erro);
         process.exit(1);
