@@ -23,6 +23,10 @@ module.exports = {
         .setName("daily")
         .setDescription("Resgate sua recompensa diária! 💰"),
 
+    // =====================================================
+    // 💬 SLASH COMMAND
+    // =====================================================
+
     async execute(interaction) {
         const userId = interaction.user.id;
         const agora = Date.now();
@@ -91,13 +95,11 @@ module.exports = {
                 });
             }
 
-            // Cooldown terminou
             cooldowns.delete(userId);
         }
 
         cooldowns.set(userId, agora);
 
-        // 💾 Adicionar recompensa ao banco
         await alterarSaldo(userId, RECOMPENSA);
 
         const novoSaldo = await getSaldo(userId);
@@ -140,6 +142,137 @@ module.exports = {
         });
     },
 
+    // =====================================================
+    // 🔤 COMANDO POR PREFIXO
+    // =====================================================
+
+    async handlePrefix(message) {
+        const userId = message.author.id;
+        const agora = Date.now();
+
+        try {
+            if (cooldowns.has(userId)) {
+                const ultimoDaily = cooldowns.get(userId);
+                const proximoDaily = ultimoDaily + COOLDOWN;
+                const restante = proximoDaily - agora;
+
+                if (restante > 0) {
+                    const horas = Math.floor(
+                        restante / (1000 * 60 * 60)
+                    );
+
+                    const minutos = Math.floor(
+                        (restante % (1000 * 60 * 60)) / (1000 * 60)
+                    );
+
+                    const segundos = Math.floor(
+                        (restante % (1000 * 60)) / 1000
+                    );
+
+                    const dataProximoDaily = new Date(proximoDaily);
+
+                    const horario = dataProximoDaily.toLocaleString("pt-BR", {
+                        timeZone: "America/Sao_Paulo",
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit"
+                    });
+
+                    const embed = new EmbedBuilder()
+                        .setTitle("⏳ DAILY")
+                        .setDescription(
+                            `Você já pegou seu daily!\n\n` +
+                            `🕐 Próximo daily em **${horas}h ${minutos}min ${segundos}s**.\n` +
+                            `📅 Disponível em **${horario}**.`
+                        );
+
+                    const notificacaoAtiva = notificacoes.has(userId);
+
+                    const botao = new ButtonBuilder()
+                        .setCustomId("daily_notificar")
+                        .setLabel(
+                            notificacaoAtiva
+                                ? "🔔 Notificação ativada"
+                                : "🔔 Me notificar"
+                        )
+                        .setStyle(
+                            notificacaoAtiva
+                                ? ButtonStyle.Success
+                                : ButtonStyle.Primary
+                        )
+                        .setDisabled(notificacaoAtiva);
+
+                    const row = new ActionRowBuilder()
+                        .addComponents(botao);
+
+                    return message.reply({
+                        embeds: [embed],
+                        components: [row]
+                    });
+                }
+
+                cooldowns.delete(userId);
+            }
+
+            cooldowns.set(userId, agora);
+
+            await alterarSaldo(userId, RECOMPENSA);
+
+            const novoSaldo = await getSaldo(userId);
+
+            const proximoDaily = new Date(agora + COOLDOWN);
+
+            const horario = proximoDaily.toLocaleString("pt-BR", {
+                timeZone: "America/Sao_Paulo",
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit"
+            });
+
+            const embed = new EmbedBuilder()
+                .setTitle("🎁 DAILY")
+                .setDescription(
+                    `Parabéns, ${message.author}!\n\n` +
+                    `💰 Você recebeu **${RECOMPENSA} moedas**!\n` +
+                    `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
+                    `🕐 Seu próximo daily estará disponível em **${horario}**.`
+                )
+                .setFooter({
+                    text: "Volte amanhã para pegar novamente!"
+                });
+
+            const botao = new ButtonBuilder()
+                .setCustomId("daily_notificar")
+                .setLabel("🔔 Me notificar amanhã")
+                .setStyle(ButtonStyle.Primary);
+
+            const row = new ActionRowBuilder()
+                .addComponents(botao);
+
+            await message.reply({
+                embeds: [embed],
+                components: [row]
+            });
+
+        } catch (erro) {
+            console.error("❌ Erro no Daily por prefixo:", erro);
+
+            await message.reply(
+                "❌ Não foi possível processar seu daily."
+            );
+        }
+    },
+
+    // =====================================================
+    // 🔘 BOTÃO DE NOTIFICAÇÃO
+    // =====================================================
+
     async handleButton(interaction) {
         if (interaction.customId !== "daily_notificar") return;
 
@@ -174,7 +307,6 @@ module.exports = {
 
         notificacoes.add(userId);
 
-        // Remove timer anterior, se existir
         if (timersNotificacao.has(userId)) {
             clearTimeout(timersNotificacao.get(userId));
         }
