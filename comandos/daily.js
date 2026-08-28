@@ -16,7 +16,42 @@ const notificacoes = new Set();
 const timersNotificacao = new Map();
 
 const COOLDOWN = 24 * 60 * 60 * 1000;
-const RECOMPENSA = 100;
+
+// =====================================================
+// 💰 SORTEIO DA RECOMPENSA
+// =====================================================
+
+function sortearRecompensa() {
+    const sorteio = Math.random() * 100;
+
+    // 45% → 100 até 500
+    if (sorteio < 45) {
+        return Math.floor(Math.random() * (500 - 100 + 1)) + 100;
+    }
+
+    // 30% → 501 até 2.000
+    if (sorteio < 75) {
+        return Math.floor(Math.random() * (2000 - 501 + 1)) + 501;
+    }
+
+    // 15% → 2.001 até 5.000
+    if (sorteio < 90) {
+        return Math.floor(Math.random() * (5000 - 2001 + 1)) + 2001;
+    }
+
+    // 7% → 5.001 até 10.000
+    if (sorteio < 97) {
+        return Math.floor(Math.random() * (10000 - 5001 + 1)) + 5001;
+    }
+
+    // 2,5% → 10.001 até 20.000
+    if (sorteio < 99.5) {
+        return Math.floor(Math.random() * (20000 - 10001 + 1)) + 10001;
+    }
+
+    // 0,5% → 20.001 até 25.000
+    return Math.floor(Math.random() * (25000 - 20001 + 1)) + 20001;
+}
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -100,7 +135,10 @@ module.exports = {
 
         cooldowns.set(userId, agora);
 
-        await alterarSaldo(userId, RECOMPENSA);
+        // 💰 Sorteia a recompensa
+        const recompensa = sortearRecompensa();
+
+        await alterarSaldo(userId, recompensa);
 
         const novoSaldo = await getSaldo(userId);
 
@@ -120,12 +158,12 @@ module.exports = {
             .setTitle("🎁 DAILY")
             .setDescription(
                 `Parabéns, ${interaction.user}!\n\n` +
-                `💰 Você recebeu **${RECOMPENSA} moedas**!\n` +
+                `🎲 Você ganhou **${recompensa} moedas**!\n` +
                 `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
                 `🕐 Seu próximo daily estará disponível em **${horario}**.`
             )
             .setFooter({
-                text: "Volte amanhã para pegar novamente!"
+                text: "Volte amanhã para tentar a sorte novamente!"
             });
 
         const botao = new ButtonBuilder()
@@ -219,7 +257,10 @@ module.exports = {
 
             cooldowns.set(userId, agora);
 
-            await alterarSaldo(userId, RECOMPENSA);
+            // 💰 Sorteia a recompensa
+            const recompensa = sortearRecompensa();
+
+            await alterarSaldo(userId, recompensa);
 
             const novoSaldo = await getSaldo(userId);
 
@@ -239,12 +280,12 @@ module.exports = {
                 .setTitle("🎁 DAILY")
                 .setDescription(
                     `Parabéns, ${message.author}!\n\n` +
-                    `💰 Você recebeu **${RECOMPENSA} moedas**!\n` +
+                    `🎲 Você ganhou **${recompensa} moedas**!\n` +
                     `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
                     `🕐 Seu próximo daily estará disponível em **${horario}**.`
                 )
                 .setFooter({
-                    text: "Volte amanhã para pegar novamente!"
+                    text: "Volte amanhã para tentar a sorte novamente!"
                 });
 
             const botao = new ButtonBuilder()
