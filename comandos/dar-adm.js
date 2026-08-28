@@ -1,23 +1,25 @@
 const {
-    SlashCommandBuilder,
-    PermissionFlagsBits
+    SlashCommandBuilder
 } = require("discord.js");
 
 const DONO_ID = "1124140396516225044";
 
+// Lista de usuários que são ADM do bot
+const adms = new Set();
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("dar-adm")
-        .setDescription("Dá o cargo de administrador para um usuário.")
+        .setDescription("Dá ou remove a permissão de ADM do bot.")
         .addUserOption(option =>
             option
                 .setName("usuario")
-                .setDescription("Usuário que receberá o cargo de administrador")
+                .setDescription("Usuário que receberá ou perderá a permissão de ADM")
                 .setRequired(true)
         ),
 
     async execute(interaction) {
-        // 👑 Somente o dono do bot pode usar
+        // 👑 Somente o dono do bot pode alterar ADMs
         if (interaction.user.id !== DONO_ID) {
             return interaction.reply({
                 content: "❌ Você não tem permissão para usar este comando.",
@@ -26,40 +28,34 @@ module.exports = {
         }
 
         const usuario = interaction.options.getUser("usuario");
-        const membro = await interaction.guild.members.fetch(usuario.id);
 
-        // Procura um cargo chamado "Administrador"
-        const cargo = interaction.guild.roles.cache.find(
-            role => role.name.toLowerCase() === "administrador"
-        );
-
-        if (!cargo) {
+        // 👑 O dono sempre continua sendo ADM
+        if (usuario.id === DONO_ID) {
             return interaction.reply({
-                content: "❌ Não encontrei um cargo chamado **Administrador** neste servidor.",
+                content: "👑 O dono do bot já possui ADM permanente.",
                 ephemeral: true
             });
         }
 
-        if (cargo.position >= interaction.guild.members.me.roles.highest.position) {
+        // 🔄 Se já for ADM, remove
+        if (adms.has(usuario.id)) {
+            adms.delete(usuario.id);
+
             return interaction.reply({
-                content: "❌ Não consigo dar esse cargo porque ele está acima ou no mesmo nível do meu cargo.",
-                ephemeral: true
+                content: `🔴 ${usuario} perdeu a permissão de **ADM do bot**.`
             });
         }
 
-        try {
-            await membro.roles.add(cargo);
+        // 🟢 Se não for ADM, adiciona
+        adms.add(usuario.id);
 
-            await interaction.reply({
-                content: `✅ ${usuario} recebeu o cargo **Administrador**! 👑`
-            });
-        } catch (erro) {
-            console.error(erro);
+        return interaction.reply({
+            content: `🟢 ${usuario} agora é **ADM do bot**! 👑`
+        });
+    },
 
-            await interaction.reply({
-                content: "❌ Não consegui dar o cargo. Verifique minhas permissões.",
-                ephemeral: true
-            });
-        }
+    // 🔐 Verificar se o usuário é ADM do bot
+    isAdmin(userId) {
+        return userId === DONO_ID || adms.has(userId);
     }
 };
