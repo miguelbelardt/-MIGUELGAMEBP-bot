@@ -6,7 +6,8 @@ const {
     ButtonStyle,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    PermissionFlagsBits
 } = require("discord.js");
 
 // Configurações temporárias de cada usuário
@@ -15,9 +16,19 @@ const configuracoes = new Map();
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("embed")
-        .setDescription("Abre o painel para criar um embed."),
+        .setDescription("Abre o painel para criar um embed.")
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
     async execute(interaction) {
+
+        // 🔐 SOMENTE ADMINISTRADOR DO DISCORD
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: "❌ Você precisa ter a permissão de **Administrador do Discord** para usar este comando.",
+                ephemeral: true
+            });
+        }
+
         const userId = interaction.user.id;
 
         configuracoes.set(userId, {
@@ -93,12 +104,22 @@ module.exports = {
 
     async handleButton(interaction) {
         const userId = interaction.user.id;
-
         const config = configuracoes.get(userId);
 
         if (!config) {
             return interaction.reply({
                 content: "❌ Sua configuração de embed expirou. Use `/embed` novamente.",
+                ephemeral: true
+            });
+        }
+
+        // =====================================================
+        // 🔐 GARANTIR ADMIN DO DISCORD NOS BOTÕES
+        // =====================================================
+
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: "❌ Você precisa ter a permissão de **Administrador do Discord** para usar este painel.",
                 ephemeral: true
             });
         }
@@ -230,14 +251,12 @@ module.exports = {
         if (interaction.customId === "embed_timestamp") {
             config.timestamp = !config.timestamp;
 
-            await interaction.reply({
+            return interaction.reply({
                 content: config.timestamp
                     ? "🕐 Timestamp ativado!"
                     : "🕐 Timestamp desativado!",
                 ephemeral: true
             });
-
-            return;
         }
 
         // =====================================================
@@ -300,8 +319,18 @@ module.exports = {
             });
         }
 
+        // 🔐 ADMINISTRADOR DO DISCORD
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: "❌ Você precisa ter a permissão de **Administrador do Discord** para alterar este painel.",
+                ephemeral: true
+            });
+        }
+
         if (interaction.customId === "embed_modal_titulo") {
-            config.titulo = interaction.fields.getTextInputValue("titulo").trim();
+            config.titulo = interaction.fields
+                .getTextInputValue("titulo")
+                .trim();
 
             return interaction.reply({
                 content: "✅ Título atualizado!",
@@ -387,7 +416,12 @@ module.exports = {
 // =====================================================
 
 function criarEmbed(config, usuario) {
-    if (!config.titulo && !config.descricao && !config.imagem && !config.thumbnail) {
+    if (
+        !config.titulo &&
+        !config.descricao &&
+        !config.imagem &&
+        !config.thumbnail
+    ) {
         return {
             sucesso: false,
             erro: "❌ Configure pelo menos um campo antes de continuar."
