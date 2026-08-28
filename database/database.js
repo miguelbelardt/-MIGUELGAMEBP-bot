@@ -7,13 +7,20 @@ const pool = new Pool({
     }
 });
 
-// Criar tabela e corrigir saldos antigos
+// Criar tabela e corrigir dados antigos
 async function inicializarBanco() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS usuarios (
             id VARCHAR(30) PRIMARY KEY,
-            saldo BIGINT NOT NULL DEFAULT 0
+            saldo BIGINT NOT NULL DEFAULT 0,
+            ultimo_daily BIGINT
         )
+    `);
+
+    // Adicionar a coluna em bancos que já tinham a tabela criada
+    await pool.query(`
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS ultimo_daily BIGINT
     `);
 
     // Corrigir usuários antigos que ficaram com saldo NULL
@@ -30,8 +37,8 @@ async function inicializarBanco() {
 async function criarUsuario(userId) {
     await pool.query(
         `
-        INSERT INTO usuarios (id, saldo)
-        VALUES ($1, 0)
+        INSERT INTO usuarios (id, saldo, ultimo_daily)
+        VALUES ($1, 0, NULL)
         ON CONFLICT (id) DO NOTHING
         `,
         [userId]
@@ -78,10 +85,44 @@ async function alterarSaldo(userId, quantidade) {
     );
 }
 
+// Pegar horário do último Daily
+async function getUltimoDaily(userId) {
+    await criarUsuario(userId);
+
+    const resultado = await pool.query(
+        `
+        SELECT ultimo_daily
+        FROM usuarios
+        WHERE id = $1
+        `,
+        [userId]
+    );
+
+    return resultado.rows[0]?.ultimo_daily
+        ? Number(resultado.rows[0].ultimo_daily)
+        : null;
+}
+
+// Salvar horário do último Daily
+async function salvarUltimoDaily(userId, timestamp) {
+    await criarUsuario(userId);
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET ultimo_daily = $1
+        WHERE id = $2
+        `,
+        [timestamp, userId]
+    );
+}
+
 module.exports = {
     pool,
     inicializarBanco,
     criarUsuario,
     getSaldo,
-    alterarSaldo
+    alterarSaldo,
+    getUltimoDaily,
+    salvarUltimoDaily
 };
