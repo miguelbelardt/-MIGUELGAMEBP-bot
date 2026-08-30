@@ -13,21 +13,31 @@ async function inicializarBanco() {
         CREATE TABLE IF NOT EXISTS usuarios (
             id VARCHAR(30) PRIMARY KEY,
             saldo BIGINT NOT NULL DEFAULT 0,
-            ultimo_daily BIGINT
+            ultimo_daily BIGINT,
+            notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE
         )
     `);
 
-    // Adicionar a coluna em bancos que já tinham a tabela criada
     await pool.query(`
         ALTER TABLE usuarios
         ADD COLUMN IF NOT EXISTS ultimo_daily BIGINT
     `);
 
-    // Corrigir usuários antigos que ficaram com saldo NULL
+    await pool.query(`
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
     await pool.query(`
         UPDATE usuarios
         SET saldo = 0
         WHERE saldo IS NULL
+    `);
+
+    await pool.query(`
+        UPDATE usuarios
+        SET notificacao_daily = FALSE
+        WHERE notificacao_daily IS NULL
     `);
 
     console.log("💾 Banco de dados conectado e tabela pronta!");
@@ -37,19 +47,32 @@ async function inicializarBanco() {
 async function criarUsuario(userId) {
     await pool.query(
         `
-        INSERT INTO usuarios (id, saldo, ultimo_daily)
-        VALUES ($1, 0, NULL)
+        INSERT INTO usuarios (
+            id,
+            saldo,
+            ultimo_daily,
+            notificacao_daily
+        )
+        VALUES ($1, 0, NULL, FALSE)
         ON CONFLICT (id) DO NOTHING
         `,
         [userId]
     );
 
-    // Garantir que o saldo nunca fique NULL
     await pool.query(
         `
         UPDATE usuarios
         SET saldo = 0
         WHERE id = $1 AND saldo IS NULL
+        `,
+        [userId]
+    );
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET notificacao_daily = FALSE
+        WHERE id = $1 AND notificacao_daily IS NULL
         `,
         [userId]
     );
@@ -117,6 +140,36 @@ async function salvarUltimoDaily(userId, timestamp) {
     );
 }
 
+// Pegar estado da notificação do Daily
+async function getNotificacaoDaily(userId) {
+    await criarUsuario(userId);
+
+    const resultado = await pool.query(
+        `
+        SELECT notificacao_daily
+        FROM usuarios
+        WHERE id = $1
+        `,
+        [userId]
+    );
+
+    return resultado.rows[0]?.notificacao_daily === true;
+}
+
+// Salvar estado da notificação do Daily
+async function salvarNotificacaoDaily(userId, ativada) {
+    await criarUsuario(userId);
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET notificacao_daily = $1
+        WHERE id = $2
+        `,
+        [ativada, userId]
+    );
+}
+
 module.exports = {
     pool,
     inicializarBanco,
@@ -124,5 +177,7 @@ module.exports = {
     getSaldo,
     alterarSaldo,
     getUltimoDaily,
-    salvarUltimoDaily
+    salvarUltimoDaily,
+    getNotificacaoDaily,
+    salvarNotificacaoDaily
 };
