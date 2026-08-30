@@ -10,10 +10,11 @@ const {
     getSaldo,
     alterarSaldo,
     getUltimoDaily,
-    salvarUltimoDaily
+    salvarUltimoDaily,
+    getNotificacaoDaily,
+    salvarNotificacaoDaily
 } = require("../database/database");
 
-const notificacoes = new Set();
 const timersNotificacao = new Map();
 
 const COOLDOWN = 24 * 60 * 60 * 1000;
@@ -25,32 +26,26 @@ const COOLDOWN = 24 * 60 * 60 * 1000;
 function sortearRecompensa() {
     const sorteio = Math.random() * 100;
 
-    // 45% → 100 até 500
     if (sorteio < 45) {
         return Math.floor(Math.random() * (500 - 100 + 1)) + 100;
     }
 
-    // 30% → 501 até 2.000
     if (sorteio < 75) {
         return Math.floor(Math.random() * (2000 - 501 + 1)) + 501;
     }
 
-    // 15% → 2.001 até 5.000
     if (sorteio < 90) {
         return Math.floor(Math.random() * (5000 - 2001 + 1)) + 2001;
     }
 
-    // 7% → 5.001 até 10.000
     if (sorteio < 97) {
         return Math.floor(Math.random() * (10000 - 5001 + 1)) + 5001;
     }
 
-    // 2,5% → 10.001 até 20.000
     if (sorteio < 99.5) {
         return Math.floor(Math.random() * (20000 - 10001 + 1)) + 10001;
     }
 
-    // 0,5% → 20.001 até 25.000
     return Math.floor(Math.random() * (25000 - 20001 + 1)) + 20001;
 }
 
@@ -71,7 +66,7 @@ function formatarHorario(timestamp) {
 }
 
 // =====================================================
-// ⏳ INFORMAÇÃO DO COOLDOWN
+// ⏳ CALCULAR COOLDOWN
 // =====================================================
 
 function calcularTempoRestante(ultimoDaily) {
@@ -138,6 +133,9 @@ module.exports = {
                     (restante % (1000 * 60)) / 1000
                 );
 
+                const notificacaoAtiva =
+                    await getNotificacaoDaily(userId);
+
                 const embed = new EmbedBuilder()
                     .setTitle("⏳ DAILY")
                     .setDescription(
@@ -146,9 +144,8 @@ module.exports = {
                         `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
                     );
 
-                const row = criarBotaoNotificacao(
-                    notificacoes.has(userId)
-                );
+                const row =
+                    criarBotaoNotificacao(notificacaoAtiva);
 
                 return interaction.reply({
                     embeds: [embed],
@@ -163,6 +160,9 @@ module.exports = {
 
         await alterarSaldo(userId, recompensa);
         await salvarUltimoDaily(userId, agora);
+
+        // Novo daily começa sem notificação ativada
+        await salvarNotificacaoDaily(userId, false);
 
         const novoSaldo = await getSaldo(userId);
         const proximoDaily = agora + COOLDOWN;
@@ -179,7 +179,7 @@ module.exports = {
                 text: "Volte amanhã para tentar a sorte novamente!"
             });
 
-        const row = criarBotaoNotificacao();
+        const row = criarBotaoNotificacao(false);
 
         await interaction.reply({
             embeds: [embed],
@@ -214,6 +214,9 @@ module.exports = {
                         (restante % (1000 * 60)) / 1000
                     );
 
+                    const notificacaoAtiva =
+                        await getNotificacaoDaily(userId);
+
                     const embed = new EmbedBuilder()
                         .setTitle("⏳ DAILY")
                         .setDescription(
@@ -222,9 +225,8 @@ module.exports = {
                             `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
                         );
 
-                    const row = criarBotaoNotificacao(
-                        notificacoes.has(userId)
-                    );
+                    const row =
+                        criarBotaoNotificacao(notificacaoAtiva);
 
                     return message.reply({
                         embeds: [embed],
@@ -238,6 +240,9 @@ module.exports = {
 
             await alterarSaldo(userId, recompensa);
             await salvarUltimoDaily(userId, agora);
+
+            // Novo daily começa sem notificação ativada
+            await salvarNotificacaoDaily(userId, false);
 
             const novoSaldo = await getSaldo(userId);
             const proximoDaily = agora + COOLDOWN;
@@ -254,7 +259,7 @@ module.exports = {
                     text: "Volte amanhã para tentar a sorte novamente!"
                 });
 
-            const row = criarBotaoNotificacao();
+            const row = criarBotaoNotificacao(false);
 
             await message.reply({
                 embeds: [embed],
@@ -262,7 +267,10 @@ module.exports = {
             });
 
         } catch (erro) {
-            console.error("❌ Erro no Daily por prefixo:", erro);
+            console.error(
+                "❌ Erro no Daily por prefixo:",
+                erro
+            );
 
             await message.reply(
                 "❌ Não foi possível processar seu daily."
@@ -279,14 +287,19 @@ module.exports = {
 
         const userId = interaction.user.id;
 
-        if (notificacoes.has(userId)) {
+        const notificacaoAtiva =
+            await getNotificacaoDaily(userId);
+
+        if (notificacaoAtiva) {
             return interaction.reply({
-                content: "🔔 Você já ativou a notificação do daily!",
+                content:
+                    "🔔 Você já ativou a notificação do daily!",
                 ephemeral: true
             });
         }
 
-        const ultimoDaily = await getUltimoDaily(userId);
+        const ultimoDaily =
+            await getUltimoDaily(userId);
 
         if (!ultimoDaily) {
             return interaction.reply({
@@ -307,10 +320,13 @@ module.exports = {
             });
         }
 
-        notificacoes.add(userId);
+        // 💾 Salvar no PostgreSQL
+        await salvarNotificacaoDaily(userId, true);
 
         if (timersNotificacao.has(userId)) {
-            clearTimeout(timersNotificacao.get(userId));
+            clearTimeout(
+                timersNotificacao.get(userId)
+            );
         }
 
         const timer = setTimeout(async () => {
@@ -325,7 +341,19 @@ module.exports = {
                 );
             }
 
-            notificacoes.delete(userId);
+            // 💾 Remover a notificação do banco
+            try {
+                await salvarNotificacaoDaily(
+                    userId,
+                    false
+                );
+            } catch (erro) {
+                console.error(
+                    "❌ Erro ao atualizar notificação:",
+                    erro
+                );
+            }
+
             timersNotificacao.delete(userId);
         }, restante);
 
