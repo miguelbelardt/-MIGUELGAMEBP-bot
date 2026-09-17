@@ -169,52 +169,6 @@ client.on("messageCreate", async message => {
     );
 
     // =================================================
-    // 📚 CENTRAL DE AJUDA
-    // =================================================
-
-    if (nomeComando === "ajuda") {
-        try {
-            const embed = {
-                title: "📚 CENTRAL DE AJUDA",
-                description:
-                    `Olá! 👋\n` +
-                    `Aqui você encontra informações sobre como usar o bot.\n\n` +
-                    `🔤 **PREFIXO**\n` +
-                    `O prefixo do bot é \`M\` ou \`m\`.\n\n` +
-                    `Você pode usar:\n` +
-                    `\`M ajuda\`\n` +
-                    `\`m ajuda\`\n` +
-                    `\`Majuda\`\n` +
-                    `\`majuda\`\n\n` +
-                    `📋 **COMANDOS**\n` +
-                    `Use o botão abaixo para visualizar todos os comandos disponíveis.`
-            };
-
-            const botao = {
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 1,
-                        label: "📋 Ver comandos",
-                        custom_id: "ajuda_comandos"
-                    }
-                ]
-            };
-
-            await message.reply({
-                embeds: [embed],
-                components: [botao]
-            });
-
-        } catch (erro) {
-            console.error("❌ Erro no M ajuda:", erro);
-        }
-
-        return;
-    }
-
-    // =================================================
     // 🔤 EXECUTAR COMANDO POR PREFIXO
     // =================================================
 
