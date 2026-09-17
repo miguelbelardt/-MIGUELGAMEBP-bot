@@ -100,6 +100,10 @@ function criarEmbedAjuda() {
             `\`m ajuda\`\n` +
             `\`Majuda\`\n` +
             `\`majuda\`\n\n` +
+            `\`M help\`\n` +
+            `\`m help\`\n` +
+            `\`Mhelp\`\n` +
+            `\`mhelp\`\n\n` +
 
             `📋 **COMANDOS**\n` +
             `Clique no botão abaixo para visualizar todos os comandos disponíveis.`
