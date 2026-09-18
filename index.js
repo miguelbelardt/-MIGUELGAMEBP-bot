@@ -123,14 +123,14 @@ client.once("ready", () => {
                 client.guilds.cache.size;
 
             client.user.setActivity(
-                `${servidores} servidores`,
+                `🌐 Estou em ${servidores} servidores`,
                 {
                     type: 0
                 }
             );
 
             console.log(
-                `🌐 Status: ${servidores} servidores`
+                `🌐 Status: Estou em ${servidores} servidores`
             );
 
         } else {
@@ -139,14 +139,14 @@ client.once("ready", () => {
                 client.commands.size;
 
             client.user.setActivity(
-                `${comandos} comandos`,
+                `📋 Tenho ${comandos} comandos disponíveis!`,
                 {
                     type: 0
                 }
             );
 
             console.log(
-                `📋 Status: ${comandos} comandos`
+                `📋 Status: Tenho ${comandos} comandos disponíveis!`
             );
         }
 
@@ -156,10 +156,10 @@ client.once("ready", () => {
     // Primeiro status
     atualizarStatus();
 
-    // Alterna a cada 3 segundos
+    // Alterna a cada 5 segundos
     setInterval(
         atualizarStatus,
-        3000
+        5000
     );
 });
 
