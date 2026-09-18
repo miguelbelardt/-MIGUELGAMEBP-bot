@@ -4,7 +4,7 @@ const {
 } = require("discord.js");
 
 const {
-    adicionarXP,
+    removerXP,
     getXP
 } = require("../database/database.js");
 
@@ -68,9 +68,9 @@ module.exports = {
                 });
             }
 
-            await adicionarXP(
+            await removerXP(
                 usuario.id,
-                -quantidadeRemover
+                quantidadeRemover
             );
 
             await interaction.reply(
@@ -149,9 +149,9 @@ module.exports = {
                 );
             }
 
-            await adicionarXP(
+            await removerXP(
                 usuario.id,
-                -quantidadeRemover
+                quantidadeRemover
             );
 
             await message.reply(
