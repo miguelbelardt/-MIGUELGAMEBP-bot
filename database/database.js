@@ -13,6 +13,7 @@ async function inicializarBanco() {
         CREATE TABLE IF NOT EXISTS usuarios (
             id VARCHAR(30) PRIMARY KEY,
             saldo BIGINT NOT NULL DEFAULT 0,
+            xp BIGINT NOT NULL DEFAULT 0,
             ultimo_daily BIGINT,
             notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE
         )
@@ -29,9 +30,20 @@ async function inicializarBanco() {
     `);
 
     await pool.query(`
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS xp BIGINT NOT NULL DEFAULT 0
+    `);
+
+    await pool.query(`
         UPDATE usuarios
         SET saldo = 0
         WHERE saldo IS NULL
+    `);
+
+    await pool.query(`
+        UPDATE usuarios
+        SET xp = 0
+        WHERE xp IS NULL
     `);
 
     await pool.query(`
@@ -57,10 +69,11 @@ async function criarUsuario(userId) {
         INSERT INTO usuarios (
             id,
             saldo,
+            xp,
             ultimo_daily,
             notificacao_daily
         )
-        VALUES ($1, 0, NULL, FALSE)
+        VALUES ($1, 0, 0, NULL, FALSE)
         ON CONFLICT (id) DO NOTHING
         `,
         [userId]
@@ -78,12 +91,25 @@ async function criarUsuario(userId) {
     await pool.query(
         `
         UPDATE usuarios
+        SET xp = 0
+        WHERE id = $1 AND xp IS NULL
+        `,
+        [userId]
+    );
+
+    await pool.query(
+        `
+        UPDATE usuarios
         SET notificacao_daily = FALSE
         WHERE id = $1 AND notificacao_daily IS NULL
         `,
         [userId]
     );
 }
+
+// ================================
+// 💰 SISTEMA DE MOEDAS
+// ================================
 
 // Pegar saldo
 async function getSaldo(userId) {
@@ -114,6 +140,44 @@ async function alterarSaldo(userId, quantidade) {
         [quantidade, userId]
     );
 }
+
+// ================================
+// ⭐ SISTEMA DE XP
+// ================================
+
+// Pegar XP
+async function getXP(userId) {
+    await criarUsuario(userId);
+
+    const resultado = await pool.query(
+        `
+        SELECT COALESCE(xp, 0) AS xp
+        FROM usuarios
+        WHERE id = $1
+        `,
+        [userId]
+    );
+
+    return Number(resultado.rows[0].xp);
+}
+
+// Adicionar XP
+async function adicionarXP(userId, quantidade) {
+    await criarUsuario(userId);
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET xp = COALESCE(xp, 0) + $1
+        WHERE id = $2
+        `,
+        [quantidade, userId]
+    );
+}
+
+// ================================
+// 🎁 SISTEMA DE DAILY
+// ================================
 
 // Pegar horário do último Daily
 async function getUltimoDaily(userId) {
@@ -194,6 +258,10 @@ async function getUsuariosComNotificacaoDaily() {
     }));
 }
 
+// ================================
+// 🏆 RANKING DE MOEDAS
+// ================================
+
 // Pegar ranking de moedas
 async function getRankingMoedas(userId, limite = 10) {
     await criarUsuario(userId);
@@ -260,7 +328,7 @@ async function getRankingMoedas(userId, limite = 10) {
 }
 
 // ================================
-// SISTEMA DE ADM DO BOT
+// 👑 SISTEMA DE ADM DO BOT
 // ================================
 
 // Adicionar ADM
@@ -300,18 +368,34 @@ async function isAdm(userId) {
     return resultado.rows.length > 0;
 }
 
+// ================================
+// 📦 EXPORTAÇÕES
+// ================================
+
 module.exports = {
     pool,
     inicializarBanco,
     criarUsuario,
+
+    // 💰 Moedas
     getSaldo,
     alterarSaldo,
+
+    // ⭐ XP
+    getXP,
+    adicionarXP,
+
+    // 🎁 Daily
     getUltimoDaily,
     salvarUltimoDaily,
     getNotificacaoDaily,
     salvarNotificacaoDaily,
     getUsuariosComNotificacaoDaily,
+
+    // 🏆 Ranking
     getRankingMoedas,
+
+    // 👑 ADM
     adicionarAdm,
     removerAdm,
     isAdm
