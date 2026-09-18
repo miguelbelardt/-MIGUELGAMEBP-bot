@@ -108,10 +108,40 @@ for (const arquivo of arquivosComandos) {
 // 🟢 BOT ONLINE
 // =====================================================
 
-client.once("ready", () => {
+client.once("ready", async () => {
     console.log(
         `🤖 Bot online como ${client.user.tag}`
     );
+
+    // =================================================
+    // 📋 REGISTRAR SLASH COMMANDS
+    // =================================================
+
+    try {
+
+        const comandosSlash =
+            [...client.commands.values()]
+                .map(comando => comando.data.toJSON());
+
+        await client.application.commands.set(
+            comandosSlash
+        );
+
+        console.log(
+            `📋 Slash Commands sincronizados: ${comandosSlash.length}`
+        );
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao sincronizar Slash Commands:",
+            erro
+        );
+    }
+
+    // =================================================
+    // 🔄 STATUS DO BOT
+    // =================================================
 
     let mostrandoServidores = true;
 
