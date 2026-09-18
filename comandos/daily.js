@@ -17,7 +17,7 @@ const {
 
 const timersNotificacao = new Map();
 
-const COOLDOWN = 24 * 60 * 60 * 1000;
+const TIMEZONE = "America/Sao_Paulo";
 
 // =====================================================
 // 💰 SORTEIO DA RECOMPENSA
@@ -55,7 +55,7 @@ function sortearRecompensa() {
 
 function formatarHorario(timestamp) {
     return new Date(timestamp).toLocaleString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
+        timeZone: TIMEZONE,
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
@@ -66,17 +66,104 @@ function formatarHorario(timestamp) {
 }
 
 // =====================================================
-// ⏳ CALCULAR COOLDOWN
+// 🌙 PRÓXIMA MEIA-NOITE
 // =====================================================
 
-function calcularTempoRestante(ultimoDaily) {
-    const proximoDaily = ultimoDaily + COOLDOWN;
+function calcularProximaMeiaNoite() {
+    const agora = new Date();
+
+    const partes = new Intl.DateTimeFormat("en-US", {
+        timeZone: TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).formatToParts(agora);
+
+    const ano = Number(
+        partes.find(parte => parte.type === "year").value
+    );
+
+    const mes = Number(
+        partes.find(parte => parte.type === "month").value
+    );
+
+    const dia = Number(
+        partes.find(parte => parte.type === "day").value
+    );
+
+    // Começamos com uma data UTC aproximada
+    // e encontramos o instante correspondente à meia-noite
+    // de Brasília.
+    let timestamp = Date.UTC(
+        ano,
+        mes - 1,
+        dia + 1,
+        3,
+        0,
+        0
+    );
+
+    return timestamp;
+}
+
+// =====================================================
+// ⏳ CALCULAR TEMPO RESTANTE
+// =====================================================
+
+function calcularTempoRestante() {
+    const proximoDaily = calcularProximaMeiaNoite();
     const restante = proximoDaily - Date.now();
 
     return {
         proximoDaily,
         restante
     };
+}
+
+// =====================================================
+// ⏱️ FORMATAR TEMPO
+// =====================================================
+
+function formatarTempo(restante) {
+    const horas = Math.floor(
+        restante / (1000 * 60 * 60)
+    );
+
+    const minutos = Math.floor(
+        (restante % (1000 * 60 * 60)) /
+        (1000 * 60)
+    );
+
+    const segundos = Math.floor(
+        (restante % (1000 * 60)) /
+        1000
+    );
+
+    return `${horas}h ${minutos}min ${segundos}s`;
+}
+
+// =====================================================
+// 📅 VERIFICAR SE JÁ PEGOU HOJE
+// =====================================================
+
+function mesmoDiaBrasilia(timestamp) {
+    const data = new Date(timestamp);
+
+    const hoje = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(data);
+
+    const agora = new Intl.DateTimeFormat("pt-BR", {
+        timeZone: TIMEZONE,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).format(new Date());
+
+    return hoje === agora;
 }
 
 // =====================================================
@@ -103,88 +190,139 @@ function criarBotaoNotificacao(ativa = false) {
 }
 
 // =====================================================
+// 🎁 ENTREGAR DAILY
+// =====================================================
+
+async function entregarDaily(userId, usuario) {
+    const agora = Date.now();
+    const recompensa = sortearRecompensa();
+
+    await alterarSaldo(
+        userId,
+        recompensa
+    );
+
+    await salvarUltimoDaily(
+        userId,
+        agora
+    );
+
+    // Novo daily começa sem notificação ativada
+    await salvarNotificacaoDaily(
+        userId,
+        false
+    );
+
+    const novoSaldo =
+        await getSaldo(userId);
+
+    const {
+        proximoDaily
+    } = calcularTempoRestante();
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎁 DAILY")
+        .setDescription(
+            `Parabéns, ${usuario}!\n\n` +
+            `🎲 Você ganhou **${recompensa} moedas**!\n` +
+            `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
+            `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
+        )
+        .setFooter({
+            text: "Volte amanhã para tentar a sorte novamente!"
+        });
+
+    const row =
+        criarBotaoNotificacao(false);
+
+    return {
+        embed,
+        row
+    };
+}
+
+// =====================================================
 // 💬 SLASH COMMAND
 // =====================================================
 
 module.exports = {
+
     data: new SlashCommandBuilder()
         .setName("daily")
-        .setDescription("Resgate sua recompensa diária! 💰"),
+        .setDescription(
+            "Resgate sua recompensa diária! 💰"
+        ),
 
     async execute(interaction) {
-        const userId = interaction.user.id;
 
-        const ultimoDaily = await getUltimoDaily(userId);
+        const userId =
+            interaction.user.id;
 
-        if (ultimoDaily) {
-            const { proximoDaily, restante } =
-                calcularTempoRestante(ultimoDaily);
+        const ultimoDaily =
+            await getUltimoDaily(userId);
 
-            if (restante > 0) {
-                const horas = Math.floor(
-                    restante / (1000 * 60 * 60)
-                );
+        if (
+            ultimoDaily &&
+            mesmoDiaBrasilia(ultimoDaily)
+        ) {
 
-                const minutos = Math.floor(
-                    (restante % (1000 * 60 * 60)) / (1000 * 60)
-                );
+            const {
+                proximoDaily,
+                restante
+            } = calcularTempoRestante();
 
-                const segundos = Math.floor(
-                    (restante % (1000 * 60)) / 1000
-                );
+            const notificacaoAtiva =
+                await getNotificacaoDaily(userId);
 
-                const notificacaoAtiva =
-                    await getNotificacaoDaily(userId);
-
-                const embed = new EmbedBuilder()
+            const embed =
+                new EmbedBuilder()
                     .setTitle("⏳ DAILY")
                     .setDescription(
-                        `Você já pegou seu daily!\n\n` +
-                        `🕐 Próximo daily em **${horas}h ${minutos}min ${segundos}s**.\n` +
+                        `Você já pegou seu daily hoje!\n\n` +
+                        `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
                         `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
                     );
 
-                const row =
-                    criarBotaoNotificacao(notificacaoAtiva);
+            const row =
+                criarBotaoNotificacao(
+                    notificacaoAtiva
+                );
 
-                return interaction.reply({
-                    embeds: [embed],
-                    components: [row],
-                    ephemeral: true
-                });
-            }
+            return interaction.reply({
+                embeds: [embed],
+                components: [row],
+                ephemeral: true
+            });
         }
 
-        const agora = Date.now();
-        const recompensa = sortearRecompensa();
+        try {
 
-        await alterarSaldo(userId, recompensa);
-        await salvarUltimoDaily(userId, agora);
+            const {
+                embed,
+                row
+            } = await entregarDaily(
+                userId,
+                interaction.user
+            );
 
-        // Novo daily começa sem notificação ativada
-        await salvarNotificacaoDaily(userId, false);
-
-        const novoSaldo = await getSaldo(userId);
-        const proximoDaily = agora + COOLDOWN;
-
-        const embed = new EmbedBuilder()
-            .setTitle("🎁 DAILY")
-            .setDescription(
-                `Parabéns, ${interaction.user}!\n\n` +
-                `🎲 Você ganhou **${recompensa} moedas**!\n` +
-                `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
-                `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
-            )
-            .setFooter({
-                text: "Volte amanhã para tentar a sorte novamente!"
+            await interaction.reply({
+                embeds: [embed],
+                components: [row]
             });
 
-        const row = criarBotaoNotificacao(false);
+        } catch (erro) {
 
-        await interaction.reply({
-            embeds: [embed],
-            components: [row]
-        });
+            console.error(
+                "❌ Erro no Daily:",
+                erro
+            );
+
+            await interaction.reply({
+                content:
+                    "❌ Não foi possível processar seu daily.",
+                ephemeral: true
+            });
+        }
     },
 
     // =====================================================
@@ -192,74 +330,55 @@ module.exports = {
     // =====================================================
 
     async handlePrefix(message) {
-        const userId = message.author.id;
+
+        const userId =
+            message.author.id;
 
         try {
-            const ultimoDaily = await getUltimoDaily(userId);
 
-            if (ultimoDaily) {
-                const { proximoDaily, restante } =
-                    calcularTempoRestante(ultimoDaily);
+            const ultimoDaily =
+                await getUltimoDaily(userId);
 
-                if (restante > 0) {
-                    const horas = Math.floor(
-                        restante / (1000 * 60 * 60)
-                    );
+            if (
+                ultimoDaily &&
+                mesmoDiaBrasilia(ultimoDaily)
+            ) {
 
-                    const minutos = Math.floor(
-                        (restante % (1000 * 60 * 60)) / (1000 * 60)
-                    );
+                const {
+                    proximoDaily,
+                    restante
+                } = calcularTempoRestante();
 
-                    const segundos = Math.floor(
-                        (restante % (1000 * 60)) / 1000
-                    );
+                const notificacaoAtiva =
+                    await getNotificacaoDaily(userId);
 
-                    const notificacaoAtiva =
-                        await getNotificacaoDaily(userId);
-
-                    const embed = new EmbedBuilder()
+                const embed =
+                    new EmbedBuilder()
                         .setTitle("⏳ DAILY")
                         .setDescription(
-                            `Você já pegou seu daily!\n\n` +
-                            `🕐 Próximo daily em **${horas}h ${minutos}min ${segundos}s**.\n` +
+                            `Você já pegou seu daily hoje!\n\n` +
+                            `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
                             `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
                         );
 
-                    const row =
-                        criarBotaoNotificacao(notificacaoAtiva);
+                const row =
+                    criarBotaoNotificacao(
+                        notificacaoAtiva
+                    );
 
-                    return message.reply({
-                        embeds: [embed],
-                        components: [row]
-                    });
-                }
+                return message.reply({
+                    embeds: [embed],
+                    components: [row]
+                });
             }
 
-            const agora = Date.now();
-            const recompensa = sortearRecompensa();
-
-            await alterarSaldo(userId, recompensa);
-            await salvarUltimoDaily(userId, agora);
-
-            // Novo daily começa sem notificação ativada
-            await salvarNotificacaoDaily(userId, false);
-
-            const novoSaldo = await getSaldo(userId);
-            const proximoDaily = agora + COOLDOWN;
-
-            const embed = new EmbedBuilder()
-                .setTitle("🎁 DAILY")
-                .setDescription(
-                    `Parabéns, ${message.author}!\n\n` +
-                    `🎲 Você ganhou **${recompensa} moedas**!\n` +
-                    `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
-                    `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
-                )
-                .setFooter({
-                    text: "Volte amanhã para tentar a sorte novamente!"
-                });
-
-            const row = criarBotaoNotificacao(false);
+            const {
+                embed,
+                row
+            } = await entregarDaily(
+                userId,
+                message.author
+            );
 
             await message.reply({
                 embeds: [embed],
@@ -267,6 +386,7 @@ module.exports = {
             });
 
         } catch (erro) {
+
             console.error(
                 "❌ Erro no Daily por prefixo:",
                 erro
@@ -283,14 +403,22 @@ module.exports = {
     // =====================================================
 
     async handleButton(interaction) {
-        if (interaction.customId !== "daily_notificar") return;
 
-        const userId = interaction.user.id;
+        if (
+            interaction.customId !==
+            "daily_notificar"
+        ) {
+            return;
+        }
+
+        const userId =
+            interaction.user.id;
 
         const notificacaoAtiva =
             await getNotificacaoDaily(userId);
 
         if (notificacaoAtiva) {
+
             return interaction.reply({
                 content:
                     "🔔 Você já ativou a notificação do daily!",
@@ -302,17 +430,21 @@ module.exports = {
             await getUltimoDaily(userId);
 
         if (!ultimoDaily) {
+
             return interaction.reply({
                 content:
-                    "❌ Você ainda não precisa de uma notificação. Use o `/daily` quando estiver disponível.",
+                    "❌ Você ainda não possui um daily para aguardar. Use `/daily` primeiro.",
                 ephemeral: true
             });
         }
 
-        const { proximoDaily, restante } =
-            calcularTempoRestante(ultimoDaily);
+        const {
+            proximoDaily,
+            restante
+        } = calcularTempoRestante();
 
         if (restante <= 0) {
+
             return interaction.reply({
                 content:
                     "🎁 Seu daily já está disponível! Use `/daily`.",
@@ -320,48 +452,86 @@ module.exports = {
             });
         }
 
-        // 💾 Salvar no PostgreSQL
-        await salvarNotificacaoDaily(userId, true);
+        // =================================================
+        // 💾 SALVAR NO POSTGRESQL
+        // =================================================
 
-        if (timersNotificacao.has(userId)) {
+        await salvarNotificacaoDaily(
+            userId,
+            true
+        );
+
+        // =================================================
+        // ⏰ LIMPAR TIMER ANTIGO
+        // =================================================
+
+        if (
+            timersNotificacao.has(userId)
+        ) {
+
             clearTimeout(
                 timersNotificacao.get(userId)
             );
         }
 
-        const timer = setTimeout(async () => {
-            try {
-                await interaction.user.send(
-                    "🔔 **Seu daily está disponível!**\n\n" +
-                    "Use `/daily` no servidor para receber sua recompensa. 💰"
-                );
-            } catch (erro) {
-                console.log(
-                    `⚠️ Não foi possível enviar DM para ${interaction.user.tag}.`
-                );
-            }
+        // =================================================
+        // 🔔 CRIAR NOVO TIMER
+        // =================================================
 
-            // 💾 Remover a notificação do banco
-            try {
-                await salvarNotificacaoDaily(
-                    userId,
-                    false
-                );
-            } catch (erro) {
-                console.error(
-                    "❌ Erro ao atualizar notificação:",
-                    erro
-                );
-            }
+        const timer =
+            setTimeout(
+                async () => {
 
-            timersNotificacao.delete(userId);
-        }, restante);
+                    try {
 
-        timersNotificacao.set(userId, timer);
+                        await interaction.user.send(
+                            "🔔 **Seu daily está disponível!**\n\n" +
+                            "Já passou da meia-noite! 🌙\n" +
+                            "Use `/daily` no servidor para receber sua recompensa. 💰"
+                        );
+
+                    } catch (erro) {
+
+                        console.log(
+                            `⚠️ Não foi possível enviar DM para ${interaction.user.tag}.`
+                        );
+                    }
+
+                    // -----------------------------
+                    // 💾 DESATIVAR NOTIFICAÇÃO
+                    // -----------------------------
+
+                    try {
+
+                        await salvarNotificacaoDaily(
+                            userId,
+                            false
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro ao atualizar notificação:",
+                            erro
+                        );
+                    }
+
+                    timersNotificacao.delete(
+                        userId
+                    );
+
+                },
+                restante
+            );
+
+        timersNotificacao.set(
+            userId,
+            timer
+        );
 
         await interaction.reply({
             content:
-                "✅ Pronto! Vou te mandar uma mensagem quando seu próximo daily estiver disponível.",
+                `✅ Pronto! Vou te avisar quando o daily estiver disponível às **${formatarHorario(proximoDaily)}**. 🔔`,
             ephemeral: true
         });
     }
