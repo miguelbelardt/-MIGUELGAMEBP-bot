@@ -17,6 +17,9 @@ const {
 
 const timersNotificacao = new Map();
 
+// 🛡️ Proteção contra duas execuções simultâneas do Daily
+const dailyProcessando = new Set();
+
 const TIMEZONE = "America/Sao_Paulo";
 
 // =====================================================
@@ -91,10 +94,7 @@ function calcularProximaMeiaNoite() {
         partes.find(parte => parte.type === "day").value
     );
 
-    // Começamos com uma data UTC aproximada
-    // e encontramos o instante correspondente à meia-noite
-    // de Brasília.
-    let timestamp = Date.UTC(
+    return Date.UTC(
         ano,
         mes - 1,
         dia + 1,
@@ -102,8 +102,6 @@ function calcularProximaMeiaNoite() {
         0,
         0
     );
-
-    return timestamp;
 }
 
 // =====================================================
@@ -207,7 +205,6 @@ async function entregarDaily(userId, usuario) {
         agora
     );
 
-    // Novo daily começa sem notificação ativada
     await salvarNotificacaoDaily(
         userId,
         false
@@ -242,7 +239,7 @@ async function entregarDaily(userId, usuario) {
 }
 
 // =====================================================
-// 💬 SLASH COMMAND
+// 🤖 COMANDO
 // =====================================================
 
 module.exports = {
@@ -253,49 +250,64 @@ module.exports = {
             "Resgate sua recompensa diária! 💰"
         ),
 
+    // =====================================================
+    // 💬 SLASH COMMAND
+    // =====================================================
+
     async execute(interaction) {
 
         const userId =
             interaction.user.id;
 
-        const ultimoDaily =
-            await getUltimoDaily(userId);
-
-        if (
-            ultimoDaily &&
-            mesmoDiaBrasilia(ultimoDaily)
-        ) {
-
-            const {
-                proximoDaily,
-                restante
-            } = calcularTempoRestante();
-
-            const notificacaoAtiva =
-                await getNotificacaoDaily(userId);
-
-            const embed =
-                new EmbedBuilder()
-                    .setTitle("⏳ DAILY")
-                    .setDescription(
-                        `Você já pegou seu daily hoje!\n\n` +
-                        `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
-                        `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
-                    );
-
-            const row =
-                criarBotaoNotificacao(
-                    notificacaoAtiva
-                );
-
+        // 🛡️ Evita duas execuções simultâneas
+        if (dailyProcessando.has(userId)) {
             return interaction.reply({
-                embeds: [embed],
-                components: [row],
+                content:
+                    "⏳ Seu Daily já está sendo processado. Aguarde um momento!",
                 ephemeral: true
             });
         }
 
+        dailyProcessando.add(userId);
+
         try {
+
+            const ultimoDaily =
+                await getUltimoDaily(userId);
+
+            if (
+                ultimoDaily &&
+                mesmoDiaBrasilia(ultimoDaily)
+            ) {
+
+                const {
+                    proximoDaily,
+                    restante
+                } = calcularTempoRestante();
+
+                const notificacaoAtiva =
+                    await getNotificacaoDaily(userId);
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle("⏳ DAILY")
+                        .setDescription(
+                            `Você já pegou seu daily hoje!\n\n` +
+                            `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
+                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+                        );
+
+                const row =
+                    criarBotaoNotificacao(
+                        notificacaoAtiva
+                    );
+
+                return interaction.reply({
+                    embeds: [embed],
+                    components: [row],
+                    ephemeral: true
+                });
+            }
 
             const {
                 embed,
@@ -317,11 +329,20 @@ module.exports = {
                 erro
             );
 
-            await interaction.reply({
-                content:
-                    "❌ Não foi possível processar seu daily.",
-                ephemeral: true
-            });
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
+                await interaction.reply({
+                    content:
+                        "❌ Não foi possível processar seu daily.",
+                    ephemeral: true
+                });
+            }
+
+        } finally {
+
+            dailyProcessando.delete(userId);
         }
     },
 
@@ -333,6 +354,13 @@ module.exports = {
 
         const userId =
             message.author.id;
+
+        // 🛡️ Evita duas execuções simultâneas
+        if (dailyProcessando.has(userId)) {
+            return;
+        }
+
+        dailyProcessando.add(userId);
 
         try {
 
@@ -395,6 +423,10 @@ module.exports = {
             await message.reply(
                 "❌ Não foi possível processar seu daily."
             );
+
+        } finally {
+
+            dailyProcessando.delete(userId);
         }
     },
 
@@ -496,10 +528,6 @@ module.exports = {
                             `⚠️ Não foi possível enviar DM para ${interaction.user.tag}.`
                         );
                     }
-
-                    // -----------------------------
-                    // 💾 DESATIVAR NOTIFICAÇÃO
-                    // -----------------------------
 
                     try {
 
