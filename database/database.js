@@ -170,6 +170,23 @@ async function salvarNotificacaoDaily(userId, ativada) {
     );
 }
 
+// Pegar usuários com notificação do Daily ativada
+async function getUsuariosComNotificacaoDaily() {
+    const resultado = await pool.query(
+        `
+        SELECT id, ultimo_daily
+        FROM usuarios
+        WHERE notificacao_daily = TRUE
+        AND ultimo_daily IS NOT NULL
+        `
+    );
+
+    return resultado.rows.map(usuario => ({
+        id: usuario.id,
+        ultimo_daily: Number(usuario.ultimo_daily)
+    }));
+}
+
 module.exports = {
     pool,
     inicializarBanco,
@@ -179,5 +196,6 @@ module.exports = {
     getUltimoDaily,
     salvarUltimoDaily,
     getNotificacaoDaily,
-    salvarNotificacaoDaily
+    salvarNotificacaoDaily,
+    getUsuariosComNotificacaoDaily
 };
