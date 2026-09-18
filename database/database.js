@@ -175,6 +175,34 @@ async function adicionarXP(userId, quantidade) {
     );
 }
 
+// Remover XP
+async function removerXP(userId, quantidade) {
+    await criarUsuario(userId);
+
+    quantidade = Number(quantidade);
+
+    if (
+        !Number.isInteger(quantidade) ||
+        quantidade <= 0
+    ) {
+        throw new Error(
+            "A quantidade de XP deve ser maior que zero."
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET xp = GREATEST(
+            COALESCE(xp, 0) - $1,
+            0
+        )
+        WHERE id = $2
+        `,
+        [quantidade, userId]
+    );
+}
+
 // Pegar ranking de XP
 async function getRankingXP(limite = 10) {
     const resultado = await pool.query(
@@ -291,7 +319,6 @@ async function getRankingMoedasPaginado(
 ) {
     await criarUsuario(userId);
 
-    // Garantir valores válidos
     pagina = Math.max(1, Number(pagina) || 1);
     limite = Math.max(1, Number(limite) || 10);
 
@@ -332,7 +359,6 @@ async function getRankingMoedasPaginado(
 
     else {
 
-        // Se não houver membros no servidor
         if (
             !Array.isArray(usuariosServidor) ||
             usuariosServidor.length === 0
@@ -448,8 +474,6 @@ async function getRankingMoedasPaginado(
 
     } else {
 
-        // Só calcula a posição local
-        // se o usuário estiver no servidor
         if (
             usuariosServidor.includes(userId)
         ) {
@@ -510,9 +534,7 @@ async function getRankingMoedasPaginado(
         },
 
         pagina,
-
         totalPaginas,
-
         totalUsuarios
     };
 }
@@ -598,6 +620,7 @@ module.exports = {
     // ⭐ XP
     getXP,
     adicionarXP,
+    removerXP,
     getRankingXP,
 
     // 🎁 Daily
