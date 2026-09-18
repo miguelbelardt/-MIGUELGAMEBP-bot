@@ -7,7 +7,10 @@ const {
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { inicializarBanco } = require("./database/database");
+const {
+    inicializarBanco,
+    adicionarXP
+} = require("./database/database");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
@@ -54,6 +57,16 @@ const DONO_ID = "1124140396516225044";
 // =====================================================
 
 const PREFIXO = "m";
+
+// =====================================================
+// ⭐ SISTEMA DE XP
+// =====================================================
+
+const xpCooldowns = new Map();
+
+const XP_MIN = 5;
+const XP_MAX = 15;
+const XP_COOLDOWN = 60 * 1000;
 
 // =====================================================
 // 🤖 CLIENTE DISCORD
@@ -242,7 +255,7 @@ client.on(
 );
 
 // =====================================================
-// 💬 COMANDOS POR PREFIXO
+// 💬 COMANDOS POR PREFIXO + ⭐ XP
 // =====================================================
 
 client.on(
@@ -250,6 +263,57 @@ client.on(
     async message => {
 
         if (message.author.bot) return;
+
+        // =================================================
+        // ⭐ GANHAR XP POR MENSAGEM
+        // =================================================
+
+        if (message.guild) {
+
+            const agora = Date.now();
+
+            const ultimoXP =
+                xpCooldowns.get(message.author.id) || 0;
+
+            if (
+                agora - ultimoXP >= XP_COOLDOWN
+            ) {
+
+                const quantidadeXP =
+                    Math.floor(
+                        Math.random() *
+                        (XP_MAX - XP_MIN + 1)
+                    ) + XP_MIN;
+
+                try {
+
+                    await adicionarXP(
+                        message.author.id,
+                        quantidadeXP
+                    );
+
+                    xpCooldowns.set(
+                        message.author.id,
+                        agora
+                    );
+
+                    console.log(
+                        `⭐ ${message.author.tag} ganhou ${quantidadeXP} XP`
+                    );
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ Erro ao adicionar XP:",
+                        erro
+                    );
+                }
+            }
+        }
+
+        // =================================================
+        // 🔤 SISTEMA DE PREFIXO
+        // =================================================
 
         const conteudo =
             message.content.trim();
