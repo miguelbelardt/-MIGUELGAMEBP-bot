@@ -203,6 +203,31 @@ async function removerXP(userId, quantidade) {
     );
 }
 
+// Definir XP
+async function setarXP(userId, quantidade) {
+    await criarUsuario(userId);
+
+    quantidade = Number(quantidade);
+
+    if (
+        !Number.isInteger(quantidade) ||
+        quantidade < 0
+    ) {
+        throw new Error(
+            "A quantidade de XP não pode ser negativa."
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET xp = $1
+        WHERE id = $2
+        `,
+        [quantidade, userId]
+    );
+}
+
 // Pegar ranking de XP
 async function getRankingXP(limite = 10) {
     const resultado = await pool.query(
@@ -621,6 +646,7 @@ module.exports = {
     getXP,
     adicionarXP,
     removerXP,
+    setarXP,
     getRankingXP,
 
     // 🎁 Daily
