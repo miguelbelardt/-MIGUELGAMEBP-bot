@@ -8,6 +8,7 @@
     "deploy": "node deploy-commands.js"
   },
   "dependencies": {
+    "@discordjs/voice": "^0.19.2",
     "discord.js": "^14.0.0",
     "pg": "^8.16.3"
   }
