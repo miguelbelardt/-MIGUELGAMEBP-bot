@@ -187,6 +187,71 @@ async function getUsuariosComNotificacaoDaily() {
     }));
 }
 
+// Pegar ranking de moedas
+async function getRankingMoedas(userId, limite = 10) {
+    await criarUsuario(userId);
+
+    const resultado = await pool.query(
+        `
+        SELECT id, saldo
+        FROM usuarios
+        ORDER BY saldo DESC, id ASC
+        LIMIT $1
+        `,
+        [limite]
+    );
+
+    const ranking = resultado.rows.map((usuario, index) => ({
+        id: usuario.id,
+        saldo: Number(usuario.saldo),
+        posicao: index + 1
+    }));
+
+    const usuarioAtual = await pool.query(
+        `
+        SELECT id, saldo
+        FROM usuarios
+        WHERE id = $1
+        `,
+        [userId]
+    );
+
+    let posicaoUsuario = null;
+    let saldoUsuario = 0;
+
+    if (usuarioAtual.rows.length > 0) {
+        saldoUsuario = Number(
+            usuarioAtual.rows[0].saldo
+        );
+
+        const posicao = await pool.query(
+            `
+            SELECT COUNT(*) + 1 AS posicao
+            FROM usuarios
+            WHERE saldo > $1
+            OR (saldo = $1 AND id < $2)
+            `,
+            [
+                saldoUsuario,
+                userId
+            ]
+        );
+
+        posicaoUsuario = Number(
+            posicao.rows[0].posicao
+        );
+    }
+
+    return {
+        ranking,
+        usuario: {
+            id: userId,
+            saldo: saldoUsuario,
+            posicao: posicaoUsuario
+        }
+    };
+}
+
 module.exports = {
     pool,
     inicializarBanco,
@@ -197,5 +262,6 @@ module.exports = {
     salvarUltimoDaily,
     getNotificacaoDaily,
     salvarNotificacaoDaily,
-    getUsuariosComNotificacaoDaily
+    getUsuariosComNotificacaoDaily,
+    getRankingMoedas
 };
