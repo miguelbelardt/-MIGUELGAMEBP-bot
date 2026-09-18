@@ -175,6 +175,25 @@ async function adicionarXP(userId, quantidade) {
     );
 }
 
+// Pegar ranking de XP
+async function getRankingXP(limite = 10) {
+    const resultado = await pool.query(
+        `
+        SELECT id, xp
+        FROM usuarios
+        ORDER BY xp DESC, id ASC
+        LIMIT $1
+        `,
+        [limite]
+    );
+
+    return resultado.rows.map((usuario, index) => ({
+        id: usuario.id,
+        xp: Number(usuario.xp),
+        posicao: index + 1
+    }));
+}
+
 // ================================
 // 🎁 SISTEMA DE DAILY
 // ================================
@@ -384,6 +403,7 @@ module.exports = {
     // ⭐ XP
     getXP,
     adicionarXP,
+    getRankingXP,
 
     // 🎁 Daily
     getUltimoDaily,
