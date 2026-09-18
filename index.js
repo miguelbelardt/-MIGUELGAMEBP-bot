@@ -26,7 +26,7 @@ process.on("warning", aviso => {
 });
 
 // =====================================================
-// 🌐 SERVIDOR HTTP PARA O RENDER
+// 🌐 SERVIDOR HTTP
 // =====================================================
 
 const PORT = process.env.PORT || 3000;
@@ -86,12 +86,21 @@ for (const arquivo of arquivosComandos) {
 
         if ("data" in comando && "execute" in comando) {
             client.commands.set(comando.data.name, comando);
-            console.log(`✅ Comando carregado: ${comando.data.name}`);
+
+            console.log(
+                `✅ Comando carregado: ${comando.data.name}`
+            );
         } else {
-            console.log(`⚠️ Comando inválido: ${arquivo}`);
+            console.log(
+                `⚠️ Comando inválido: ${arquivo}`
+            );
         }
+
     } catch (erro) {
-        console.error(`❌ Erro ao carregar ${arquivo}:`, erro);
+        console.error(
+            `❌ Erro ao carregar ${arquivo}:`,
+            erro
+        );
     }
 }
 
@@ -100,13 +109,58 @@ for (const arquivo of arquivosComandos) {
 // =====================================================
 
 client.once("ready", () => {
-    console.log(`🤖 Bot online como ${client.user.tag}`);
+    console.log(
+        `🤖 Bot online como ${client.user.tag}`
+    );
 
-    client.user.setActivity("Minecraft", {
-        type: 0
-    });
+    let mostrandoServidores = true;
 
-    console.log("🎮 Status definido: Jogando Minecraft");
+    const atualizarStatus = () => {
+
+        if (mostrandoServidores) {
+
+            const servidores =
+                client.guilds.cache.size;
+
+            client.user.setActivity(
+                `${servidores} servidores`,
+                {
+                    type: 0
+                }
+            );
+
+            console.log(
+                `🌐 Status: ${servidores} servidores`
+            );
+
+        } else {
+
+            const comandos =
+                client.commands.size;
+
+            client.user.setActivity(
+                `${comandos} comandos`,
+                {
+                    type: 0
+                }
+            );
+
+            console.log(
+                `📋 Status: ${comandos} comandos`
+            );
+        }
+
+        mostrandoServidores = !mostrandoServidores;
+    };
+
+    // Primeiro status
+    atualizarStatus();
+
+    // Alterna a cada 3 segundos
+    setInterval(
+        atualizarStatus,
+        3000
+    );
 });
 
 // =====================================================
@@ -114,313 +168,542 @@ client.once("ready", () => {
 // =====================================================
 
 client.on("error", erro => {
-    console.error("❌ Erro no cliente Discord:", erro);
+    console.error(
+        "❌ Erro no cliente Discord:",
+        erro
+    );
 });
 
 client.on("warn", aviso => {
-    console.warn("⚠️ Aviso do Discord:", aviso);
-});
-
-client.on("shardDisconnect", (evento, shardId) => {
-    console.error(
-        `🔴 Discord desconectou o shard ${shardId}.`,
-        evento
+    console.warn(
+        "⚠️ Aviso do Discord:",
+        aviso
     );
 });
 
-client.on("shardReconnecting", shardId => {
-    console.log(`🔄 Tentando reconectar o shard ${shardId}...`);
-});
+client.on(
+    "shardDisconnect",
+    (evento, shardId) => {
 
-client.on("shardResume", (replayedEvents, shardId) => {
-    console.log(
-        `🟢 Conexão restaurada no shard ${shardId}. Eventos recuperados: ${replayedEvents}`
-    );
-});
+        console.error(
+            `🔴 Discord desconectou o shard ${shardId}.`,
+            evento
+        );
+    }
+);
+
+client.on(
+    "shardReconnecting",
+    shardId => {
+
+        console.log(
+            `🔄 Tentando reconectar o shard ${shardId}...`
+        );
+    }
+);
+
+client.on(
+    "shardResume",
+    (replayedEvents, shardId) => {
+
+        console.log(
+            `🟢 Conexão restaurada no shard ${shardId}. Eventos recuperados: ${replayedEvents}`
+        );
+    }
+);
 
 // =====================================================
 // 💬 COMANDOS POR PREFIXO
 // =====================================================
 
-client.on("messageCreate", async message => {
-    if (message.author.bot) return;
+client.on(
+    "messageCreate",
+    async message => {
 
-    const conteudo = message.content.trim();
+        if (message.author.bot) return;
 
-    if (!conteudo) return;
+        const conteudo =
+            message.content.trim();
 
-    if (conteudo.charAt(0).toLowerCase() !== PREFIXO) {
-        return;
-    }
+        if (!conteudo) return;
 
-    const depoisDoPrefixo = conteudo.slice(1).trim();
+        // Verifica o prefixo
+        if (
+            conteudo
+                .charAt(0)
+                .toLowerCase() !== PREFIXO
+        ) {
+            return;
+        }
 
-    if (!depoisDoPrefixo) return;
+        const depoisDoPrefixo =
+            conteudo
+                .slice(1)
+                .trim();
 
-    const partes = depoisDoPrefixo.split(/\s+/);
-    const nomeComando = partes.shift().toLowerCase();
+        if (!depoisDoPrefixo) return;
 
-    const comando = client.commands.get(nomeComando);
+        const partes =
+            depoisDoPrefixo.split(/\s+/);
 
-    if (!comando) return;
+        const nomeComando =
+            partes
+                .shift()
+                .toLowerCase();
 
-    console.log(
-        `📩 Comando por prefixo: ${message.content}`
-    );
+        // =================================================
+        // 🔎 COMANDO NÃO ENCONTRADO
+        // =================================================
 
-    // =================================================
-    // 🔤 EXECUTAR COMANDO POR PREFIXO
-    // =================================================
+        const comando =
+            client.commands.get(nomeComando);
 
-    if (typeof comando.handlePrefix === "function") {
-        try {
-            await comando.handlePrefix(message, partes);
+        if (!comando) {
 
             console.log(
-                `✅ Comando por prefixo executado: ${message.content}`
+                `⚠️ Comando não encontrado: ${nomeComando}`
+            );
+
+            try {
+
+                await message.reply(
+                    "❌ Comando não encontrado!\n📋 Use `mhelp` para ver a lista de comandos."
+                );
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Não foi possível enviar a mensagem de comando não encontrado:",
+                    erro
+                );
+            }
+
+            return;
+        }
+
+        console.log(
+            `📩 Comando por prefixo: ${message.content}`
+        );
+
+        // =================================================
+        // 🔤 EXECUTAR COMANDO POR PREFIXO
+        // =================================================
+
+        if (
+            typeof comando.handlePrefix === "function"
+        ) {
+
+            try {
+
+                await comando.handlePrefix(
+                    message,
+                    partes
+                );
+
+                console.log(
+                    `✅ Comando por prefixo executado: ${message.content}`
+                );
+
+            } catch (erro) {
+
+                console.error(
+                    `❌ Erro no comando por prefixo ${nomeComando}:`,
+                    erro
+                );
+
+                try {
+
+                    await message.reply(
+                        "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde."
+                    );
+
+                } catch (erroResposta) {
+
+                    console.error(
+                        "❌ Não foi possível enviar a mensagem de erro:",
+                        erroResposta
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // =================================================
+        // ⚠️ SEM SUPORTE PARA PREFIXO
+        // =================================================
+
+        console.log(
+            `⚠️ O comando ${nomeComando} ainda não possui suporte por prefixo.`
+        );
+
+        try {
+
+            await message.reply(
+                "⚠️ Esse comando ainda não pode ser usado pelo prefixo.\n📋 Use `mhelp` para ver os comandos disponíveis."
             );
 
         } catch (erro) {
+
             console.error(
-                `❌ Erro no comando por prefixo ${nomeComando}:`,
+                "❌ Não foi possível enviar a mensagem:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// 📩 INTERAÇÕES
+// =====================================================
+
+client.on(
+    "interactionCreate",
+    async interaction => {
+
+        console.log(
+            `📩 Interação recebida: ${
+                interaction.commandName ||
+                interaction.customId ||
+                "desconhecida"
+            }`
+        );
+
+        // =================================================
+        // 🔘 BOTÕES
+        // =================================================
+
+        if (interaction.isButton()) {
+
+            // -----------------------------
+            // DAILY
+            // -----------------------------
+
+            if (
+                interaction.customId ===
+                "daily_notificar"
+            ) {
+
+                const comando =
+                    client.commands.get("daily");
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                        "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão do daily:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // -----------------------------
+            // CENTRAL DE AJUDA
+            // -----------------------------
+
+            if (
+                interaction.customId ===
+                "ajuda_comandos"
+            ) {
+
+                const comando =
+                    client.commands.get("ajuda");
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                        "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão da ajuda:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // -----------------------------
+            // 🎨 EMBED
+            // -----------------------------
+
+            if (
+                interaction.customId.startsWith(
+                    "embed_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get("embed");
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                        "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão do embed:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            return;
+        }
+
+        // =================================================
+        // 📝 MODAIS
+        // =================================================
+
+        if (interaction.isModalSubmit()) {
+
+            if (
+                interaction.customId.startsWith(
+                    "embed_modal_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get("embed");
+
+                if (
+                    comando &&
+                    typeof comando.handleModal ===
+                        "function"
+                ) {
+
+                    try {
+
+                        await comando.handleModal(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no modal do embed:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            return;
+        }
+
+        // =================================================
+        // 💬 SLASH COMMANDS
+        // =================================================
+
+        if (
+            !interaction.isChatInputCommand()
+        ) {
+            return;
+        }
+
+        const comando =
+            client.commands.get(
+                interaction.commandName
+            );
+
+        if (!comando) {
+
+            console.log(
+                `⚠️ Comando não encontrado: ${interaction.commandName}`
+            );
+
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Comando não encontrado!",
+                    ephemeral: true
+                });
+            }
+
+            return;
+        }
+
+        try {
+
+            await comando.execute(
+                interaction
+            );
+
+            console.log(
+                `✅ Comando executado: /${interaction.commandName}`
+            );
+
+        } catch (erro) {
+
+            console.error(
+                `❌ Erro no comando /${interaction.commandName}:`,
                 erro
             );
 
             try {
-                await message.reply(
-                    "❌ Ocorreu um erro ao executar esse comando."
-                );
+
+                if (
+                    interaction.replied ||
+                    interaction.deferred
+                ) {
+
+                    await interaction.followUp({
+                        content:
+                            "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
+                        ephemeral: true
+                    });
+
+                } else {
+
+                    await interaction.reply({
+                        content:
+                            "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
+                        ephemeral: true
+                    });
+                }
+
             } catch (erroResposta) {
+
                 console.error(
                     "❌ Não foi possível enviar a mensagem de erro:",
                     erroResposta
                 );
             }
         }
-
-        return;
     }
-
-    console.log(
-        `⚠️ O comando ${nomeComando} ainda não possui suporte por prefixo.`
-    );
-});
-
-// =====================================================
-// 📩 INTERAÇÕES
-// =====================================================
-
-client.on("interactionCreate", async interaction => {
-
-    console.log(
-        `📩 Interação recebida: ${
-            interaction.commandName ||
-            interaction.customId ||
-            "desconhecida"
-        }`
-    );
-
-    // =================================================
-    // 🔘 BOTÕES
-    // =================================================
-
-    if (interaction.isButton()) {
-
-        // -----------------------------
-        // DAILY
-        // -----------------------------
-
-        if (interaction.customId === "daily_notificar") {
-            const comando = client.commands.get("daily");
-
-            if (
-                comando &&
-                typeof comando.handleButton === "function"
-            ) {
-                try {
-                    await comando.handleButton(interaction);
-                } catch (erro) {
-                    console.error(
-                        "❌ Erro no botão do daily:",
-                        erro
-                    );
-
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: "❌ Ocorreu um erro ao processar o botão.",
-                            ephemeral: true
-                        });
-                    }
-                }
-            }
-
-            return;
-        }
-
-        // -----------------------------
-        // CENTRAL DE AJUDA
-        // -----------------------------
-
-        if (interaction.customId === "ajuda_comandos") {
-            const comando = client.commands.get("ajuda");
-
-            if (
-                comando &&
-                typeof comando.handleButton === "function"
-            ) {
-                try {
-                    await comando.handleButton(interaction);
-                } catch (erro) {
-                    console.error(
-                        "❌ Erro no botão da ajuda:",
-                        erro
-                    );
-
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: "❌ Ocorreu um erro ao processar o botão.",
-                            ephemeral: true
-                        });
-                    }
-                }
-            }
-
-            return;
-        }
-
-        // -----------------------------
-        // 🎨 EMBED
-        // -----------------------------
-
-        if (interaction.customId.startsWith("embed_")) {
-            const comando = client.commands.get("embed");
-
-            if (
-                comando &&
-                typeof comando.handleButton === "function"
-            ) {
-                try {
-                    await comando.handleButton(interaction);
-                } catch (erro) {
-                    console.error(
-                        "❌ Erro no botão do embed:",
-                        erro
-                    );
-
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: "❌ Ocorreu um erro ao processar o botão do embed.",
-                            ephemeral: true
-                        });
-                    }
-                }
-            }
-
-            return;
-        }
-
-        return;
-    }
-
-    // =================================================
-    // 📝 MODAIS
-    // =================================================
-
-    if (interaction.isModalSubmit()) {
-
-        if (interaction.customId.startsWith("embed_modal_")) {
-            const comando = client.commands.get("embed");
-
-            if (
-                comando &&
-                typeof comando.handleModal === "function"
-            ) {
-                try {
-                    await comando.handleModal(interaction);
-                } catch (erro) {
-                    console.error(
-                        "❌ Erro no modal do embed:",
-                        erro
-                    );
-
-                    if (!interaction.replied && !interaction.deferred) {
-                        await interaction.reply({
-                            content: "❌ Ocorreu um erro ao processar o formulário.",
-                            ephemeral: true
-                        });
-                    }
-                }
-            }
-
-            return;
-        }
-
-        return;
-    }
-
-    // =================================================
-    // 💬 SLASH COMMANDS
-    // =================================================
-
-    if (!interaction.isChatInputCommand()) return;
-
-    const comando = client.commands.get(interaction.commandName);
-
-    if (!comando) {
-        console.log(
-            `⚠️ Comando não encontrado: ${interaction.commandName}`
-        );
-        return;
-    }
-
-    try {
-        await comando.execute(interaction);
-
-        console.log(
-            `✅ Comando executado: /${interaction.commandName}`
-        );
-
-    } catch (erro) {
-        console.error(
-            `❌ Erro no comando /${interaction.commandName}:`,
-            erro
-        );
-
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({
-                content: "❌ Ocorreu um erro ao executar esse comando.",
-                ephemeral: true
-            });
-        } else {
-            await interaction.reply({
-                content: "❌ Ocorreu um erro ao executar esse comando.",
-                ephemeral: true
-            });
-        }
-    }
-});
+);
 
 // =====================================================
 // 💾 BANCO + LOGIN DO DISCORD
 // =====================================================
 
 async function iniciar() {
-    try {
-        console.log("🚀 Iniciando bot...");
 
-        console.log("💾 Conectando ao banco...");
+    try {
+
+        console.log(
+            "🚀 Iniciando bot..."
+        );
+
+        console.log(
+            "💾 Conectando ao banco..."
+        );
+
         await inicializarBanco();
 
-        console.log("💾 Banco de dados inicializado!");
+        console.log(
+            "💾 Banco de dados inicializado!"
+        );
 
-        console.log("🔑 Tentando conectar ao Discord...");
+        console.log(
+            "🔑 Tentando conectar ao Discord..."
+        );
 
-        await client.login(process.env.DISCORD_TOKEN);
+        await client.login(
+            process.env.DISCORD_TOKEN
+        );
 
-        console.log("🔑 Login do Discord concluído!");
+        console.log(
+            "🔑 Login do Discord concluído!"
+        );
 
     } catch (erro) {
-        console.error("❌ Erro ao iniciar o bot:", erro);
+
+        console.error(
+            "❌ Erro ao iniciar o bot:",
+            erro
+        );
+
         process.exit(1);
     }
 }
