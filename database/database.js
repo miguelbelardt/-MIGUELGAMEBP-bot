@@ -40,6 +40,13 @@ async function inicializarBanco() {
         WHERE notificacao_daily IS NULL
     `);
 
+    // Criar tabela de ADMs
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS adms (
+            id VARCHAR(30) PRIMARY KEY
+        )
+    `);
+
     console.log("💾 Banco de dados conectado e tabela pronta!");
 }
 
@@ -252,6 +259,47 @@ async function getRankingMoedas(userId, limite = 10) {
     };
 }
 
+// ================================
+// SISTEMA DE ADM DO BOT
+// ================================
+
+// Adicionar ADM
+async function adicionarAdm(userId) {
+    await pool.query(
+        `
+        INSERT INTO adms (id)
+        VALUES ($1)
+        ON CONFLICT (id) DO NOTHING
+        `,
+        [userId]
+    );
+}
+
+// Remover ADM
+async function removerAdm(userId) {
+    await pool.query(
+        `
+        DELETE FROM adms
+        WHERE id = $1
+        `,
+        [userId]
+    );
+}
+
+// Verificar se é ADM
+async function isAdm(userId) {
+    const resultado = await pool.query(
+        `
+        SELECT id
+        FROM adms
+        WHERE id = $1
+        `,
+        [userId]
+    );
+
+    return resultado.rows.length > 0;
+}
+
 module.exports = {
     pool,
     inicializarBanco,
@@ -263,5 +311,8 @@ module.exports = {
     getNotificacaoDaily,
     salvarNotificacaoDaily,
     getUsuariosComNotificacaoDaily,
-    getRankingMoedas
+    getRankingMoedas,
+    adicionarAdm,
+    removerAdm,
+    isAdm
 };
