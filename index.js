@@ -63,7 +63,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates
     ]
 });
 
@@ -108,7 +109,7 @@ for (const arquivo of arquivosComandos) {
 // 🟢 BOT ONLINE
 // =====================================================
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
     console.log(
         `🤖 Bot online como ${client.user.tag}`
     );
@@ -183,10 +184,8 @@ client.once("ready", async () => {
         mostrandoServidores = !mostrandoServidores;
     };
 
-    // Primeiro status
     atualizarStatus();
 
-    // Alterna a cada 5 segundos
     setInterval(
         atualizarStatus,
         5000
@@ -257,7 +256,6 @@ client.on(
 
         if (!conteudo) return;
 
-        // Verifica o prefixo
         if (
             conteudo
                 .charAt(0)
@@ -280,10 +278,6 @@ client.on(
             partes
                 .shift()
                 .toLowerCase();
-
-        // =================================================
-        // 🔎 COMANDO NÃO ENCONTRADO
-        // =================================================
 
         const comando =
             client.commands.get(nomeComando);
@@ -314,10 +308,6 @@ client.on(
         console.log(
             `📩 Comando por prefixo: ${message.content}`
         );
-
-        // =================================================
-        // 🔤 EXECUTAR COMANDO POR PREFIXO
-        // =================================================
 
         if (
             typeof comando.handlePrefix === "function"
@@ -358,10 +348,6 @@ client.on(
 
             return;
         }
-
-        // =================================================
-        // ⚠️ SEM SUPORTE PARA PREFIXO
-        // =================================================
 
         console.log(
             `⚠️ O comando ${nomeComando} ainda não possui suporte por prefixo.`
@@ -404,10 +390,6 @@ client.on(
         // =================================================
 
         if (interaction.isButton()) {
-
-            // -----------------------------
-            // DAILY
-            // -----------------------------
 
             if (
                 interaction.customId ===
@@ -453,10 +435,6 @@ client.on(
                 return;
             }
 
-            // -----------------------------
-            // CENTRAL DE AJUDA
-            // -----------------------------
-
             if (
                 interaction.customId ===
                 "ajuda_comandos"
@@ -500,10 +478,6 @@ client.on(
 
                 return;
             }
-
-            // -----------------------------
-            // 🎨 EMBED
-            // -----------------------------
 
             if (
                 interaction.customId.startsWith(
