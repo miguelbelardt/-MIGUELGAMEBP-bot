@@ -281,68 +281,263 @@ async function getUsuariosComNotificacaoDaily() {
 // 🏆 RANKING DE MOEDAS
 // ================================
 
-// Pegar ranking de moedas
-async function getRankingMoedas(userId, limite = 10) {
+// Ranking global/local com paginação
+async function getRankingMoedasPaginado(
+    userId,
+    tipo = "global",
+    usuariosServidor = [],
+    pagina = 1,
+    limite = 10
+) {
     await criarUsuario(userId);
 
-    const resultado = await pool.query(
-        `
-        SELECT id, saldo
-        FROM usuarios
-        ORDER BY saldo DESC, id ASC
-        LIMIT $1
-        `,
-        [limite]
-    );
+    // Garantir valores válidos
+    pagina = Math.max(1, Number(pagina) || 1);
+    limite = Math.max(1, Number(limite) || 10);
 
-    const ranking = resultado.rows.map((usuario, index) => ({
-        id: usuario.id,
-        saldo: Number(usuario.saldo),
-        posicao: index + 1
-    }));
+    const offset = (pagina - 1) * limite;
 
-    const usuarioAtual = await pool.query(
-        `
-        SELECT id, saldo
-        FROM usuarios
-        WHERE id = $1
-        `,
-        [userId]
-    );
+    let rankingResult;
+    let totalResult;
 
-    let posicaoUsuario = null;
-    let saldoUsuario = 0;
+    // ================================
+    // 🌎 RANKING GLOBAL
+    // ================================
 
-    if (usuarioAtual.rows.length > 0) {
-        saldoUsuario = Number(
-            usuarioAtual.rows[0].saldo
+    if (tipo === "global") {
+
+        rankingResult = await pool.query(
+            `
+            SELECT id, saldo
+            FROM usuarios
+            ORDER BY saldo DESC, id ASC
+            LIMIT $1
+            OFFSET $2
+            `,
+            [limite, offset]
         );
 
-        const posicao = await pool.query(
+        totalResult = await pool.query(
             `
-            SELECT COUNT(*) + 1 AS posicao
+            SELECT COUNT(*) AS total
             FROM usuarios
-            WHERE saldo > $1
-            OR (saldo = $1 AND id < $2)
+            `
+        );
+
+    }
+
+    // ================================
+    // 🏠 RANKING LOCAL
+    // ================================
+
+    else {
+
+        // Se não houver membros no servidor
+        if (
+            !Array.isArray(usuariosServidor) ||
+            usuariosServidor.length === 0
+        ) {
+            return {
+                ranking: [],
+                usuario: {
+                    id: userId,
+                    saldo: 0,
+                    posicao: null
+                },
+                pagina: 1,
+                totalPaginas: 1,
+                totalUsuarios: 0
+            };
+        }
+
+        rankingResult = await pool.query(
+            `
+            SELECT id, saldo
+            FROM usuarios
+            WHERE id = ANY($1::varchar[])
+            ORDER BY saldo DESC, id ASC
+            LIMIT $2
+            OFFSET $3
             `,
             [
-                saldoUsuario,
-                userId
+                usuariosServidor,
+                limite,
+                offset
             ]
         );
 
-        posicaoUsuario = Number(
-            posicao.rows[0].posicao
+        totalResult = await pool.query(
+            `
+            SELECT COUNT(*) AS total
+            FROM usuarios
+            WHERE id = ANY($1::varchar[])
+            `,
+            [usuariosServidor]
         );
+    }
+
+    // ================================
+    // 📊 MONTAR RANKING
+    // ================================
+
+    const ranking = rankingResult.rows.map(
+        (usuario, index) => ({
+            id: usuario.id,
+            saldo: Number(usuario.saldo),
+            posicao: offset + index + 1
+        })
+    );
+
+    const totalUsuarios =
+        Number(totalResult.rows[0].total);
+
+    const totalPaginas =
+        Math.max(
+            1,
+            Math.ceil(totalUsuarios / limite)
+        );
+
+    // ================================
+    // 👤 POSIÇÃO DO USUÁRIO
+    // ================================
+
+    let saldoUsuario = 0;
+    let posicaoUsuario = null;
+
+    if (tipo === "global") {
+
+        const usuarioAtual =
+            await pool.query(
+                `
+                SELECT id, saldo
+                FROM usuarios
+                WHERE id = $1
+                `,
+                [userId]
+            );
+
+        if (usuarioAtual.rows.length > 0) {
+
+            saldoUsuario =
+                Number(
+                    usuarioAtual.rows[0].saldo
+                );
+
+            const posicao =
+                await pool.query(
+                    `
+                    SELECT COUNT(*) + 1 AS posicao
+                    FROM usuarios
+                    WHERE saldo > $1
+                    OR (
+                        saldo = $1
+                        AND id < $2
+                    )
+                    `,
+                    [
+                        saldoUsuario,
+                        userId
+                    ]
+                );
+
+            posicaoUsuario =
+                Number(
+                    posicao.rows[0].posicao
+                );
+        }
+
+    } else {
+
+        // Só calcula a posição local
+        // se o usuário estiver no servidor
+        if (
+            usuariosServidor.includes(userId)
+        ) {
+
+            const usuarioAtual =
+                await pool.query(
+                    `
+                    SELECT id, saldo
+                    FROM usuarios
+                    WHERE id = $1
+                    `,
+                    [userId]
+                );
+
+            if (usuarioAtual.rows.length > 0) {
+
+                saldoUsuario =
+                    Number(
+                        usuarioAtual.rows[0].saldo
+                    );
+
+                const posicao =
+                    await pool.query(
+                        `
+                        SELECT COUNT(*) + 1 AS posicao
+                        FROM usuarios
+                        WHERE id = ANY($1::varchar[])
+                        AND (
+                            saldo > $2
+                            OR (
+                                saldo = $2
+                                AND id < $3
+                            )
+                        )
+                        `,
+                        [
+                            usuariosServidor,
+                            saldoUsuario,
+                            userId
+                        ]
+                    );
+
+                posicaoUsuario =
+                    Number(
+                        posicao.rows[0].posicao
+                    );
+            }
+        }
     }
 
     return {
         ranking,
+
         usuario: {
             id: userId,
             saldo: saldoUsuario,
             posicao: posicaoUsuario
-        }
+        },
+
+        pagina,
+
+        totalPaginas,
+
+        totalUsuarios
+    };
+}
+
+// ================================
+// 🔄 RANKING ANTIGO
+// ================================
+
+// Mantido para não quebrar comandos antigos
+async function getRankingMoedas(
+    userId,
+    limite = 10
+) {
+    const resultado =
+        await getRankingMoedasPaginado(
+            userId,
+            "global",
+            [],
+            1,
+            limite
+        );
+
+    return {
+        ranking: resultado.ranking,
+        usuario: resultado.usuario
     };
 }
 
@@ -414,6 +609,7 @@ module.exports = {
 
     // 🏆 Ranking
     getRankingMoedas,
+    getRankingMoedasPaginado,
 
     // 👑 ADM
     adicionarAdm,
