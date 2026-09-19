@@ -7,8 +7,13 @@ const pool = new Pool({
     }
 });
 
-// Criar tabela e corrigir dados antigos
+// Criar tabelas e corrigir dados antigos
 async function inicializarBanco() {
+
+    // ================================
+    // 👤 USUÁRIOS
+    // ================================
+
     await pool.query(`
         CREATE TABLE IF NOT EXISTS usuarios (
             id VARCHAR(30) PRIMARY KEY,
@@ -52,14 +57,65 @@ async function inicializarBanco() {
         WHERE notificacao_daily IS NULL
     `);
 
-    // Criar tabela de ADMs
+    // ================================
+    // 👑 ADMS
+    // ================================
+
     await pool.query(`
         CREATE TABLE IF NOT EXISTS adms (
             id VARCHAR(30) PRIMARY KEY
         )
     `);
 
-    console.log("💾 Banco de dados conectado e tabela pronta!");
+    // ================================
+    // 🎉 SORTEIOS
+    // ================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS sorteios (
+            id BIGSERIAL PRIMARY KEY,
+            guild_id VARCHAR(30) NOT NULL,
+            canal_id VARCHAR(30) NOT NULL,
+            titulo TEXT NOT NULL,
+            descricao TEXT NOT NULL,
+            cor VARCHAR(20),
+            imagem TEXT,
+            thumbnail TEXT,
+            encerra_em BIGINT NOT NULL,
+            vencedores INTEGER NOT NULL DEFAULT 1,
+            vencedores_ids VARCHAR(30)[] DEFAULT '{}',
+            encerrado BOOLEAN NOT NULL DEFAULT FALSE,
+            criado_em BIGINT NOT NULL DEFAULT (
+                EXTRACT(EPOCH FROM NOW()) * 1000
+            )
+        )
+    `);
+
+    // ================================
+    // 🎟️ PARTICIPANTES DOS SORTEIOS
+    // ================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS sorteio_participantes (
+            sorteio_id BIGINT NOT NULL,
+            user_id VARCHAR(30) NOT NULL,
+
+            PRIMARY KEY (
+                sorteio_id,
+                user_id
+            ),
+
+            FOREIGN KEY (
+                sorteio_id
+            )
+            REFERENCES sorteios(id)
+            ON DELETE CASCADE
+        )
+    `);
+
+    console.log(
+        "💾 Banco de dados conectado e tabelas prontas!"
+    );
 }
 
 // Criar usuário se não existir
@@ -403,8 +459,6 @@ async function getRankingMoedasPaginado(
             };
         }
 
-        // Todos os membros do servidor entram no ranking.
-        // Quem ainda não possui registro no banco fica com 0 moedas.
         rankingResult = await pool.query(
             `
             SELECT
