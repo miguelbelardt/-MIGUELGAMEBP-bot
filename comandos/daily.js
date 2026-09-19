@@ -112,18 +112,19 @@ function calcularInicioDoDiaBrasilia() {
     /*
      * Brasília = UTC-3.
      *
-     * Portanto:
-     * 00:00 em Brasília = 03:00 UTC
+     * 00:00 em Brasília
+     * = 03:00 UTC.
+     *
+     * O -03:00 é usado explicitamente para evitar
+     * problemas de conversão de horário.
      */
-    return Date.UTC(
-        ano,
-        mes - 1,
-        dia,
-        3,
-        0,
-        0,
-        0
-    );
+
+    const inicio =
+        new Date(
+            `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}T00:00:00-03:00`
+        );
+
+    return inicio.getTime();
 }
 
 // =====================================================
@@ -138,19 +139,38 @@ function calcularProximaMeiaNoite() {
     } = obterDataBrasilia();
 
     /*
-     * Próxima meia-noite em Brasília.
-     *
-     * 00:00 Brasília = 03:00 UTC
+     * Calcula o próximo dia de forma segura,
+     * inclusive quando mudar mês ou ano.
      */
-    return Date.UTC(
-        ano,
-        mes - 1,
-        dia + 1,
-        3,
-        0,
-        0,
-        0
-    );
+
+    const proximoDia =
+        new Date(
+            Date.UTC(
+                ano,
+                mes - 1,
+                dia + 1
+            )
+        );
+
+    const proximoAno =
+        proximoDia.getUTCFullYear();
+
+    const proximoMes =
+        proximoDia.getUTCMonth() + 1;
+
+    const proximoDiaNumero =
+        proximoDia.getUTCDate();
+
+    /*
+     * 00:00 em Brasília = 03:00 UTC.
+     */
+
+    const proximaMeiaNoite =
+        new Date(
+            `${proximoAno}-${String(proximoMes).padStart(2, "0")}-${String(proximoDiaNumero).padStart(2, "0")}T00:00:00-03:00`
+        );
+
+    return proximaMeiaNoite.getTime();
 }
 
 // =====================================================
@@ -235,6 +255,7 @@ function pegouDailyHoje(timestamp) {
      * depois da meia-noite de hoje,
      * significa que já pegou o Daily hoje.
      */
+
     return ultimoDaily >= inicioDoDia;
 }
 
