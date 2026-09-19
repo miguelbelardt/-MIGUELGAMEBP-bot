@@ -724,6 +724,57 @@ client.on(
                 return;
             }
 
+            // =================================================
+            // 🪨📄✂️ PEDRA PAPEL TESOURA
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "ppt_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "ppt"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão do PPT:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao jogar Pedra, Papel e Tesoura.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
             return;
         }
 
