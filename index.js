@@ -62,11 +62,8 @@ const PREFIXO = "m";
 // ⭐ SISTEMA DE XP
 // =====================================================
 
-const xpCooldowns = new Map();
-
 const XP_MIN = 5;
 const XP_MAX = 15;
-const XP_COOLDOWN = 60 * 1000;
 
 // =====================================================
 // 🤖 CLIENTE DISCORD
@@ -270,44 +267,29 @@ client.on(
 
         if (message.guild) {
 
-            const agora = Date.now();
+            const quantidadeXP =
+                Math.floor(
+                    Math.random() *
+                    (XP_MAX - XP_MIN + 1)
+                ) + XP_MIN;
 
-            const ultimoXP =
-                xpCooldowns.get(message.author.id) || 0;
+            try {
 
-            if (
-                agora - ultimoXP >= XP_COOLDOWN
-            ) {
+                await adicionarXP(
+                    message.author.id,
+                    quantidadeXP
+                );
 
-                const quantidadeXP =
-                    Math.floor(
-                        Math.random() *
-                        (XP_MAX - XP_MIN + 1)
-                    ) + XP_MIN;
+                console.log(
+                    `⭐ ${message.author.tag} ganhou ${quantidadeXP} XP`
+                );
 
-                try {
+            } catch (erro) {
 
-                    await adicionarXP(
-                        message.author.id,
-                        quantidadeXP
-                    );
-
-                    xpCooldowns.set(
-                        message.author.id,
-                        agora
-                    );
-
-                    console.log(
-                        `⭐ ${message.author.tag} ganhou ${quantidadeXP} XP`
-                    );
-
-                } catch (erro) {
-
-                    console.error(
-                        "❌ Erro ao adicionar XP:",
-                        erro
-                    );
-                }
+                console.error(
+                    "❌ Erro ao adicionar XP:",
+                    erro
+                );
             }
         }
 
