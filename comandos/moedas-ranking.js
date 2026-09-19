@@ -42,20 +42,31 @@ function criarEmbed(resultado, tipo) {
         );
     }
 
-    let texto = linhas.join("\n");
+    let texto = linhas.length
+        ? linhas.join("\n")
+        : "❌ Nenhum usuário encontrado.";
 
-    if (
-        usuario.posicao &&
-        usuario.posicao > (
+    if (usuario.posicao) {
+
+        const inicioPagina =
+            (resultado.pagina - 1) *
+            LIMITE_POR_PAGINA + 1;
+
+        const fimPagina =
             resultado.pagina *
-            LIMITE_POR_PAGINA
-        )
-    ) {
+            LIMITE_POR_PAGINA;
 
-        texto +=
-            `\n\n━━━━━━━━━━━━━━━━━━\n` +
-            `📍 **Sua posição:** ${usuario.posicao}º\n` +
-            `💰 **Suas moedas:** ${usuario.saldo.toLocaleString("pt-BR")}`;
+        const usuarioEstaNaPagina =
+            usuario.posicao >= inicioPagina &&
+            usuario.posicao <= fimPagina;
+
+        if (!usuarioEstaNaPagina) {
+
+            texto +=
+                `\n\n━━━━━━━━━━━━━━━━━━\n` +
+                `📍 **Sua posição:** ${usuario.posicao}º\n` +
+                `💰 **Suas moedas:** ${usuario.saldo.toLocaleString("pt-BR")}`;
+        }
     }
 
     const nomeTipo =
@@ -172,8 +183,17 @@ async function carregarRanking(
     let usuariosServidor = [];
 
     if (tipo === "local") {
+
         usuariosServidor =
             await pegarUsuariosServidor(guild);
+
+        // Garante que o usuário que executou
+        // o comando esteja na lista.
+        if (
+            !usuariosServidor.includes(userId)
+        ) {
+            usuariosServidor.push(userId);
+        }
     }
 
     return await getRankingMoedasPaginado(
@@ -183,6 +203,167 @@ async function carregarRanking(
         pagina,
         LIMITE_POR_PAGINA
     );
+}
+
+// ================================================
+// 🔄 PROCESSAR BOTÃO
+// ================================================
+
+async function processarBotao(
+    botao,
+    estado,
+    userId,
+    guild
+) {
+
+    if (botao.user.id !== userId) {
+        return botao.reply({
+            content:
+                "❌ Esse ranking pertence a outra pessoa.",
+            ephemeral: true
+        });
+    }
+
+    try {
+
+        const partes =
+            botao.customId.split("_");
+
+        const acao =
+            partes[1];
+
+        let novoTipo =
+            estado.tipo;
+
+        let novaPagina =
+            estado.pagina;
+
+        // ================================
+        // ◀️ VOLTAR
+        // ================================
+
+        if (acao === "anterior") {
+
+            novaPagina =
+                Math.max(
+                    1,
+                    estado.pagina - 1
+                );
+        }
+
+        // ================================
+        // ▶️ PRÓXIMA
+        // ================================
+
+        else if (acao === "proxima") {
+
+            novaPagina =
+                Math.min(
+                    estado.totalPaginas,
+                    estado.pagina + 1
+                );
+        }
+
+        // ================================
+        // 🌎 GLOBAL
+        // ================================
+
+        else if (acao === "global") {
+
+            novoTipo = "global";
+            novaPagina = 1;
+        }
+
+        // ================================
+        // 🏠 LOCAL
+        // ================================
+
+        else if (acao === "local") {
+
+            novoTipo = "local";
+            novaPagina = 1;
+        }
+
+        // ================================
+        // 📊 CARREGAR NOVO RANKING
+        // ================================
+
+        const novoResultado =
+            await carregarRanking(
+                userId,
+                guild,
+                novoTipo,
+                novaPagina
+            );
+
+        if (
+            novoResultado.ranking.length === 0
+        ) {
+
+            return botao.update({
+                content:
+                    "❌ Ainda não existem usuários no ranking.",
+                embeds: [],
+                components: []
+            });
+        }
+
+        // Atualizar estado
+        estado.tipo =
+            novoTipo;
+
+        estado.pagina =
+            novoResultado.pagina;
+
+        estado.totalPaginas =
+            novoResultado.totalPaginas;
+
+        estado.totalUsuarios =
+            novoResultado.totalUsuarios;
+
+        // ================================
+        // 🏆 NOVO EMBED
+        // ================================
+
+        const novoEmbed =
+            criarEmbed(
+                novoResultado,
+                novoTipo
+            );
+
+        // ================================
+        // 🔘 NOVOS BOTÕES
+        // ================================
+
+        const novosBotoes =
+            criarBotoes(
+                novoResultado,
+                novoTipo,
+                userId
+            );
+
+        await botao.update({
+            content: null,
+            embeds: [novoEmbed],
+            components: [novosBotoes]
+        });
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao atualizar ranking:",
+            erro
+        );
+
+        if (!botao.replied) {
+
+            await botao.reply({
+                content:
+                    "❌ Não foi possível atualizar o ranking.",
+                ephemeral: true
+            });
+        }
+    }
 }
 
 // ================================================
@@ -231,11 +412,11 @@ module.exports = {
                 });
             }
 
-            const tipo =
+            let tipo =
                 interaction.options.getString("tipo") ||
                 "global";
 
-            const resultado =
+            let resultado =
                 await carregarRanking(
                     interaction.user.id,
                     interaction.guild,
@@ -271,6 +452,14 @@ module.exports = {
                     fetchReply: true
                 });
 
+            // Estado atual do ranking
+            const estado = {
+                tipo,
+                pagina: resultado.pagina,
+                totalPaginas: resultado.totalPaginas,
+                totalUsuarios: resultado.totalUsuarios
+            };
+
             const collector =
                 resposta.createMessageComponentCollector({
                     time: 5 * 60 * 1000
@@ -280,118 +469,12 @@ module.exports = {
                 "collect",
                 async botao => {
 
-                    if (
-                        botao.user.id !==
-                        interaction.user.id
-                    ) {
-                        return botao.reply({
-                            content:
-                                "❌ Esse ranking pertence a outra pessoa.",
-                            ephemeral: true
-                        });
-                    }
-
-                    try {
-
-                        const partes =
-                            botao.customId.split("_");
-
-                        const acao =
-                            partes[1];
-
-                        let novoTipo =
-                            tipo;
-
-                        let novaPagina =
-                            resultado.pagina;
-
-                        if (acao === "anterior") {
-
-                            novaPagina =
-                                Math.max(
-                                    1,
-                                    novaPagina - 1
-                                );
-
-                        } else if (acao === "proxima") {
-
-                            novaPagina =
-                                Math.min(
-                                    resultado.totalPaginas,
-                                    novaPagina + 1
-                                );
-
-                        } else if (
-                            acao === "global"
-                        ) {
-
-                            novoTipo =
-                                "global";
-
-                            novaPagina = 1;
-
-                        } else if (
-                            acao === "local"
-                        ) {
-
-                            novoTipo =
-                                "local";
-
-                            novaPagina = 1;
-                        }
-
-                        const novoResultado =
-                            await carregarRanking(
-                                interaction.user.id,
-                                interaction.guild,
-                                novoTipo,
-                                novaPagina
-                            );
-
-                        if (
-                            novoResultado.ranking.length === 0
-                        ) {
-                            return botao.update({
-                                content:
-                                    "❌ Ainda não existem usuários no ranking.",
-                                embeds: [],
-                                components: []
-                            });
-                        }
-
-                        const novoEmbed =
-                            criarEmbed(
-                                novoResultado,
-                                novoTipo
-                            );
-
-                        const novosBotoes =
-                            criarBotoes(
-                                novoResultado,
-                                novoTipo,
-                                interaction.user.id
-                            );
-
-                        await botao.update({
-                            embeds: [novoEmbed],
-                            components: [novosBotoes]
-                        });
-
-                    } catch (erro) {
-
-                        console.error(
-                            "❌ Erro ao atualizar ranking:",
-                            erro
-                        );
-
-                        if (!botao.replied) {
-                            await botao.reply({
-                                content:
-                                    "❌ Não foi possível atualizar o ranking.",
-                                ephemeral: true
-                            });
-                        }
-                    }
+                    await processarBotao(
+                        botao,
+                        estado,
+                        interaction.user.id,
+                        interaction.guild
+                    );
                 }
             );
 
@@ -409,7 +492,7 @@ module.exports = {
 
                                 new ButtonBuilder()
                                     .setCustomId(
-                                        `moedas_anterior_expirado`
+                                        "moedas_anterior_expirado"
                                     )
                                     .setLabel("Voltar")
                                     .setEmoji("◀️")
@@ -420,7 +503,7 @@ module.exports = {
 
                                 new ButtonBuilder()
                                     .setCustomId(
-                                        `moedas_global_expirado`
+                                        "moedas_global_expirado"
                                     )
                                     .setLabel("Global")
                                     .setEmoji("🌎")
@@ -431,7 +514,7 @@ module.exports = {
 
                                 new ButtonBuilder()
                                     .setCustomId(
-                                        `moedas_local_expirado`
+                                        "moedas_local_expirado"
                                     )
                                     .setLabel("Local")
                                     .setEmoji("🏠")
@@ -442,7 +525,7 @@ module.exports = {
 
                                 new ButtonBuilder()
                                     .setCustomId(
-                                        `moedas_proxima_expirado`
+                                        "moedas_proxima_expirado"
                                     )
                                     .setLabel("Próxima")
                                     .setEmoji("▶️")
@@ -475,6 +558,7 @@ module.exports = {
                 !interaction.replied &&
                 !interaction.deferred
             ) {
+
                 await interaction.reply({
                     content:
                         "❌ Não foi possível carregar o ranking.",
@@ -517,7 +601,7 @@ module.exports = {
                 tipo = "global";
             }
 
-            const resultado =
+            let resultado =
                 await carregarRanking(
                     message.author.id,
                     message.guild,
@@ -550,6 +634,14 @@ module.exports = {
                     components: [botoes]
                 });
 
+            // Estado atual do ranking
+            const estado = {
+                tipo,
+                pagina: resultado.pagina,
+                totalPaginas: resultado.totalPaginas,
+                totalUsuarios: resultado.totalUsuarios
+            };
+
             const collector =
                 resposta.createMessageComponentCollector({
                     time: 5 * 60 * 1000
@@ -559,121 +651,77 @@ module.exports = {
                 "collect",
                 async botao => {
 
-                    if (
-                        botao.user.id !==
-                        message.author.id
-                    ) {
-                        return botao.reply({
-                            content:
-                                "❌ Esse ranking pertence a outra pessoa.",
-                            ephemeral: true
-                        });
-                    }
+                    await processarBotao(
+                        botao,
+                        estado,
+                        message.author.id,
+                        message.guild
+                    );
+                }
+            );
+
+            collector.on(
+                "end",
+                async () => {
 
                     try {
 
-                        const partes =
-                            botao.customId.split("_");
+                        const botoesDesativados =
+                            new ActionRowBuilder().addComponents(
 
-                        const acao =
-                            partes[1];
+                                new ButtonBuilder()
+                                    .setCustomId(
+                                        "moedas_anterior_expirado"
+                                    )
+                                    .setLabel("Voltar")
+                                    .setEmoji("◀️")
+                                    .setStyle(
+                                        ButtonStyle.Secondary
+                                    )
+                                    .setDisabled(true),
 
-                        let novoTipo =
-                            tipo;
+                                new ButtonBuilder()
+                                    .setCustomId(
+                                        "moedas_global_expirado"
+                                    )
+                                    .setLabel("Global")
+                                    .setEmoji("🌎")
+                                    .setStyle(
+                                        ButtonStyle.Secondary
+                                    )
+                                    .setDisabled(true),
 
-                        let novaPagina =
-                            resultado.pagina;
+                                new ButtonBuilder()
+                                    .setCustomId(
+                                        "moedas_local_expirado"
+                                    )
+                                    .setLabel("Local")
+                                    .setEmoji("🏠")
+                                    .setStyle(
+                                        ButtonStyle.Secondary
+                                    )
+                                    .setDisabled(true),
 
-                        if (
-                            acao === "anterior"
-                        ) {
-
-                            novaPagina =
-                                Math.max(
-                                    1,
-                                    novaPagina - 1
-                                );
-
-                        } else if (
-                            acao === "proxima"
-                        ) {
-
-                            novaPagina =
-                                Math.min(
-                                    resultado.totalPaginas,
-                                    novaPagina + 1
-                                );
-
-                        } else if (
-                            acao === "global"
-                        ) {
-
-                            novoTipo =
-                                "global";
-
-                            novaPagina = 1;
-
-                        } else if (
-                            acao === "local"
-                        ) {
-
-                            novoTipo =
-                                "local";
-
-                            novaPagina = 1;
-                        }
-
-                        const novoResultado =
-                            await carregarRanking(
-                                message.author.id,
-                                message.guild,
-                                novoTipo,
-                                novaPagina
+                                new ButtonBuilder()
+                                    .setCustomId(
+                                        "moedas_proxima_expirado"
+                                    )
+                                    .setLabel("Próxima")
+                                    .setEmoji("▶️")
+                                    .setStyle(
+                                        ButtonStyle.Secondary
+                                    )
+                                    .setDisabled(true)
                             );
 
-                        if (
-                            novoResultado.ranking.length === 0
-                        ) {
-                            return botao.update({
-                                content:
-                                    "❌ Ainda não existem usuários no ranking.",
-                                embeds: [],
-                                components: []
-                            });
-                        }
-
-                        const novoEmbed =
-                            criarEmbed(
-                                novoResultado,
-                                novoTipo
-                            );
-
-                        const novosBotoes =
-                            criarBotoes(
-                                novoResultado,
-                                novoTipo,
-                                message.author.id
-                            );
-
-                        await botao.update({
-                            embeds: [novoEmbed],
-                            components: [novosBotoes]
+                        await resposta.edit({
+                            components: [
+                                botoesDesativados
+                            ]
                         });
 
                     } catch (erro) {
-
-                        console.error(
-                            "❌ Erro ao atualizar ranking por prefixo:",
-                            erro
-                        );
-
-                        if (!botao.replied) {
-                            await botao.reply({
-                                content:
-                                    "❌ Não foi possível atualizar o ranking.",
-                                ephemeral: true
-                            });
-                        }
+                        // Mensagem pode ter sido apagada
                     }
                 }
             );
