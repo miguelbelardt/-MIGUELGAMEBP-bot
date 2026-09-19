@@ -93,22 +93,39 @@ const arquivosComandos = fs
 
 for (const arquivo of arquivosComandos) {
     try {
-        const caminho = path.join(comandosPath, arquivo);
-        const comando = require(caminho);
 
-        if ("data" in comando && "execute" in comando) {
-            client.commands.set(comando.data.name, comando);
+        const caminho =
+            path.join(
+                comandosPath,
+                arquivo
+            );
+
+        const comando =
+            require(caminho);
+
+        if (
+            "data" in comando &&
+            "execute" in comando
+        ) {
+
+            client.commands.set(
+                comando.data.name,
+                comando
+            );
 
             console.log(
                 `✅ Comando carregado: ${comando.data.name}`
             );
+
         } else {
+
             console.log(
                 `⚠️ Comando inválido: ${arquivo}`
             );
         }
 
     } catch (erro) {
+
         console.error(
             `❌ Erro ao carregar ${arquivo}:`,
             erro
@@ -120,106 +137,146 @@ for (const arquivo of arquivosComandos) {
 // 🟢 BOT ONLINE
 // =====================================================
 
-client.once("clientReady", async () => {
-    console.log(
-        `🤖 Bot online como ${client.user.tag}`
-    );
-
-    // =================================================
-    // 📋 REGISTRAR SLASH COMMANDS
-    // =================================================
-
-    try {
-
-        const comandosSlash =
-            [...client.commands.values()]
-                .map(comando => comando.data.toJSON());
-
-        await client.application.commands.set(
-            comandosSlash
-        );
+client.once(
+    "clientReady",
+    async () => {
 
         console.log(
-            `📋 Slash Commands sincronizados: ${comandosSlash.length}`
+            `🤖 Bot online como ${client.user.tag}`
         );
 
-    } catch (erro) {
+        // =================================================
+        // 🔔 SISTEMA AUTOMÁTICO DO DAILY
+        // =================================================
 
-        console.error(
-            "❌ Erro ao sincronizar Slash Commands:",
-            erro
-        );
-    }
+        const comandoDaily =
+            client.commands.get("daily");
 
-    // =================================================
-    // 🔄 STATUS DO BOT
-    // =================================================
+        if (
+            comandoDaily &&
+            typeof comandoDaily.iniciarSistemaNotificacoes ===
+                "function"
+        ) {
 
-    let mostrandoServidores = true;
-
-    const atualizarStatus = () => {
-
-        if (mostrandoServidores) {
-
-            const servidores =
-                client.guilds.cache.size;
-
-            client.user.setActivity(
-                `🌐 Estou em ${servidores} servidores`,
-                {
-                    type: 0
-                }
-            );
-
-            console.log(
-                `🌐 Status: Estou em ${servidores} servidores`
+            comandoDaily.iniciarSistemaNotificacoes(
+                client
             );
 
         } else {
 
-            const comandos =
-                client.commands.size;
-
-            client.user.setActivity(
-                `📋 Tenho ${comandos} comandos disponíveis!`,
-                {
-                    type: 0
-                }
-            );
-
             console.log(
-                `📋 Status: Tenho ${comandos} comandos disponíveis!`
+                "⚠️ Sistema automático de notificações do Daily não foi encontrado."
             );
         }
 
-        mostrandoServidores = !mostrandoServidores;
-    };
+        // =================================================
+        // 📋 REGISTRAR SLASH COMMANDS
+        // =================================================
 
-    atualizarStatus();
+        try {
 
-    setInterval(
-        atualizarStatus,
-        5000
-    );
-});
+            const comandosSlash =
+                [...client.commands.values()]
+                    .map(
+                        comando =>
+                            comando.data.toJSON()
+                    );
+
+            await client.application.commands.set(
+                comandosSlash
+            );
+
+            console.log(
+                `📋 Slash Commands sincronizados: ${comandosSlash.length}`
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro ao sincronizar Slash Commands:",
+                erro
+            );
+        }
+
+        // =================================================
+        // 🔄 STATUS DO BOT
+        // =================================================
+
+        let mostrandoServidores = true;
+
+        const atualizarStatus = () => {
+
+            if (mostrandoServidores) {
+
+                const servidores =
+                    client.guilds.cache.size;
+
+                client.user.setActivity(
+                    `🌐 Estou em ${servidores} servidores`,
+                    {
+                        type: 0
+                    }
+                );
+
+                console.log(
+                    `🌐 Status: Estou em ${servidores} servidores`
+                );
+
+            } else {
+
+                const comandos =
+                    client.commands.size;
+
+                client.user.setActivity(
+                    `📋 Tenho ${comandos} comandos disponíveis!`,
+                    {
+                        type: 0
+                    }
+                );
+
+                console.log(
+                    `📋 Status: Tenho ${comandos} comandos disponíveis!`
+                );
+            }
+
+            mostrandoServidores =
+                !mostrandoServidores;
+        };
+
+        atualizarStatus();
+
+        setInterval(
+            atualizarStatus,
+            5000
+        );
+    }
+);
 
 // =====================================================
 // 🔌 EVENTOS DE CONEXÃO DO DISCORD
 // =====================================================
 
-client.on("error", erro => {
-    console.error(
-        "❌ Erro no cliente Discord:",
-        erro
-    );
-});
+client.on(
+    "error",
+    erro => {
 
-client.on("warn", aviso => {
-    console.warn(
-        "⚠️ Aviso do Discord:",
-        aviso
-    );
-});
+        console.error(
+            "❌ Erro no cliente Discord:",
+            erro
+        );
+    }
+);
+
+client.on(
+    "warn",
+    aviso => {
+
+        console.warn(
+            "⚠️ Aviso do Discord:",
+            aviso
+        );
+    }
+);
 
 client.on(
     "shardDisconnect",
@@ -327,7 +384,9 @@ client.on(
                 .toLowerCase();
 
         const comando =
-            client.commands.get(nomeComando);
+            client.commands.get(
+                nomeComando
+            );
 
         if (!comando) {
 
@@ -357,7 +416,8 @@ client.on(
         );
 
         if (
-            typeof comando.handlePrefix === "function"
+            typeof comando.handlePrefix ===
+            "function"
         ) {
 
             try {
@@ -444,12 +504,14 @@ client.on(
             ) {
 
                 const comando =
-                    client.commands.get("daily");
+                    client.commands.get(
+                        "daily"
+                    );
 
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                        "function"
+                    "function"
                 ) {
 
                     try {
@@ -488,12 +550,14 @@ client.on(
             ) {
 
                 const comando =
-                    client.commands.get("ajuda");
+                    client.commands.get(
+                        "ajuda"
+                    );
 
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                        "function"
+                    "function"
                 ) {
 
                     try {
@@ -533,12 +597,14 @@ client.on(
             ) {
 
                 const comando =
-                    client.commands.get("embed");
+                    client.commands.get(
+                        "embed"
+                    );
 
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                        "function"
+                    "function"
                 ) {
 
                     try {
@@ -578,7 +644,9 @@ client.on(
         // 📝 MODAIS
         // =================================================
 
-        if (interaction.isModalSubmit()) {
+        if (
+            interaction.isModalSubmit()
+        ) {
 
             if (
                 interaction.customId.startsWith(
@@ -587,12 +655,14 @@ client.on(
             ) {
 
                 const comando =
-                    client.commands.get("embed");
+                    client.commands.get(
+                        "embed"
+                    );
 
                 if (
                     comando &&
                     typeof comando.handleModal ===
-                        "function"
+                    "function"
                 ) {
 
                     try {
