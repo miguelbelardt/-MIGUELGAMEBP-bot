@@ -151,11 +151,10 @@ async function pegarUsuariosServidor(guild) {
 
     try {
 
-        const membros =
-            await guild.members.fetch();
+        await guild.members.fetch();
 
         return [
-            ...membros.keys()
+            ...guild.members.cache.keys()
         ];
 
     } catch (erro) {
@@ -165,7 +164,9 @@ async function pegarUsuariosServidor(guild) {
             erro
         );
 
-        return [];
+        return [
+            ...guild.members.cache.keys()
+        ];
     }
 }
 
@@ -187,8 +188,6 @@ async function carregarRanking(
         usuariosServidor =
             await pegarUsuariosServidor(guild);
 
-        // Garante que o usuário que executou
-        // o comando esteja na lista.
         if (
             !usuariosServidor.includes(userId)
         ) {
@@ -452,7 +451,6 @@ module.exports = {
                     fetchReply: true
                 });
 
-            // Estado atual do ranking
             const estado = {
                 tipo,
                 pagina: resultado.pagina,
@@ -634,7 +632,6 @@ module.exports = {
                     components: [botoes]
                 });
 
-            // Estado atual do ranking
             const estado = {
                 tipo,
                 pagina: resultado.pagina,
