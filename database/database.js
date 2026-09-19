@@ -360,7 +360,9 @@ async function getRankingMoedasPaginado(
 
         rankingResult = await pool.query(
             `
-            SELECT id, saldo
+            SELECT
+                id,
+                COALESCE(saldo, 0) AS saldo
             FROM usuarios
             ORDER BY saldo DESC, id ASC
             LIMIT $1
@@ -401,12 +403,19 @@ async function getRankingMoedasPaginado(
             };
         }
 
+        // Todos os membros do servidor entram no ranking.
+        // Quem ainda não possui registro no banco fica com 0 moedas.
         rankingResult = await pool.query(
             `
-            SELECT id, saldo
-            FROM usuarios
-            WHERE id = ANY($1::varchar[])
-            ORDER BY saldo DESC, id ASC
+            SELECT
+                membros.id,
+                COALESCE(u.saldo, 0) AS saldo
+            FROM unnest($1::varchar[]) AS membros(id)
+            LEFT JOIN usuarios u
+                ON u.id = membros.id
+            ORDER BY
+                COALESCE(u.saldo, 0) DESC,
+                membros.id ASC
             LIMIT $2
             OFFSET $3
             `,
@@ -420,8 +429,7 @@ async function getRankingMoedasPaginado(
         totalResult = await pool.query(
             `
             SELECT COUNT(*) AS total
-            FROM usuarios
-            WHERE id = ANY($1::varchar[])
+            FROM unnest($1::varchar[]) AS membros(id)
             `,
             [usuariosServidor]
         );
@@ -455,12 +463,18 @@ async function getRankingMoedasPaginado(
     let saldoUsuario = 0;
     let posicaoUsuario = null;
 
+    // ================================
+    // 🌎 POSIÇÃO GLOBAL
+    // ================================
+
     if (tipo === "global") {
 
         const usuarioAtual =
             await pool.query(
                 `
-                SELECT id, saldo
+                SELECT
+                    id,
+                    COALESCE(saldo, 0) AS saldo
                 FROM usuarios
                 WHERE id = $1
                 `,
@@ -497,55 +511,60 @@ async function getRankingMoedasPaginado(
                 );
         }
 
-    } else {
+    }
+
+    // ================================
+    // 🏠 POSIÇÃO LOCAL
+    // ================================
+
+    else {
 
         if (
+            Array.isArray(usuariosServidor) &&
             usuariosServidor.includes(userId)
         ) {
 
             const usuarioAtual =
                 await pool.query(
                     `
-                    SELECT id, saldo
+                    SELECT
+                        COALESCE(saldo, 0) AS saldo
                     FROM usuarios
                     WHERE id = $1
                     `,
                     [userId]
                 );
 
-            if (usuarioAtual.rows.length > 0) {
+            saldoUsuario =
+                usuarioAtual.rows.length > 0
+                    ? Number(usuarioAtual.rows[0].saldo)
+                    : 0;
 
-                saldoUsuario =
-                    Number(
-                        usuarioAtual.rows[0].saldo
-                    );
-
-                const posicao =
-                    await pool.query(
-                        `
-                        SELECT COUNT(*) + 1 AS posicao
-                        FROM usuarios
-                        WHERE id = ANY($1::varchar[])
-                        AND (
-                            saldo > $2
-                            OR (
-                                saldo = $2
-                                AND id < $3
-                            )
+            const posicao =
+                await pool.query(
+                    `
+                    SELECT COUNT(*) + 1 AS posicao
+                    FROM unnest($1::varchar[]) AS membros(id)
+                    LEFT JOIN usuarios u
+                        ON u.id = membros.id
+                    WHERE
+                        COALESCE(u.saldo, 0) > $2
+                        OR (
+                            COALESCE(u.saldo, 0) = $2
+                            AND membros.id < $3
                         )
-                        `,
-                        [
-                            usuariosServidor,
-                            saldoUsuario,
-                            userId
-                        ]
-                    );
+                    `,
+                    [
+                        usuariosServidor,
+                        saldoUsuario,
+                        userId
+                    ]
+                );
 
-                posicaoUsuario =
-                    Number(
-                        posicao.rows[0].posicao
-                    );
-            }
+            posicaoUsuario =
+                Number(
+                    posicao.rows[0].posicao
+                );
         }
     }
 
