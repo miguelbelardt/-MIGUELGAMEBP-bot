@@ -154,7 +154,9 @@ async function pegarUsuariosServidor(guild) {
         await guild.members.fetch();
 
         return [
-            ...guild.members.cache.keys()
+            ...guild.members.cache
+                .filter(member => !member.user.bot)
+                .keys()
         ];
 
     } catch (erro) {
@@ -165,7 +167,9 @@ async function pegarUsuariosServidor(guild) {
         );
 
         return [
-            ...guild.members.cache.keys()
+            ...guild.members.cache
+                .filter(member => !member.user.bot)
+                .keys()
         ];
     }
 }
