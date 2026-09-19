@@ -13,7 +13,6 @@ const {
     salvarNotificacaoDaily
 } = require("../database/database");
 
-const timersNotificacao = new Map();
 const dailyProcessando = new Set();
 
 const TIMEZONE = "America/Sao_Paulo";
@@ -119,61 +118,34 @@ function calcularTempoRestante() {
 // =====================================================
 
 function formatarTempo(restante) {
-    const horas = Math.floor(
-        restante / (1000 * 60 * 60)
+    const horas = Math.max(
+        0,
+        Math.floor(
+            restante / (1000 * 60 * 60)
+        )
     );
 
-    const minutos = Math.floor(
-        (restante % (1000 * 60 * 60)) /
-        (1000 * 60)
+    const minutos = Math.max(
+        0,
+        Math.floor(
+            (restante % (1000 * 60 * 60)) /
+            (1000 * 60)
+        )
     );
 
-    const segundos = Math.floor(
-        (restante % (1000 * 60)) /
-        1000
+    const segundos = Math.max(
+        0,
+        Math.floor(
+            (restante % (1000 * 60)) /
+            1000
+        )
     );
 
     return `${horas}h ${minutos}min ${segundos}s`;
 }
 
 // =====================================================
-// 📅 INÍCIO DO DIA EM BRASÍLIA
-// =====================================================
-
-function calcularInicioDoDia() {
-    const agora = new Date();
-
-    const partes = new Intl.DateTimeFormat("en-US", {
-        timeZone: TIMEZONE,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-    }).formatToParts(agora);
-
-    const ano = Number(
-        partes.find(parte => parte.type === "year").value
-    );
-
-    const mes = Number(
-        partes.find(parte => parte.type === "month").value
-    );
-
-    const dia = Number(
-        partes.find(parte => parte.type === "day").value
-    );
-
-    return Date.UTC(
-        ano,
-        mes - 1,
-        dia,
-        3,
-        0,
-        0
-    );
-}
-
-// =====================================================
-// 📅 VERIFICAR SE JÁ PEGOU HOJE
+// 📅 VERIFICAR MESMO DIA EM BRASÍLIA
 // =====================================================
 
 function mesmoDiaBrasilia(timestamp) {
@@ -310,9 +282,111 @@ async function resgatarDailyAtomico(userId, usuario) {
     } catch (erro) {
         await client.query("ROLLBACK");
         throw erro;
+
     } finally {
         client.release();
     }
+}
+
+// =====================================================
+// 🔔 SISTEMA AUTOMÁTICO DE NOTIFICAÇÕES
+// =====================================================
+
+async function verificarNotificacoesDaily(client) {
+
+    try {
+
+        const resultado = await pool.query(`
+            SELECT
+                id,
+                ultimo_daily
+            FROM usuarios
+            WHERE
+                notificacao_daily = TRUE
+                AND ultimo_daily IS NOT NULL
+        `);
+
+        for (const usuario of resultado.rows) {
+
+            const userId = usuario.id;
+            const ultimoDaily = Number(
+                usuario.ultimo_daily
+            );
+
+            // Ainda é o mesmo dia em Brasília.
+            if (mesmoDiaBrasilia(ultimoDaily)) {
+                continue;
+            }
+
+            try {
+
+                const discordUser =
+                    await client.users.fetch(userId);
+
+                await discordUser.send(
+                    "🔔 **Seu daily está disponível!**\n\n" +
+                    "Já passou da meia-noite! 🌙\n" +
+                    "Use `/daily` no servidor para receber sua recompensa. 💰"
+                );
+
+                console.log(
+                    `🔔 Notificação do Daily enviada para ${discordUser.tag}`
+                );
+
+            } catch (erro) {
+
+                console.log(
+                    `⚠️ Não foi possível enviar DM do Daily para o usuário ${userId}.`
+                );
+            }
+
+            // Independentemente de a DM ter sido entregue,
+            // a notificação não deve ficar sendo processada.
+            try {
+
+                await salvarNotificacaoDaily(
+                    userId,
+                    false
+                );
+
+            } catch (erro) {
+
+                console.error(
+                    `❌ Erro ao desativar notificação do Daily de ${userId}:`,
+                    erro
+                );
+            }
+        }
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao verificar notificações do Daily:",
+            erro
+        );
+    }
+}
+
+// =====================================================
+// 🚀 INICIAR SISTEMA DE NOTIFICAÇÕES
+// =====================================================
+
+function iniciarSistemaNotificacoes(client) {
+
+    console.log(
+        "🔔 Sistema de notificações do Daily iniciado."
+    );
+
+    // Verifica imediatamente ao iniciar o bot.
+    verificarNotificacoesDaily(client);
+
+    // Depois verifica a cada 30 segundos.
+    setInterval(
+        () => {
+            verificarNotificacoesDaily(client);
+        },
+        30 * 1000
+    );
 }
 
 // =====================================================
@@ -327,12 +401,16 @@ module.exports = {
             "Resgate sua recompensa diária! 💰"
         ),
 
+    iniciarSistemaNotificacoes,
+
     // =====================================================
     // 💬 SLASH COMMAND
     // =====================================================
 
     async execute(interaction) {
-        const userId = interaction.user.id;
+
+        const userId =
+            interaction.user.id;
 
         if (dailyProcessando.has(userId)) {
             return interaction.reply({
@@ -345,6 +423,7 @@ module.exports = {
         dailyProcessando.add(userId);
 
         try {
+
             const resultado =
                 await resgatarDailyAtomico(
                     userId,
@@ -352,21 +431,25 @@ module.exports = {
                 );
 
             if (!resultado.sucesso) {
+
                 const {
                     proximoDaily,
                     restante
                 } = calcularTempoRestante();
 
                 const notificacaoAtiva =
-                    await getNotificacaoDaily(userId);
-
-                const embed = new EmbedBuilder()
-                    .setTitle("⏳ DAILY")
-                    .setDescription(
-                        `Você já pegou seu daily hoje!\n\n` +
-                        `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
-                        `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+                    await getNotificacaoDaily(
+                        userId
                     );
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle("⏳ DAILY")
+                        .setDescription(
+                            `Você já pegou seu daily hoje!\n\n` +
+                            `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
+                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+                        );
 
                 return interaction.reply({
                     embeds: [embed],
@@ -381,10 +464,13 @@ module.exports = {
 
             await interaction.reply({
                 embeds: [resultado.embed],
-                components: [resultado.row]
+                components: [
+                    resultado.row
+                ]
             });
 
         } catch (erro) {
+
             console.error(
                 "❌ Erro no Daily:",
                 erro
@@ -394,6 +480,7 @@ module.exports = {
                 !interaction.replied &&
                 !interaction.deferred
             ) {
+
                 await interaction.reply({
                     content:
                         "❌ Não foi possível processar seu daily.",
@@ -402,7 +489,10 @@ module.exports = {
             }
 
         } finally {
-            dailyProcessando.delete(userId);
+
+            dailyProcessando.delete(
+                userId
+            );
         }
     },
 
@@ -411,7 +501,9 @@ module.exports = {
     // =====================================================
 
     async handlePrefix(message) {
-        const userId = message.author.id;
+
+        const userId =
+            message.author.id;
 
         if (dailyProcessando.has(userId)) {
             return;
@@ -420,6 +512,7 @@ module.exports = {
         dailyProcessando.add(userId);
 
         try {
+
             const resultado =
                 await resgatarDailyAtomico(
                     userId,
@@ -427,21 +520,25 @@ module.exports = {
                 );
 
             if (!resultado.sucesso) {
+
                 const {
                     proximoDaily,
                     restante
                 } = calcularTempoRestante();
 
                 const notificacaoAtiva =
-                    await getNotificacaoDaily(userId);
-
-                const embed = new EmbedBuilder()
-                    .setTitle("⏳ DAILY")
-                    .setDescription(
-                        `Você já pegou seu daily hoje!\n\n` +
-                        `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
-                        `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+                    await getNotificacaoDaily(
+                        userId
                     );
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle("⏳ DAILY")
+                        .setDescription(
+                            `Você já pegou seu daily hoje!\n\n` +
+                            `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
+                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+                        );
 
                 return message.reply({
                     embeds: [embed],
@@ -455,10 +552,13 @@ module.exports = {
 
             await message.reply({
                 embeds: [resultado.embed],
-                components: [resultado.row]
+                components: [
+                    resultado.row
+                ]
             });
 
         } catch (erro) {
+
             console.error(
                 "❌ Erro no Daily por prefixo:",
                 erro
@@ -469,7 +569,10 @@ module.exports = {
             );
 
         } finally {
-            dailyProcessando.delete(userId);
+
+            dailyProcessando.delete(
+                userId
+            );
         }
     },
 
@@ -478,6 +581,7 @@ module.exports = {
     // =====================================================
 
     async handleButton(interaction) {
+
         if (
             interaction.customId !==
             "daily_notificar"
@@ -489,9 +593,12 @@ module.exports = {
             interaction.user.id;
 
         const notificacaoAtiva =
-            await getNotificacaoDaily(userId);
+            await getNotificacaoDaily(
+                userId
+            );
 
         if (notificacaoAtiva) {
+
             return interaction.reply({
                 content:
                     "🔔 Você já ativou a notificação do daily!",
@@ -500,9 +607,12 @@ module.exports = {
         }
 
         const ultimoDaily =
-            await getUltimoDaily(userId);
+            await getUltimoDaily(
+                userId
+            );
 
         if (!ultimoDaily) {
+
             return interaction.reply({
                 content:
                     "❌ Você ainda não possui um daily para aguardar. Use `/daily` primeiro.",
@@ -516,6 +626,7 @@ module.exports = {
         } = calcularTempoRestante();
 
         if (restante <= 0) {
+
             return interaction.reply({
                 content:
                     "🎁 Seu daily já está disponível! Use `/daily`.",
@@ -526,52 +637,6 @@ module.exports = {
         await salvarNotificacaoDaily(
             userId,
             true
-        );
-
-        if (
-            timersNotificacao.has(userId)
-        ) {
-            clearTimeout(
-                timersNotificacao.get(userId)
-            );
-        }
-
-        const timer = setTimeout(
-            async () => {
-                try {
-                    await interaction.user.send(
-                        "🔔 **Seu daily está disponível!**\n\n" +
-                        "Já passou da meia-noite! 🌙\n" +
-                        "Use `/daily` no servidor para receber sua recompensa. 💰"
-                    );
-                } catch (erro) {
-                    console.log(
-                        `⚠️ Não foi possível enviar DM para ${interaction.user.tag}.`
-                    );
-                }
-
-                try {
-                    await salvarNotificacaoDaily(
-                        userId,
-                        false
-                    );
-                } catch (erro) {
-                    console.error(
-                        "❌ Erro ao atualizar notificação:",
-                        erro
-                    );
-                }
-
-                timersNotificacao.delete(
-                    userId
-                );
-            },
-            restante
-        );
-
-        timersNotificacao.set(
-            userId,
-            timer
         );
 
         await interaction.reply({
