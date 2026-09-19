@@ -170,6 +170,30 @@ client.once(
         }
 
         // =================================================
+        // 🎉 SISTEMA AUTOMÁTICO DOS SORTEIOS
+        // =================================================
+
+        const comandoSorteio =
+            client.commands.get("sorteio");
+
+        if (
+            comandoSorteio &&
+            typeof comandoSorteio.iniciarSistemaSorteios ===
+                "function"
+        ) {
+
+            comandoSorteio.iniciarSistemaSorteios(
+                client
+            );
+
+        } else {
+
+            console.log(
+                "⚠️ Sistema automático de sorteios não foi encontrado."
+            );
+        }
+
+        // =================================================
         // 📋 REGISTRAR SLASH COMMANDS
         // =================================================
 
@@ -498,6 +522,10 @@ client.on(
 
         if (interaction.isButton()) {
 
+            // =================================================
+            // 🔔 DAILY
+            // =================================================
+
             if (
                 interaction.customId ===
                 "daily_notificar"
@@ -544,6 +572,10 @@ client.on(
                 return;
             }
 
+            // =================================================
+            // ❓ AJUDA
+            // =================================================
+
             if (
                 interaction.customId ===
                 "ajuda_comandos"
@@ -589,6 +621,10 @@ client.on(
 
                 return;
             }
+
+            // =================================================
+            // 📝 EMBED
+            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -637,6 +673,57 @@ client.on(
                 return;
             }
 
+            // =================================================
+            // 🎉 SORTEIO
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "sorteio_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "sorteio"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão do sorteio:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar o sorteio.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
             return;
         }
 
@@ -647,6 +734,10 @@ client.on(
         if (
             interaction.isModalSubmit()
         ) {
+
+            // =================================================
+            // 📝 EMBED
+            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -686,6 +777,57 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // 🎉 SORTEIO
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "sorteio_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "sorteio"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleModal ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleModal(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no modal do sorteio:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao configurar o sorteio.",
                                 ephemeral: true
                             });
                         }
