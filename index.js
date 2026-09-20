@@ -517,6 +517,64 @@ client.on(
         );
 
         // =================================================
+        // 📋 MENUS DE SELEÇÃO
+        // =================================================
+
+        if (
+            interaction.isAnySelectMenu()
+        ) {
+
+            if (
+                interaction.customId.startsWith(
+                    "sorteio_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "sorteio"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleSelect ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleSelect(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no menu do sorteio:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao selecionar a opção do sorteio.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            return;
+        }
+
+        // =================================================
         // 🔘 BOTÕES
         // =================================================
 
@@ -664,6 +722,57 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // 🎟️ PARTICIPAR DO SORTEIO
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "sorteio_participar_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "sorteio"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleParticipation ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleParticipation(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro ao participar do sorteio:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao participar do sorteio.",
                                 ephemeral: true
                             });
                         }
