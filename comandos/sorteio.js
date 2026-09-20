@@ -17,6 +17,33 @@ const { pool } = require("../database/database");
 
 const sessoes = new Map();
 
+function criarConfig(guildId) {
+    return {
+        guildId,
+        canalId: null,
+        titulo: "",
+        descricao: "",
+        cor: "5865F2",
+        imagem: null,
+        thumbnail: null,
+        data: null,
+        horario: null,
+        vencedores: 1
+    };
+}
+
+function normalizarCor(cor) {
+    if (!cor) return 0x5865F2;
+
+    let valor = String(cor).trim().replace("#", "");
+
+    if (!/^[0-9A-Fa-f]{6}$/.test(valor)) {
+        return 0x5865F2;
+    }
+
+    return parseInt(valor, 16);
+}
+
 function criarPainelSorteio() {
     return [
         new ActionRowBuilder().addComponents(
@@ -40,6 +67,12 @@ function criarPainelSorteio() {
         ),
 
         new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("sorteio_data")
+                .setLabel("Data e horário")
+                .setEmoji("📅")
+                .setStyle(ButtonStyle.Secondary),
+
             new ButtonBuilder()
                 .setCustomId("sorteio_preview")
                 .setLabel("Visualizar sorteio")
@@ -79,7 +112,7 @@ function criarEmbedPainel(config) {
             },
             {
                 name: "🎨 Cor",
-                value: config.cor || "Padrão",
+                value: `#${String(config.cor || "5865F2").replace("#", "")}`,
                 inline: true
             },
             {
@@ -94,9 +127,10 @@ function criarEmbedPainel(config) {
             },
             {
                 name: "📅 Encerramento",
-                value: config.data && config.horario
-                    ? `${config.data} às ${config.horario}`
-                    : "❌ Não definido",
+                value:
+                    config.data && config.horario
+                        ? `${config.data} às ${config.horario}`
+                        : "❌ Não definido",
                 inline: false
             }
         )
@@ -107,7 +141,7 @@ function criarEmbedPainel(config) {
 
 function criarEmbedPreview(config) {
     const embed = new EmbedBuilder()
-        .setColor(config.cor || 0x5865F2)
+        .setColor(normalizarCor(config.cor))
         .setTitle(`🎉 ${config.titulo || "Sorteio"}`)
         .setDescription(
             config.descricao ||
@@ -174,6 +208,12 @@ async function criarSorteio(config) {
         throw new Error("Data ou horário inválido.");
     }
 
+    if (encerraEm <= Date.now()) {
+        throw new Error(
+            "A data e o horário precisam estar no futuro."
+        );
+    }
+
     const resultado = await pool.query(
         `
         INSERT INTO sorteios
@@ -209,24 +249,70 @@ async function criarSorteio(config) {
 
 async function participarSorteio(sorteioId, userId) {
     try {
-        await pool.query(
+        const sorteio = await pool.query(
+            `
+            SELECT *
+            FROM sorteios
+            WHERE id = $1
+            `,
+            [sorteioId]
+        );
+
+        if (sorteio.rows.length === 0) {
+            return {
+                sucesso: false,
+                mensagem: "❌ Esse sorteio não existe."
+            };
+        }
+
+        const dados = sorteio.rows[0];
+
+        if (dados.encerrado) {
+            return {
+                sucesso: false,
+                mensagem: "❌ Esse sorteio já foi encerrado."
+            };
+        }
+
+        if (Number(dados.encerra_em) <= Date.now()) {
+            return {
+                sucesso: false,
+                mensagem: "❌ Esse sorteio já terminou."
+            };
+        }
+
+        const resultado = await pool.query(
             `
             INSERT INTO sorteio_participantes
             (sorteio_id, user_id)
             VALUES ($1, $2)
             ON CONFLICT DO NOTHING
+            RETURNING user_id
             `,
             [sorteioId, userId]
         );
 
-        return true;
+        if (resultado.rows.length === 0) {
+            return {
+                sucesso: false,
+                mensagem: "⚠️ Você já está participando desse sorteio."
+            };
+        }
+
+        return {
+            sucesso: true,
+            mensagem: "🎟️ Você está participando do sorteio!"
+        };
     } catch (erro) {
         console.error(
             "❌ Erro ao registrar participante:",
             erro
         );
 
-        return false;
+        return {
+            sucesso: false,
+            mensagem: "❌ Não foi possível registrar sua participação."
+        };
     }
 }
 
@@ -289,7 +375,7 @@ async function finalizarSorteio(client, sorteio) {
         }
 
         const quantidade = Math.min(
-            sorteio.vencedores,
+            Number(sorteio.vencedores) || 1,
             embaralhados.length
         );
 
@@ -328,7 +414,6 @@ async function finalizarSorteio(client, sorteio) {
         await canal.send({
             embeds: [embed]
         });
-
     } catch (erro) {
         console.error(
             "❌ Erro ao finalizar sorteio:",
@@ -364,6 +449,8 @@ async function verificarSorteios(client) {
 }
 
 function iniciarSistemaSorteios(client) {
+    verificarSorteios(client);
+
     setInterval(() => {
         verificarSorteios(client);
     }, 10000);
@@ -394,18 +481,9 @@ module.exports = {
             });
         }
 
-        const config = {
-            guildId: interaction.guildId,
-            canalId: null,
-            titulo: "",
-            descricao: "",
-            cor: "5865F2",
-            imagem: null,
-            thumbnail: null,
-            data: null,
-            horario: null,
-            vencedores: 1
-        };
+        const config = criarConfig(
+            interaction.guildId
+        );
 
         sessoes.set(
             interaction.user.id,
@@ -427,18 +505,9 @@ module.exports = {
         let config = sessoes.get(userId);
 
         if (!config) {
-            config = {
-                guildId: interaction.guildId,
-                canalId: null,
-                titulo: "",
-                descricao: "",
-                cor: "5865F2",
-                imagem: null,
-                thumbnail: null,
-                data: null,
-                horario: null,
-                vencedores: 1
-            };
+            config = criarConfig(
+                interaction.guildId
+            );
 
             sessoes.set(userId, config);
         }
@@ -464,6 +533,7 @@ module.exports = {
                         TextInputStyle.Short
                     )
                     .setRequired(true)
+                    .setMaxLength(256)
                     .setValue(
                         config.titulo || ""
                     );
@@ -476,6 +546,7 @@ module.exports = {
                         TextInputStyle.Paragraph
                     )
                     .setRequired(true)
+                    .setMaxLength(4000)
                     .setValue(
                         config.descricao || ""
                     );
@@ -503,6 +574,9 @@ module.exports = {
                         TextInputStyle.Short
                     )
                     .setRequired(false)
+                    .setPlaceholder(
+                        "https://..."
+                    )
                     .setValue(
                         config.imagem || ""
                     );
@@ -515,6 +589,9 @@ module.exports = {
                         TextInputStyle.Short
                     )
                     .setRequired(false)
+                    .setPlaceholder(
+                        "https://..."
+                    )
                     .setValue(
                         config.thumbnail || ""
                     );
@@ -534,6 +611,67 @@ module.exports = {
                 ),
                 new ActionRowBuilder().addComponents(
                     thumbnail
+                )
+            );
+
+            return interaction.showModal(
+                modal
+            );
+        }
+
+        if (
+            interaction.customId ===
+            "sorteio_data"
+        ) {
+            const modal =
+                new ModalBuilder()
+                    .setCustomId(
+                        "sorteio_modal_data"
+                    )
+                    .setTitle(
+                        "📅 Encerramento do sorteio"
+                    );
+
+            const data =
+                new TextInputBuilder()
+                    .setCustomId("data")
+                    .setLabel(
+                        "Data de encerramento"
+                    )
+                    .setStyle(
+                        TextInputStyle.Short
+                    )
+                    .setRequired(true)
+                    .setPlaceholder(
+                        "2026-12-31"
+                    )
+                    .setValue(
+                        config.data || ""
+                    );
+
+            const horario =
+                new TextInputBuilder()
+                    .setCustomId("horario")
+                    .setLabel(
+                        "Horário de encerramento"
+                    )
+                    .setStyle(
+                        TextInputStyle.Short
+                    )
+                    .setRequired(true)
+                    .setPlaceholder(
+                        "23:59"
+                    )
+                    .setValue(
+                        config.horario || ""
+                    );
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    data
+                ),
+                new ActionRowBuilder().addComponents(
+                    horario
                 )
             );
 
@@ -680,6 +818,27 @@ module.exports = {
                 });
             }
 
+            const encerraEm = converterData(
+                config.data,
+                config.horario
+            );
+
+            if (!encerraEm) {
+                return interaction.reply({
+                    content:
+                        "❌ A data ou horário está inválido.",
+                    ephemeral: true
+                });
+            }
+
+            if (encerraEm <= Date.now()) {
+                return interaction.reply({
+                    content:
+                        "❌ A data e o horário precisam estar no futuro.",
+                    ephemeral: true
+                });
+            }
+
             const canal =
                 await interaction.guild.channels
                     .fetch(config.canalId)
@@ -693,85 +852,200 @@ module.exports = {
                 });
             }
 
-            const sorteio =
-                await criarSorteio(config);
+            try {
+                const sorteio =
+                    await criarSorteio(config);
 
-            await canal.send({
-                embeds: [
-                    criarEmbedPreview(config)
-                ],
-                components: [
-                    criarBotaoParticipar(
-                        sorteio.id
-                    )
-                ]
-            });
+                await canal.send({
+                    embeds: [
+                        criarEmbedPreview(config)
+                    ],
+                    components: [
+                        criarBotaoParticipar(
+                            sorteio.id
+                        )
+                    ]
+                });
 
-            sessoes.delete(userId);
+                sessoes.delete(userId);
 
-            return interaction.reply({
-                content:
-                    `✅ Sorteio enviado em ${canal}!`,
-                ephemeral: true
-            });
+                return interaction.reply({
+                    content:
+                        `✅ Sorteio enviado em ${canal}!`,
+                    ephemeral: true
+                });
+            } catch (erro) {
+                console.error(
+                    "❌ Erro ao criar/enviar sorteio:",
+                    erro
+                );
+
+                return interaction.reply({
+                    content:
+                        "❌ Não foi possível criar o sorteio.",
+                    ephemeral: true
+                });
+            }
         }
     },
 
     async handleModal(interaction) {
         if (
-            interaction.customId !==
+            interaction.customId ===
             "sorteio_modal_config"
         ) {
-            return;
-        }
+            const config =
+                sessoes.get(
+                    interaction.user.id
+                );
 
-        const config =
-            sessoes.get(
-                interaction.user.id
-            );
+            if (!config) {
+                return interaction.reply({
+                    content:
+                        "❌ Sua sessão de sorteio expirou. Use `/sorteio` novamente.",
+                    ephemeral: true
+                });
+            }
 
-        if (!config) {
+            config.titulo =
+                interaction.fields.getTextInputValue(
+                    "titulo"
+                ).trim();
+
+            config.descricao =
+                interaction.fields.getTextInputValue(
+                    "descricao"
+                ).trim();
+
+            const cor =
+                interaction.fields.getTextInputValue(
+                    "cor"
+                ).trim();
+
+            if (
+                cor &&
+                !/^[0-9A-Fa-f]{6}$/.test(
+                    cor.replace("#", "")
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ A cor precisa estar no formato hexadecimal, por exemplo `5865F2`.",
+                    ephemeral: true
+                });
+            }
+
+            config.cor =
+                cor.replace("#", "") ||
+                "5865F2";
+
+            config.imagem =
+                interaction.fields.getTextInputValue(
+                    "imagem"
+                ).trim() || null;
+
+            config.thumbnail =
+                interaction.fields.getTextInputValue(
+                    "thumbnail"
+                ).trim() || null;
+
             return interaction.reply({
                 content:
-                    "❌ Sua sessão de sorteio expirou. Use `/sorteio` novamente.",
+                    "✅ Configurações salvas!",
+                embeds: [
+                    criarEmbedPainel(config)
+                ],
+                components: criarPainelSorteio(),
                 ephemeral: true
             });
         }
 
-        config.titulo =
-            interaction.fields.getTextInputValue(
-                "titulo"
-            );
+        if (
+            interaction.customId ===
+            "sorteio_modal_data"
+        ) {
+            const config =
+                sessoes.get(
+                    interaction.user.id
+                );
 
-        config.descricao =
-            interaction.fields.getTextInputValue(
-                "descricao"
-            );
+            if (!config) {
+                return interaction.reply({
+                    content:
+                        "❌ Sua sessão de sorteio expirou. Use `/sorteio` novamente.",
+                    ephemeral: true
+                });
+            }
 
-        config.cor =
-            interaction.fields.getTextInputValue(
-                "cor"
-            ) || "5865F2";
+            const data =
+                interaction.fields
+                    .getTextInputValue("data")
+                    .trim();
 
-        config.imagem =
-            interaction.fields.getTextInputValue(
-                "imagem"
-            ) || null;
+            const horario =
+                interaction.fields
+                    .getTextInputValue("horario")
+                    .trim();
 
-        config.thumbnail =
-            interaction.fields.getTextInputValue(
-                "thumbnail"
-            ) || null;
+            if (
+                !/^\d{4}-\d{2}-\d{2}$/.test(
+                    data
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ A data precisa estar no formato `AAAA-MM-DD`.",
+                    ephemeral: true
+                });
+            }
 
-        return interaction.reply({
-            content:
-                "✅ Configurações salvas!",
-            embeds: [
-                criarEmbedPainel(config)
-            ],
-            components: criarPainelSorteio(),
-            ephemeral: true
-        });
+            if (
+                !/^\d{2}:\d{2}$/.test(
+                    horario
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ O horário precisa estar no formato `HH:MM`.",
+                    ephemeral: true
+                });
+            }
+
+            const encerraEm =
+                converterData(
+                    data,
+                    horario
+                );
+
+            if (!encerraEm) {
+                return interaction.reply({
+                    content:
+                        "❌ A data ou horário informado é inválido.",
+                    ephemeral: true
+                });
+            }
+
+            if (encerraEm <= Date.now()) {
+                return interaction.reply({
+                    content:
+                        "❌ A data e o horário precisam estar no futuro.",
+                    ephemeral: true
+                });
+            }
+
+            config.data = data;
+            config.horario = horario;
+
+            return interaction.reply({
+                content:
+                    "✅ Data e horário salvos!",
+                embeds: [
+                    criarEmbedPainel(config)
+                ],
+                components: criarPainelSorteio(),
+                ephemeral: true
+            });
+        }
     },
 
     async handleSelect(interaction) {
@@ -840,17 +1114,8 @@ module.exports = {
                 interaction.user.id
             );
 
-        if (!resultado) {
-            return interaction.reply({
-                content:
-                    "❌ Não foi possível registrar sua participação.",
-                ephemeral: true
-            });
-        }
-
         return interaction.reply({
-            content:
-                "🎟️ Você está participando do sorteio!",
+            content: resultado.mensagem,
             ephemeral: true
         });
     },
