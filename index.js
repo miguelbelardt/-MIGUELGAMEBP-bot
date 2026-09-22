@@ -7,6 +7,7 @@ const {
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+
 const {
     inicializarBanco,
     adicionarXP
@@ -193,32 +194,6 @@ client.once(
         } else {
             console.log(
                 "⚠️ Sistema automático de sorteios não foi encontrado."
-            );
-        }
-
-        // =================================================
-        // 📋 REGISTRAR SLASH COMMANDS
-        // =================================================
-
-        try {
-            const comandosSlash =
-                [...client.commands.values()]
-                    .map(
-                        comando =>
-                            comando.data.toJSON()
-                    );
-
-            await client.application.commands.set(
-                comandosSlash
-            );
-
-            console.log(
-                `📋 Slash Commands sincronizados: ${comandosSlash.length}`
-            );
-        } catch (erro) {
-            console.error(
-                "❌ Erro ao sincronizar Slash Commands:",
-                erro
             );
         }
 
@@ -933,7 +908,7 @@ client.on(
 
         // =================================================
         // 📝 MODAIS
-        // =================================================
+        // =====================================================
 
         if (
             interaction.isModalSubmit()
