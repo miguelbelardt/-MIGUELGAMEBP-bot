@@ -56,7 +56,7 @@ const DONO_ID = "1124140396516225044";
 // 🔤 PREFIXO
 // =====================================================
 
-const PREFIXO = "m";
+const PREFIXO = "'";
 
 // =====================================================
 // ⭐ SISTEMA DE XP
@@ -137,6 +137,24 @@ client.once(
         );
 
         // =================================================
+        // 🟡 STATUS DE INICIALIZAÇÃO
+        // =================================================
+
+        client.user.setPresence({
+            status: "idle",
+            activities: [
+                {
+                    name: "🔄 Iniciando o bot...",
+                    type: 0
+                }
+            ]
+        });
+
+        console.log(
+            "🟡 Status: Ausente — Iniciando o bot..."
+        );
+
+        // =================================================
         // 🔔 SISTEMA AUTOMÁTICO DO DAILY
         // =================================================
 
@@ -205,52 +223,75 @@ client.once(
         }
 
         // =================================================
-        // 🔄 STATUS DO BOT
+        // ⏳ AGUARDAR 15 SEGUNDOS
         // =================================================
 
-        let mostrandoServidores = true;
-
-        const atualizarStatus = () => {
-            if (mostrandoServidores) {
-                const servidores =
-                    client.guilds.cache.size;
-
-                client.user.setActivity(
-                    `🌐 Estou em ${servidores} servidores`,
-                    {
-                        type: 0
-                    }
-                );
-
-                console.log(
-                    `🌐 Status: Estou em ${servidores} servidores`
-                );
-            } else {
-                const comandos =
-                    client.commands.size;
-
-                client.user.setActivity(
-                    `📋 Tenho ${comandos} comandos disponíveis!`,
-                    {
-                        type: 0
-                    }
-                );
-
-                console.log(
-                    `📋 Status: Tenho ${comandos} comandos disponíveis!`
-                );
-            }
-
-            mostrandoServidores =
-                !mostrandoServidores;
-        };
-
-        atualizarStatus();
-
-        setInterval(
-            atualizarStatus,
-            5000
+        console.log(
+            "⏳ Aguardando 15 segundos para finalizar a inicialização..."
         );
+
+        setTimeout(() => {
+            // =================================================
+            // 🟢 VOLTAR PARA ONLINE
+            // =================================================
+
+            client.user.setPresence({
+                status: "online",
+                activities: []
+            });
+
+            console.log(
+                "🟢 Status: Bot online!"
+            );
+
+            // =================================================
+            // 🔄 STATUS NORMAL DO BOT
+            // =================================================
+
+            let mostrandoServidores = true;
+
+            const atualizarStatus = () => {
+                if (mostrandoServidores) {
+                    const servidores =
+                        client.guilds.cache.size;
+
+                    client.user.setActivity(
+                        `🌐 Estou em ${servidores} servidores`,
+                        {
+                            type: 0
+                        }
+                    );
+
+                    console.log(
+                        `🌐 Status: Estou em ${servidores} servidores`
+                    );
+                } else {
+                    const comandos =
+                        client.commands.size;
+
+                    client.user.setActivity(
+                        `📋 Tenho ${comandos} comandos disponíveis!`,
+                        {
+                            type: 0
+                        }
+                    );
+
+                    console.log(
+                        `📋 Status: Tenho ${comandos} comandos disponíveis!`
+                    );
+                }
+
+                mostrandoServidores =
+                    !mostrandoServidores;
+            };
+
+            atualizarStatus();
+
+            setInterval(
+                atualizarStatus,
+                5000
+            );
+        }, 15000);
     }
 );
 
@@ -387,7 +428,7 @@ client.on(
 
             try {
                 await message.reply(
-                    "❌ Comando não encontrado!\n📋 Use `mhelp` para ver a lista de comandos."
+                    "❌ Comando não encontrado!\n📋 Use `'help` para ver a lista de comandos."
                 );
             } catch (erro) {
                 console.error(
@@ -443,7 +484,7 @@ client.on(
 
         try {
             await message.reply(
-                "⚠️ Esse comando ainda não pode ser usado pelo prefixo.\n📋 Use `mhelp` para ver os comandos disponíveis."
+                "⚠️ Esse comando ainda não pode ser usado pelo prefixo.\n📋 Use `'help` para ver os comandos disponíveis."
             );
         } catch (erro) {
             console.error(
