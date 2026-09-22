@@ -16,6 +16,7 @@ const {
 const dailyProcessando = new Set();
 
 const TIMEZONE = "America/Sao_Paulo";
+const OFFSET_BRASILIA = 3 * 60 * 60 * 1000;
 
 // =====================================================
 // 💰 SORTEIO DA RECOMPENSA
@@ -79,21 +80,13 @@ function obterDataBrasilia() {
 
     return {
         ano: Number(
-            partes.find(
-                parte => parte.type === "year"
-            ).value
+            partes.find(parte => parte.type === "year").value
         ),
-
         mes: Number(
-            partes.find(
-                parte => parte.type === "month"
-            ).value
+            partes.find(parte => parte.type === "month").value
         ),
-
         dia: Number(
-            partes.find(
-                parte => parte.type === "day"
-            ).value
+            partes.find(parte => parte.type === "day").value
         )
     };
 }
@@ -110,21 +103,17 @@ function calcularInicioDoDiaBrasilia() {
     } = obterDataBrasilia();
 
     /*
-     * Brasília = UTC-3.
+     * 00:00 em Brasília corresponde a 03:00 UTC.
      *
-     * 00:00 em Brasília
-     * = 03:00 UTC.
-     *
-     * O -03:00 é usado explicitamente para evitar
-     * problemas de conversão de horário.
+     * Aqui não usamos strings com "-03:00".
+     * Fazemos o cálculo diretamente em UTC.
      */
 
-    const inicio =
-        new Date(
-            `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}T00:00:00-03:00`
-        );
-
-    return inicio.getTime();
+    return Date.UTC(
+        ano,
+        mes - 1,
+        dia
+    ) + OFFSET_BRASILIA;
 }
 
 // =====================================================
@@ -139,38 +128,41 @@ function calcularProximaMeiaNoite() {
     } = obterDataBrasilia();
 
     /*
-     * Calcula o próximo dia de forma segura,
-     * inclusive quando mudar mês ou ano.
+     * Primeiro calculamos o próximo dia em UTC
+     * apenas para cuidar corretamente de:
+     *
+     * 30/31 dias
+     * mudança de mês
+     * mudança de ano
      */
 
-    const proximoDia =
-        new Date(
-            Date.UTC(
-                ano,
-                mes - 1,
-                dia + 1
-            )
-        );
+    const proximoDia = new Date(
+        Date.UTC(
+            ano,
+            mes - 1,
+            dia + 1
+        )
+    );
 
     const proximoAno =
         proximoDia.getUTCFullYear();
 
     const proximoMes =
-        proximoDia.getUTCMonth() + 1;
+        proximoDia.getUTCMonth();
 
     const proximoDiaNumero =
         proximoDia.getUTCDate();
 
     /*
-     * 00:00 em Brasília = 03:00 UTC.
+     * 00:00 do próximo dia em Brasília
+     * = 03:00 UTC.
      */
 
-    const proximaMeiaNoite =
-        new Date(
-            `${proximoAno}-${String(proximoMes).padStart(2, "0")}-${String(proximoDiaNumero).padStart(2, "0")}T00:00:00-03:00`
-        );
-
-    return proximaMeiaNoite.getTime();
+    return Date.UTC(
+        proximoAno,
+        proximoMes,
+        proximoDiaNumero
+    ) + OFFSET_BRASILIA;
 }
 
 // =====================================================
@@ -182,7 +174,10 @@ function calcularTempoRestante() {
         calcularProximaMeiaNoite();
 
     const restante =
-        proximoDaily - Date.now();
+        Math.max(
+            0,
+            proximoDaily - Date.now()
+        );
 
     return {
         proximoDaily,
@@ -198,8 +193,7 @@ function formatarTempo(restante) {
     const horas = Math.max(
         0,
         Math.floor(
-            restante /
-            (1000 * 60 * 60)
+            restante / (1000 * 60 * 60)
         )
     );
 
@@ -250,12 +244,6 @@ function pegouDailyHoje(timestamp) {
     const inicioDoDia =
         calcularInicioDoDiaBrasilia();
 
-    /*
-     * Se o último resgate aconteceu
-     * depois da meia-noite de hoje,
-     * significa que já pegou o Daily hoje.
-     */
-
     return ultimoDaily >= inicioDoDia;
 }
 
@@ -267,9 +255,7 @@ function criarBotaoNotificacao(ativa = false) {
     return new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId(
-                    "daily_notificar"
-                )
+                .setCustomId("daily_notificar")
                 .setLabel(
                     ativa
                         ? "🔔 Notificação ativada"
@@ -296,9 +282,7 @@ async function resgatarDailyAtomico(
         await pool.connect();
 
     try {
-        await client.query(
-            "BEGIN"
-        );
+        await client.query("BEGIN");
 
         await client.query(`
             INSERT INTO usuarios (
@@ -334,18 +318,12 @@ async function resgatarDailyAtomico(
         const dados =
             resultado.rows[0];
 
-        // =================================================
-        // 🚫 JÁ PEGOU HOJE
-        // =================================================
-
         if (
             pegouDailyHoje(
                 dados.ultimo_daily
             )
         ) {
-            await client.query(
-                "COMMIT"
-            );
+            await client.query("COMMIT");
 
             return {
                 sucesso: false,
@@ -356,19 +334,11 @@ async function resgatarDailyAtomico(
             };
         }
 
-        // =================================================
-        // 💰 SORTEAR RECOMPENSA
-        // =================================================
-
         const recompensa =
             sortearRecompensa();
 
         const agora =
             Date.now();
-
-        // =================================================
-        // 💾 SALVAR DAILY
-        // =================================================
 
         const atualizado =
             await client.query(`
@@ -393,9 +363,7 @@ async function resgatarDailyAtomico(
                 userId
             ]);
 
-        await client.query(
-            "COMMIT"
-        );
+        await client.query("COMMIT");
 
         const novoSaldo =
             Number(
@@ -406,15 +374,9 @@ async function resgatarDailyAtomico(
             proximoDaily
         } = calcularTempoRestante();
 
-        // =================================================
-        // 🎁 EMBED
-        // =================================================
-
         const embed =
             new EmbedBuilder()
-                .setTitle(
-                    "🎁 DAILY"
-                )
+                .setTitle("🎁 DAILY")
                 .setDescription(
                     `Parabéns, ${usuario}!\n\n` +
                     `🎲 Você ganhou **${recompensa} moedas**!\n` +
@@ -430,16 +392,12 @@ async function resgatarDailyAtomico(
             sucesso: true,
             embed,
             row:
-                criarBotaoNotificacao(
-                    false
-                )
+                criarBotaoNotificacao(false)
         };
 
     } catch (erro) {
 
-        await client.query(
-            "ROLLBACK"
-        );
+        await client.query("ROLLBACK");
 
         throw erro;
 
@@ -482,7 +440,6 @@ async function verificarNotificacoesDaily(
                     usuario.ultimo_daily
                 );
 
-            // Ainda é o mesmo dia.
             if (
                 pegouDailyHoje(
                     ultimoDaily
@@ -515,7 +472,6 @@ async function verificarNotificacoesDaily(
                 );
             }
 
-            // Desativar notificação.
             try {
 
                 await salvarNotificacaoDaily(
@@ -618,10 +574,6 @@ module.exports = {
                     interaction.user
                 );
 
-            // =============================================
-            // 🚫 JÁ PEGOU
-            // =============================================
-
             if (
                 !resultado.sucesso
             ) {
@@ -639,9 +591,7 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
-                        .setTitle(
-                            "⏳ DAILY"
-                        )
+                        .setTitle("⏳ DAILY")
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
                             `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
@@ -660,10 +610,6 @@ module.exports = {
                     ephemeral: true
                 });
             }
-
-            // =============================================
-            // 🎁 DAILY RESGATADO
-            // =============================================
 
             await interaction.reply({
                 embeds: [
@@ -732,10 +678,6 @@ module.exports = {
                     message.author
                 );
 
-            // =============================================
-            // 🚫 JÁ PEGOU
-            // =============================================
-
             if (
                 !resultado.sucesso
             ) {
@@ -753,9 +695,7 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
-                        .setTitle(
-                            "⏳ DAILY"
-                        )
+                        .setTitle("⏳ DAILY")
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
                             `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
@@ -773,10 +713,6 @@ module.exports = {
                     ]
                 });
             }
-
-            // =============================================
-            // 🎁 DAILY RESGATADO
-            // =============================================
 
             await message.reply({
                 embeds: [
