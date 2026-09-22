@@ -30,14 +30,16 @@ module.exports = {
         const texto = conteudo.toLowerCase();
 
         // Aceita:
-        // M help
-        // m help
-        // Mhelp
-        // mhelp
+        // 'help
+        // ' help
+        // 'ajuda
+        // ' ajuda
 
         const ehHelp =
-            texto === "m help" ||
-            texto === "mhelp";
+            texto === "'help" ||
+            texto === "' help" ||
+            texto === "'ajuda" ||
+            texto === "' ajuda";
 
         if (!ehHelp) return;
 
@@ -90,17 +92,13 @@ function criarEmbedAjuda() {
             `Aqui você encontra informações sobre como usar o bot.\n\n` +
 
             `🔤 **PREFIXO**\n` +
-            `O prefixo do bot é \`M\` ou \`m\`.\n\n` +
+            `O prefixo do bot é \`'\`.\n\n` +
 
             `Você pode usar:\n` +
-            `\`M ajuda\`\n` +
-            `\`m ajuda\`\n` +
-            `\`Majuda\`\n` +
-            `\`majuda\`\n` +
-            `\`M help\`\n` +
-            `\`m help\`\n` +
-            `\`Mhelp\`\n` +
-            `\`mhelp\`\n\n` +
+            `\`'ajuda\`\n` +
+            `\`' ajuda\`\n` +
+            `\`'help\`\n` +
+            `\`' help\`\n\n` +
 
             `📋 **COMANDOS**\n` +
             `Clique no botão abaixo para visualizar todos os comandos disponíveis.`
