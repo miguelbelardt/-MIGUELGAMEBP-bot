@@ -54,10 +54,31 @@ function emojiJogada(jogada) {
     return "❓";
 }
 
+function extrairDadosBotao(customId) {
+    const prefixo = "pptduo_";
+    const restante = customId.slice(prefixo.length);
+
+    const separador = restante.indexOf("_");
+
+    if (separador === -1) {
+        return null;
+    }
+
+    const jogada = restante.slice(0, separador);
+    const id = restante.slice(separador + 1);
+
+    return {
+        jogada,
+        id
+    };
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("pptduo")
-        .setDescription("Desafia outro jogador para uma partida de Pedra, Papel e Tesoura."),
+        .setDescription(
+            "Desafia outro jogador para uma partida de Pedra, Papel e Tesoura."
+        ),
 
     async execute(interaction) {
         const menu = new UserSelectMenuBuilder()
@@ -79,10 +100,7 @@ module.exports = {
     },
 
     async handleSelect(interaction) {
-        if (
-            interaction.customId !==
-            "pptduo_escolher_usuario"
-        ) {
+        if (interaction.customId !== "pptduo_escolher_usuario") {
             return;
         }
 
@@ -98,14 +116,18 @@ module.exports = {
 
         const id = `${interaction.user.id}_${adversarioId}_${Date.now()}`;
 
-        desafios.set(id, {
+        const desafio = {
             id,
             jogador1: interaction.user.id,
             jogador2: adversarioId,
             jogador1Jogada: null,
             jogador2Jogada: null,
-            guildId: interaction.guildId
-        });
+            guildId: interaction.guildId,
+            canalId: interaction.channelId,
+            mensagemId: null
+        };
+
+        desafios.set(id, desafio);
 
         const embed = new EmbedBuilder()
             .setColor(0x5865F2)
@@ -113,22 +135,24 @@ module.exports = {
             .setDescription(
                 `<@${interaction.user.id}> desafiou <@${adversarioId}> para uma partida de **Pedra, Papel e Tesoura!**`
             )
-            .addFields({
-                name: "🎯 Desafiante",
-                value: `<@${interaction.user.id}>`,
-                inline: true
-            })
-            .addFields({
-                name: "👤 Desafiado",
-                value: `<@${adversarioId}>`,
-                inline: true
-            })
+            .addFields(
+                {
+                    name: "🎯 Desafiante",
+                    value: `<@${interaction.user.id}>`,
+                    inline: true
+                },
+                {
+                    name: "👤 Desafiado",
+                    value: `<@${adversarioId}>`,
+                    inline: true
+                }
+            )
             .setFooter({
                 text: "O desafiante precisa escolher sua jogada primeiro."
             });
 
         await interaction.update({
-            content: "🎯 Agora escolha sua jogada:",
+            content: "🎯 **Agora escolha sua jogada:**",
             components: [
                 criarBotoesJogada(id)
             ]
@@ -139,12 +163,7 @@ module.exports = {
             embeds: [embed]
         });
 
-        const desafio = desafios.get(id);
-
-        if (desafio) {
-            desafio.mensagemId = mensagem.id;
-            desafio.canalId = interaction.channelId;
-        }
+        desafio.mensagemId = mensagem.id;
     },
 
     async handleButton(interaction) {
@@ -152,11 +171,21 @@ module.exports = {
             return;
         }
 
-        const partes = interaction.customId.split("_");
+        const dados = extrairDadosBotao(interaction.customId);
 
-        const tipo = partes[1];
-        const jogada = partes[2];
-        const id = partes.slice(3).join("_");
+        if (!dados) {
+            return;
+        }
+
+        const { jogada, id } = dados;
+
+        if (
+            jogada !== "pedra" &&
+            jogada !== "papel" &&
+            jogada !== "tesoura"
+        ) {
+            return;
+        }
 
         const desafio = desafios.get(id);
 
@@ -166,14 +195,6 @@ module.exports = {
                     "❌ Esse desafio não existe mais ou expirou.",
                 ephemeral: true
             });
-        }
-
-        if (
-            tipo !== "pedra" &&
-            tipo !== "papel" &&
-            tipo !== "tesoura"
-        ) {
-            return;
         }
 
         if (
@@ -187,6 +208,7 @@ module.exports = {
             });
         }
 
+        // JOGADOR 1
         if (interaction.user.id === desafio.jogador1) {
             if (desafio.jogador1Jogada) {
                 return interaction.reply({
@@ -204,7 +226,66 @@ module.exports = {
                     "⏳ Agora aguarde o outro jogador.",
                 ephemeral: true
             });
-        } else {
+
+            // Libera os botões para o jogador 2 na mensagem pública
+            if (desafio.mensagemId && desafio.canalId) {
+                const canal = await interaction.client.channels
+                    .fetch(desafio.canalId)
+                    .catch(() => null);
+
+                if (canal) {
+                    const mensagem = await canal.messages
+                        .fetch(desafio.mensagemId)
+                        .catch(() => null);
+
+                    if (mensagem) {
+                        const embed = new EmbedBuilder()
+                            .setColor(0x5865F2)
+                            .setTitle("🎮 PPT Duo")
+                            .setDescription(
+                                `<@${desafio.jogador1}> escolheu sua jogada!\n\n` +
+                                `👉 <@${desafio.jogador2}>, agora é sua vez!`
+                            )
+                            .addFields(
+                                {
+                                    name: "🎯 Desafiante",
+                                    value: `<@${desafio.jogador1}>\n✅ Jogada escolhida`,
+                                    inline: true
+                                },
+                                {
+                                    name: "👤 Desafiado",
+                                    value: `<@${desafio.jogador2}>\n⏳ Escolha sua jogada`,
+                                    inline: true
+                                }
+                            )
+                            .setFooter({
+                                text: "Somente o jogador desafiado pode escolher agora."
+                            });
+
+                        await mensagem.edit({
+                            content: `<@${desafio.jogador2}>`,
+                            embeds: [embed],
+                            components: [
+                                criarBotoesJogada(id)
+                            ]
+                        });
+                    }
+                }
+            }
+
+            return;
+        }
+
+        // JOGADOR 2
+        if (interaction.user.id === desafio.jogador2) {
+            if (!desafio.jogador1Jogada) {
+                return interaction.reply({
+                    content:
+                        "⏳ O desafiante ainda não escolheu a jogada.",
+                    ephemeral: true
+                });
+            }
+
             if (desafio.jogador2Jogada) {
                 return interaction.reply({
                     content:
@@ -276,7 +357,7 @@ module.exports = {
                 }
             )
             .setFooter({
-                text: "PPT Duo"
+                text: "🎮 PPT Duo"
             });
 
         const canal = await interaction.client.channels
@@ -284,9 +365,27 @@ module.exports = {
             .catch(() => null);
 
         if (canal) {
-            await canal.send({
-                embeds: [embed]
-            });
+            if (desafio.mensagemId) {
+                const mensagem = await canal.messages
+                    .fetch(desafio.mensagemId)
+                    .catch(() => null);
+
+                if (mensagem) {
+                    await mensagem.edit({
+                        content: null,
+                        embeds: [embed],
+                        components: []
+                    });
+                } else {
+                    await canal.send({
+                        embeds: [embed]
+                    });
+                }
+            } else {
+                await canal.send({
+                    embeds: [embed]
+                });
+            }
         }
 
         desafios.delete(id);
