@@ -141,7 +141,7 @@ client.once(
         // 🟡 STATUS DE INICIALIZAÇÃO
         // =================================================
 
-        client.user.setPresence({
+        await client.user.setPresence({
             status: "idle",
             activities: [
                 {
@@ -205,12 +205,12 @@ client.once(
             "⏳ Aguardando 15 segundos para finalizar a inicialização..."
         );
 
-        setTimeout(() => {
+        setTimeout(async () => {
             // =================================================
             // 🟢 VOLTAR PARA ONLINE
             // =================================================
 
-            client.user.setPresence({
+            await client.user.setPresence({
                 status: "online",
                 activities: []
             });
