@@ -206,6 +206,7 @@ client.once(
         );
 
         setTimeout(async () => {
+
             // =================================================
             // 🟢 VOLTAR PARA ONLINE
             // =================================================
@@ -226,7 +227,9 @@ client.once(
             let mostrandoServidores = true;
 
             const atualizarStatus = () => {
+
                 if (mostrandoServidores) {
+
                     const servidores =
                         client.guilds.cache.size;
 
@@ -240,7 +243,9 @@ client.once(
                     console.log(
                         `🌐 Status: Estou em ${servidores} servidores`
                     );
+
                 } else {
+
                     const comandos =
                         client.commands.size;
 
@@ -266,6 +271,7 @@ client.once(
                 atualizarStatus,
                 5000
             );
+
         }, 15000);
     }
 );
@@ -329,6 +335,7 @@ client.on(
 client.on(
     "messageCreate",
     async message => {
+
         if (message.author.bot) return;
 
         // =================================================
@@ -336,6 +343,7 @@ client.on(
         // =================================================
 
         if (message.guild) {
+
             const quantidadeXP =
                 Math.floor(
                     Math.random() *
@@ -343,6 +351,7 @@ client.on(
                 ) + XP_MIN;
 
             try {
+
                 await adicionarXP(
                     message.author.id,
                     quantidadeXP
@@ -351,7 +360,9 @@ client.on(
                 console.log(
                     `⭐ ${message.author.tag} ganhou ${quantidadeXP} XP`
                 );
+
             } catch (erro) {
+
                 console.error(
                     "❌ Erro ao adicionar XP:",
                     erro
@@ -397,15 +408,19 @@ client.on(
             );
 
         if (!comando) {
+
             console.log(
                 `⚠️ Comando não encontrado: ${nomeComando}`
             );
 
             try {
+
                 await message.reply(
                     "❌ Comando não encontrado!\n📋 Use `'help` para ver a lista de comandos."
                 );
+
             } catch (erro) {
+
                 console.error(
                     "❌ Não foi possível enviar a mensagem de comando não encontrado:",
                     erro
@@ -423,7 +438,9 @@ client.on(
             typeof comando.handlePrefix ===
             "function"
         ) {
+
             try {
+
                 await comando.handlePrefix(
                     message,
                     partes
@@ -432,17 +449,22 @@ client.on(
                 console.log(
                     `✅ Comando por prefixo executado: ${message.content}`
                 );
+
             } catch (erro) {
+
                 console.error(
                     `❌ Erro no comando por prefixo ${nomeComando}:`,
                     erro
                 );
 
                 try {
+
                     await message.reply(
                         "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde."
                     );
+
                 } catch (erroResposta) {
+
                     console.error(
                         "❌ Não foi possível enviar a mensagem de erro:",
                         erroResposta
@@ -458,10 +480,13 @@ client.on(
         );
 
         try {
+
             await message.reply(
                 "⚠️ Esse comando ainda não pode ser usado pelo prefixo.\n📋 Use `'help` para ver os comandos disponíveis."
             );
+
         } catch (erro) {
+
             console.error(
                 "❌ Não foi possível enviar a mensagem:",
                 erro
@@ -477,6 +502,7 @@ client.on(
 client.on(
     "interactionCreate",
     async interaction => {
+
         console.log(
             `📩 Interação recebida: ${
                 interaction.commandName ||
@@ -492,6 +518,7 @@ client.on(
         if (
             interaction.isAutocomplete()
         ) {
+
             const comando =
                 client.commands.get(
                     interaction.commandName
@@ -502,34 +529,114 @@ client.on(
                 typeof comando.autocomplete ===
                     "function"
             ) {
+
                 try {
+
                     await comando.autocomplete(
                         interaction
                     );
+
                 } catch (erro) {
+
                     console.error(
                         `❌ Erro no autocomplete do comando /${interaction.commandName}:`,
                         erro
                     );
 
                     try {
+
                         await interaction.respond([]);
+
                     } catch (erroResposta) {
+
                         console.error(
                             "❌ Não foi possível responder ao autocomplete:",
                             erroResposta
                         );
                     }
                 }
+
             } else {
+
                 try {
+
                     await interaction.respond([]);
+
                 } catch (erro) {
+
                     console.error(
                         "❌ Não foi possível responder ao autocomplete:",
                         erro
                     );
                 }
+            }
+
+            return;
+        }
+
+        // =================================================
+        // 📋 SISTEMA DE LOGS
+        // =================================================
+        // Todas as interações com customId logs_ são
+        // encaminhadas para comandos/logs.js
+        // =================================================
+
+        if (
+            interaction.customId &&
+            interaction.customId.startsWith("logs_")
+        ) {
+
+            const comandoLogs =
+                client.commands.get("logs");
+
+            if (
+                comandoLogs &&
+                typeof comandoLogs.handleInteraction ===
+                    "function"
+            ) {
+
+                try {
+
+                    await comandoLogs.handleInteraction(
+                        interaction
+                    );
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ Erro no sistema de logs:",
+                        erro
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar o sistema de logs.",
+                                ephemeral: true
+                            });
+
+                        }
+
+                    } catch (erroResposta) {
+
+                        console.error(
+                            "❌ Não foi possível responder ao erro do sistema de logs:",
+                            erroResposta
+                        );
+                    }
+                }
+
+            } else {
+
+                console.error(
+                    "❌ O comando logs não foi carregado."
+                );
             }
 
             return;
@@ -542,6 +649,7 @@ client.on(
         if (
             interaction.isAnySelectMenu()
         ) {
+
             // =================================================
             // 🎉 MENUS DO SORTEIO
             // =================================================
@@ -551,6 +659,7 @@ client.on(
                     "sorteio_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "sorteio"
@@ -561,11 +670,15 @@ client.on(
                     typeof comando.handleSelect ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleSelect(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no menu do sorteio:",
                             erro
@@ -575,6 +688,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao selecionar a opção do sorteio.",
@@ -596,6 +710,7 @@ client.on(
                     "pptduo_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "pptduo"
@@ -606,11 +721,15 @@ client.on(
                     typeof comando.handleSelect ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleSelect(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no menu do PPT Duo:",
                             erro
@@ -620,6 +739,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao escolher o jogador do PPT Duo.",
@@ -639,7 +759,10 @@ client.on(
         // 🔘 BOTÕES
         // =================================================
 
-        if (interaction.isButton()) {
+        if (
+            interaction.isButton()
+        ) {
+
             // =================================================
             // 🔔 DAILY
             // =================================================
@@ -648,6 +771,7 @@ client.on(
                 interaction.customId ===
                 "daily_notificar"
             ) {
+
                 const comando =
                     client.commands.get(
                         "daily"
@@ -658,11 +782,15 @@ client.on(
                     typeof comando.handleButton ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleButton(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no botão do daily:",
                             erro
@@ -672,6 +800,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
@@ -692,6 +821,7 @@ client.on(
                 interaction.customId ===
                 "ajuda_comandos"
             ) {
+
                 const comando =
                     client.commands.get(
                         "ajuda"
@@ -702,11 +832,15 @@ client.on(
                     typeof comando.handleButton ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleButton(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no botão da ajuda:",
                             erro
@@ -716,6 +850,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
@@ -737,6 +872,7 @@ client.on(
                     "embed_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "embed"
@@ -747,11 +883,15 @@ client.on(
                     typeof comando.handleButton ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleButton(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no botão do embed:",
                             erro
@@ -761,6 +901,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
@@ -782,6 +923,7 @@ client.on(
                     "sorteio_participar_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "sorteio"
@@ -792,11 +934,15 @@ client.on(
                     typeof comando.handleParticipation ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleParticipation(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro ao participar do sorteio:",
                             erro
@@ -806,6 +952,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao participar do sorteio.",
@@ -827,6 +974,7 @@ client.on(
                     "sorteio_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "sorteio"
@@ -837,11 +985,15 @@ client.on(
                     typeof comando.handleButton ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleButton(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no botão do sorteio:",
                             erro
@@ -851,6 +1003,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar o sorteio.",
@@ -872,6 +1025,7 @@ client.on(
                     "pptduo_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "pptduo"
@@ -882,11 +1036,15 @@ client.on(
                     typeof comando.handleButton ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleButton(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no botão do PPT Duo:",
                             erro
@@ -896,6 +1054,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao jogar no PPT Duo.",
@@ -917,6 +1076,7 @@ client.on(
                     "ppt_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "ppt"
@@ -927,11 +1087,15 @@ client.on(
                     typeof comando.handleButton ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleButton(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no botão do PPT:",
                             erro
@@ -941,6 +1105,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao jogar Pedra, Papel e Tesoura.",
@@ -958,11 +1123,12 @@ client.on(
 
         // =================================================
         // 📝 MODAIS
-        // =================================================
+        // =====================================================
 
         if (
             interaction.isModalSubmit()
         ) {
+
             // =================================================
             // 📝 EMBED
             // =================================================
@@ -972,6 +1138,7 @@ client.on(
                     "embed_modal_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "embed"
@@ -982,11 +1149,15 @@ client.on(
                     typeof comando.handleModal ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleModal(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no modal do embed:",
                             erro
@@ -996,6 +1167,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
@@ -1017,6 +1189,7 @@ client.on(
                     "sorteio_"
                 )
             ) {
+
                 const comando =
                     client.commands.get(
                         "sorteio"
@@ -1027,11 +1200,15 @@ client.on(
                     typeof comando.handleModal ===
                     "function"
                 ) {
+
                     try {
+
                         await comando.handleModal(
                             interaction
                         );
+
                     } catch (erro) {
+
                         console.error(
                             "❌ Erro no modal do sorteio:",
                             erro
@@ -1041,6 +1218,7 @@ client.on(
                             !interaction.replied &&
                             !interaction.deferred
                         ) {
+
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao configurar o sorteio.",
@@ -1072,6 +1250,7 @@ client.on(
             );
 
         if (!comando) {
+
             console.log(
                 `⚠️ Comando não encontrado: ${interaction.commandName}`
             );
@@ -1080,6 +1259,7 @@ client.on(
                 !interaction.replied &&
                 !interaction.deferred
             ) {
+
                 await interaction.reply({
                     content:
                         "❌ Comando não encontrado!",
@@ -1091,6 +1271,7 @@ client.on(
         }
 
         try {
+
             await comando.execute(
                 interaction
             );
@@ -1098,30 +1279,38 @@ client.on(
             console.log(
                 `✅ Comando executado: /${interaction.commandName}`
             );
+
         } catch (erro) {
+
             console.error(
                 `❌ Erro no comando /${interaction.commandName}:`,
                 erro
             );
 
             try {
+
                 if (
                     interaction.replied ||
                     interaction.deferred
                 ) {
+
                     await interaction.followUp({
                         content:
                             "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
                         ephemeral: true
                     });
+
                 } else {
+
                     await interaction.reply({
                         content:
                             "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
                         ephemeral: true
                     });
                 }
+
             } catch (erroResposta) {
+
                 console.error(
                     "❌ Não foi possível enviar a mensagem de erro:",
                     erroResposta
@@ -1136,7 +1325,9 @@ client.on(
 // =====================================================
 
 async function iniciar() {
+
     try {
+
         console.log(
             "🚀 Iniciando bot..."
         );
@@ -1162,7 +1353,9 @@ async function iniciar() {
         console.log(
             "🔑 Login do Discord concluído!"
         );
+
     } catch (erro) {
+
         console.error(
             "❌ Erro ao iniciar o bot:",
             erro
