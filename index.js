@@ -486,6 +486,56 @@ client.on(
         );
 
         // =================================================
+        // 🔎 AUTOCOMPLETE
+        // =================================================
+
+        if (
+            interaction.isAutocomplete()
+        ) {
+            const comando =
+                client.commands.get(
+                    interaction.commandName
+                );
+
+            if (
+                comando &&
+                typeof comando.autocomplete ===
+                    "function"
+            ) {
+                try {
+                    await comando.autocomplete(
+                        interaction
+                    );
+                } catch (erro) {
+                    console.error(
+                        `❌ Erro no autocomplete do comando /${interaction.commandName}:`,
+                        erro
+                    );
+
+                    try {
+                        await interaction.respond([]);
+                    } catch (erroResposta) {
+                        console.error(
+                            "❌ Não foi possível responder ao autocomplete:",
+                            erroResposta
+                        );
+                    }
+                }
+            } else {
+                try {
+                    await interaction.respond([]);
+                } catch (erro) {
+                    console.error(
+                        "❌ Não foi possível responder ao autocomplete:",
+                        erro
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // =================================================
         // 📋 MENUS DE SELEÇÃO
         // =================================================
 
@@ -908,7 +958,7 @@ client.on(
 
         // =================================================
         // 📝 MODAIS
-        // =====================================================
+        // =================================================
 
         if (
             interaction.isModalSubmit()
