@@ -113,6 +113,23 @@ async function inicializarBanco() {
         )
     `);
 
+    // ================================
+    // 📋 CONFIGURAÇÃO DE LOGS
+    // ================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS logs_config (
+            guild_id VARCHAR(30) NOT NULL,
+            tipo VARCHAR(30) NOT NULL,
+            canal_id VARCHAR(30) NOT NULL,
+
+            PRIMARY KEY (
+                guild_id,
+                tipo
+            )
+        )
+    `);
+
     console.log(
         "💾 Banco de dados conectado e tabelas prontas!"
     );
