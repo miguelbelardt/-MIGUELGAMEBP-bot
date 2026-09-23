@@ -18,6 +18,12 @@ const dailyProcessando = new Set();
 const TIMEZONE = "America/Sao_Paulo";
 const OFFSET_BRASILIA = 3 * 60 * 60 * 1000;
 
+// Horários aleatórios das notificações
+const notificacoesAgendadas = new Map();
+
+const JANELA_NOTIFICACAO =
+    30 * 60 * 1000;
+
 // =====================================================
 // 💰 SORTEIO DA RECOMPENSA
 // =====================================================
@@ -102,13 +108,6 @@ function calcularInicioDoDiaBrasilia() {
         dia
     } = obterDataBrasilia();
 
-    /*
-     * 00:00 em Brasília corresponde a 03:00 UTC.
-     *
-     * Aqui não usamos strings com "-03:00".
-     * Fazemos o cálculo diretamente em UTC.
-     */
-
     return Date.UTC(
         ano,
         mes - 1,
@@ -127,15 +126,6 @@ function calcularProximaMeiaNoite() {
         dia
     } = obterDataBrasilia();
 
-    /*
-     * Primeiro calculamos o próximo dia em UTC
-     * apenas para cuidar corretamente de:
-     *
-     * 30/31 dias
-     * mudança de mês
-     * mudança de ano
-     */
-
     const proximoDia = new Date(
         Date.UTC(
             ano,
@@ -153,16 +143,53 @@ function calcularProximaMeiaNoite() {
     const proximoDiaNumero =
         proximoDia.getUTCDate();
 
-    /*
-     * 00:00 do próximo dia em Brasília
-     * = 03:00 UTC.
-     */
-
     return Date.UTC(
         proximoAno,
         proximoMes,
         proximoDiaNumero
     ) + OFFSET_BRASILIA;
+}
+
+// =====================================================
+// 🔔 SORTEAR HORÁRIO DA NOTIFICAÇÃO
+// =====================================================
+
+function sortearHorarioNotificacao() {
+    const proximaMeiaNoite =
+        calcularProximaMeiaNoite();
+
+    const atrasoAleatorio =
+        Math.floor(
+            Math.random() *
+            (JANELA_NOTIFICACAO + 1)
+        );
+
+    return proximaMeiaNoite + atrasoAleatorio;
+}
+
+// =====================================================
+// 🔔 OBTER HORÁRIO AGENDADO
+// =====================================================
+
+function obterHorarioNotificacao(userId) {
+    let horario =
+        notificacoesAgendadas.get(userId);
+
+    if (
+        !horario ||
+        horario < calcularProximaMeiaNoite() -
+            JANELA_NOTIFICACAO
+    ) {
+        horario =
+            sortearHorarioNotificacao();
+
+        notificacoesAgendadas.set(
+            userId,
+            horario
+        );
+    }
+
+    return horario;
 }
 
 // =====================================================
@@ -340,34 +367,45 @@ async function resgatarDailyAtomico(
         const agora =
             Date.now();
 
-        const atualizado =
-            await client.query(`
-                UPDATE usuarios
-                SET
-                    saldo =
-                        COALESCE(
-                            saldo,
-                            0
-                        ) + $1,
+        await client.query(`
+            UPDATE usuarios
+            SET
+                saldo =
+                    COALESCE(
+                        saldo,
+                        0
+                    ) + $1,
 
-                    ultimo_daily = $2,
+                ultimo_daily = $2,
 
-                    notificacao_daily = FALSE
+                notificacao_daily = FALSE
 
-                WHERE id = $3
-
-                RETURNING saldo
-            `, [
-                recompensa,
-                agora,
-                userId
-            ]);
+            WHERE id = $3
+        `, [
+            recompensa,
+            agora,
+            userId
+        ]);
 
         await client.query("COMMIT");
 
+        // Remove qualquer horário antigo de notificação
+        notificacoesAgendadas.delete(
+            userId
+        );
+
+        const saldoAtual =
+            await client.query(`
+                SELECT saldo
+                FROM usuarios
+                WHERE id = $1
+            `, [
+                userId
+            ]);
+
         const novoSaldo =
             Number(
-                atualizado.rows[0].saldo
+                saldoAtual.rows[0].saldo
             );
 
         const {
@@ -440,10 +478,40 @@ async function verificarNotificacoesDaily(
                     usuario.ultimo_daily
                 );
 
+            // Ainda não chegou o próximo dia
             if (
                 pegouDailyHoje(
                     ultimoDaily
                 )
+            ) {
+                continue;
+            }
+
+            // Cria um horário aleatório para este usuário
+            let horarioNotificacao =
+                notificacoesAgendadas.get(
+                    userId
+                );
+
+            if (!horarioNotificacao) {
+
+                horarioNotificacao =
+                    sortearHorarioNotificacao();
+
+                notificacoesAgendadas.set(
+                    userId,
+                    horarioNotificacao
+                );
+
+                console.log(
+                    `🎲 Notificação do Daily de ${userId} agendada para ${formatarHorario(horarioNotificacao)}`
+                );
+            }
+
+            // Ainda não chegou o horário sorteado
+            if (
+                Date.now() <
+                horarioNotificacao
             ) {
                 continue;
             }
@@ -486,6 +554,10 @@ async function verificarNotificacoesDaily(
                     erro
                 );
             }
+
+            notificacoesAgendadas.delete(
+                userId
+            );
         }
 
     } catch (erro) {
@@ -807,6 +879,15 @@ module.exports = {
             });
         }
 
+        // Sorteia o horário da notificação
+        const horarioNotificacao =
+            sortearHorarioNotificacao();
+
+        notificacoesAgendadas.set(
+            userId,
+            horarioNotificacao
+        );
+
         await salvarNotificacaoDaily(
             userId,
             true
@@ -814,7 +895,7 @@ module.exports = {
 
         await interaction.reply({
             content:
-                `✅ Pronto! Vou te avisar quando o daily estiver disponível às **${formatarHorario(proximoDaily)}**. 🔔`,
+                `✅ Pronto! Vou te avisar amanhã em um horário aleatório entre **00:00 e 00:30**. 🔔`,
             ephemeral: true
         });
     }
