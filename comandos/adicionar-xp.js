@@ -1,10 +1,10 @@
 const {
-    SlashCommandBuilder,
-    PermissionFlagsBits
+    SlashCommandBuilder
 } = require("discord.js");
 
 const {
-    adicionarXP
+    adicionarXP,
+    isAdm
 } = require("../database/database.js");
 
 module.exports = {
@@ -23,20 +23,22 @@ module.exports = {
                 .setDescription("Quantidade de XP que será adicionada.")
                 .setRequired(true)
                 .setMinValue(1)
-        )
-        .setDefaultMemberPermissions(
-            PermissionFlagsBits.Administrator
         ),
 
     async execute(interaction) {
-        if (
-            !interaction.memberPermissions?.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
+
+        // =================================================
+        // 👑 VERIFICAR ADM DO BOT
+        // =================================================
+
+        const adm = await isAdm(
+            interaction.user.id
+        );
+
+        if (!adm) {
             return interaction.reply({
                 content:
-                    "❌ Você precisa ter a permissão de **Administrador** para usar este comando.",
+                    "❌ Você não tem permissão para usar este comando.",
                 ephemeral: true
             });
         }
@@ -48,6 +50,7 @@ module.exports = {
             interaction.options.getInteger("quantidade");
 
         try {
+
             await adicionarXP(
                 usuario.id,
                 quantidade
@@ -58,6 +61,7 @@ module.exports = {
             );
 
         } catch (erro) {
+
             console.error(
                 "❌ Erro no comando /adicionar-xp:",
                 erro
@@ -72,24 +76,38 @@ module.exports = {
     },
 
     async handlePrefix(message, args) {
-        if (
-            !message.member?.permissions.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
+
+        // =================================================
+        // 👑 VERIFICAR ADM DO BOT
+        // =================================================
+
+        const adm = await isAdm(
+            message.author.id
+        );
+
+        if (!adm) {
             return message.reply(
-                "❌ Você precisa ter a permissão de **Administrador** para usar este comando."
+                "❌ Você não tem permissão para usar este comando."
             );
         }
+
+        // =================================================
+        // 👤 USUÁRIO
+        // =================================================
 
         const usuario =
             message.mentions.users.first();
 
         if (!usuario) {
             return message.reply(
-                "❌ Você precisa mencionar o usuário.\nExemplo: `madicionar-xp @usuário 100`"
+                "❌ Você precisa mencionar o usuário.\n" +
+                "Exemplo: `'adicionar-xp @usuário 100`"
             );
         }
+
+        // =================================================
+        // ⭐ QUANTIDADE DE XP
+        // =================================================
 
         const quantidadeTexto =
             args.find(arg => /^\d+$/.test(arg));
@@ -103,11 +121,13 @@ module.exports = {
             quantidade < 1
         ) {
             return message.reply(
-                "❌ Informe uma quantidade de XP válida.\nExemplo: `madicionar-xp @usuário 100`"
+                "❌ Informe uma quantidade de XP válida.\n" +
+                "Exemplo: `'adicionar-xp @usuário 100`"
             );
         }
 
         try {
+
             await adicionarXP(
                 usuario.id,
                 quantidade
@@ -118,8 +138,9 @@ module.exports = {
             );
 
         } catch (erro) {
+
             console.error(
-                "❌ Erro no comando madicionar-xp:",
+                "❌ Erro no comando 'adicionar-xp':",
                 erro
             );
 
