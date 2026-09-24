@@ -8,7 +8,6 @@ const path = require("path");
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
 
 // =====================================================
 // 🛡️ VERIFICAR VARIÁVEIS
@@ -21,11 +20,6 @@ if (!TOKEN) {
 
 if (!CLIENT_ID) {
     console.error("❌ CLIENT_ID não foi encontrado.");
-    process.exit(1);
-}
-
-if (!GUILD_ID) {
-    console.error("❌ GUILD_ID não foi encontrado.");
     process.exit(1);
 }
 
@@ -71,6 +65,22 @@ for (const arquivo of arquivosComandos) {
         ) {
             const dados = comando.data.toJSON();
 
+            // =================================================
+            // 🌐 CONTEXTOS DO COMANDO
+            // =================================================
+            //
+            // 0 = Guild
+            // 1 = Bot DM
+            // 2 = DM entre usuários / grupo privado
+            //
+            // 0 = Guild Install
+            // 1 = User Install
+            //
+
+            dados.integration_types = [0, 1];
+
+            dados.contexts = [0, 1, 2];
+
             comandos.push(dados);
 
             console.log(
@@ -113,7 +123,7 @@ if (duplicados.length > 0) {
 }
 
 // =====================================================
-// 🚀 REGISTRAR COMANDOS
+// 🚀 REGISTRAR COMANDOS GLOBAIS
 // =====================================================
 
 const rest = new REST({
@@ -124,11 +134,7 @@ const rest = new REST({
     try {
         console.log("");
         console.log(
-            `🔄 Limpando e registrando ${comandos.length} comandos...`
-        );
-
-        console.log(
-            `🏠 Servidor: ${GUILD_ID}`
+            `🔄 Limpando e registrando ${comandos.length} comandos globais...`
         );
 
         console.log(
@@ -136,13 +142,12 @@ const rest = new REST({
         );
 
         // =================================================
-        // 🧹 LIMPAR COMANDOS ANTIGOS E REGISTRAR OS ATUAIS
+        // 🌐 REGISTRO GLOBAL
         // =================================================
 
         await rest.put(
-            Routes.applicationGuildCommands(
-                CLIENT_ID,
-                GUILD_ID
+            Routes.applicationCommands(
+                CLIENT_ID
             ),
             {
                 body: comandos
@@ -151,7 +156,7 @@ const rest = new REST({
 
         console.log("");
         console.log(
-            "✅ Comandos Slash registrados com sucesso!"
+            "✅ Comandos Slash globais registrados com sucesso!"
         );
 
         console.log(
@@ -159,7 +164,11 @@ const rest = new REST({
         );
 
         console.log(
-            "🧹 Comandos antigos do servidor foram substituídos pela lista atual."
+            "🌐 Contextos: servidor + DM do bot + DM entre usuários."
+        );
+
+        console.log(
+            "👤 Instalação: servidor + usuário."
         );
     } catch (erro) {
         console.error("");
