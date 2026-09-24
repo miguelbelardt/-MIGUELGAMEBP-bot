@@ -41,7 +41,10 @@ async function prepararBanco() {
 
         console.log("💾 Banco de sorteios preparado.");
     } catch (erro) {
-        console.error("❌ Erro ao preparar banco de sorteios:", erro);
+        console.error(
+            "❌ Erro ao preparar banco de sorteios:",
+            erro
+        );
     }
 }
 
@@ -94,23 +97,33 @@ function normalizarCor(cor) {
 // 🛠️ PAINEL
 // ================================
 
-function criarPainelSorteio(usuarioId) {
+function criarPainelSorteio(
+    usuarioId,
+    enviado = false
+) {
     return [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`sorteio_config_${usuarioId}`)
+                .setCustomId(
+                    `sorteio_config_${usuarioId}`
+                )
                 .setLabel("Configurar")
                 .setEmoji("⚙️")
                 .setStyle(ButtonStyle.Primary),
 
             new ButtonBuilder()
-                .setCustomId(`sorteio_canal_${usuarioId}`)
+                .setCustomId(
+                    `sorteio_canal_${usuarioId}`
+                )
                 .setLabel("Escolher canal")
                 .setEmoji("📢")
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(enviado),
 
             new ButtonBuilder()
-                .setCustomId(`sorteio_vencedores_${usuarioId}`)
+                .setCustomId(
+                    `sorteio_vencedores_${usuarioId}`
+                )
                 .setLabel("Vencedores")
                 .setEmoji("🏆")
                 .setStyle(ButtonStyle.Secondary)
@@ -118,27 +131,43 @@ function criarPainelSorteio(usuarioId) {
 
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`sorteio_data_${usuarioId}`)
+                .setCustomId(
+                    `sorteio_data_${usuarioId}`
+                )
                 .setLabel("Data e horário")
                 .setEmoji("📅")
                 .setStyle(ButtonStyle.Secondary),
 
             new ButtonBuilder()
-                .setCustomId(`sorteio_participantes_${usuarioId}`)
+                .setCustomId(
+                    `sorteio_participantes_${usuarioId}`
+                )
                 .setLabel("Participantes")
                 .setEmoji("👥")
                 .setStyle(ButtonStyle.Secondary),
 
             new ButtonBuilder()
-                .setCustomId(`sorteio_preview_${usuarioId}`)
+                .setCustomId(
+                    `sorteio_preview_${usuarioId}`
+                )
                 .setLabel("Visualizar sorteio")
                 .setEmoji("👀")
                 .setStyle(ButtonStyle.Success),
 
             new ButtonBuilder()
-                .setCustomId(`sorteio_enviar_${usuarioId}`)
-                .setLabel("Enviar sorteio")
-                .setEmoji("🚀")
+                .setCustomId(
+                    `sorteio_enviar_${usuarioId}`
+                )
+                .setLabel(
+                    enviado
+                        ? "Editar sorteio"
+                        : "Enviar sorteio"
+                )
+                .setEmoji(
+                    enviado
+                        ? "✏️"
+                        : "🚀"
+                )
                 .setStyle(ButtonStyle.Primary)
         )
     ];
@@ -148,46 +177,69 @@ function criarEmbedPainel(config) {
     return new EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle("🎉 Criador de Sorteio")
-        .setDescription("Configure o sorteio usando os botões abaixo.")
+        .setDescription(
+            config.sorteioId
+                ? "⚙️ Sorteio já enviado. Altere as opções e clique em **✏️ Editar sorteio** para salvar."
+                : "Configure o sorteio usando os botões abaixo."
+        )
         .addFields(
             {
                 name: "📝 Título",
-                value: config.titulo || "❌ Não definido"
+                value:
+                    config.titulo ||
+                    "❌ Não definido"
             },
             {
                 name: "📄 Descrição",
-                value: config.descricao || "❌ Não definida"
+                value:
+                    config.descricao ||
+                    "❌ Não definida"
             },
             {
                 name: "🎨 Cor",
-                value: `#${String(config.cor || "5865F2").replace("#", "")}`,
+                value:
+                    `#${String(
+                        config.cor || "5865F2"
+                    ).replace("#", "")}`,
                 inline: true
             },
             {
                 name: "🏆 Vencedores",
-                value: String(config.vencedores || 1),
+                value: String(
+                    config.vencedores || 1
+                ),
                 inline: true
             },
             {
                 name: "📢 Canal",
-                value: config.canalId
-                    ? `<#${config.canalId}>`
-                    : "❌ Não escolhido",
+                value:
+                    config.canalId
+                        ? `<#${config.canalId}>`
+                        : "❌ Não escolhido",
                 inline: true
             },
             {
                 name: "👥 Participantes",
-                value: config.mostrarParticipantes
-                    ? "🟢 Visíveis"
-                    : "🔴 Ocultos",
+                value:
+                    config.mostrarParticipantes
+                        ? "🟢 Visíveis"
+                        : "🔴 Ocultos",
                 inline: true
             },
             {
                 name: "📅 Encerramento",
                 value:
-                    config.data && config.horario
+                    config.data &&
+                    config.horario
                         ? `${config.data} às ${config.horario}`
                         : "❌ Não definido"
+            },
+            {
+                name: "📌 Status",
+                value:
+                    config.sorteioId
+                        ? "🟢 Sorteio enviado"
+                        : "🟡 Em configuração"
             }
         );
 }
@@ -196,54 +248,100 @@ function criarEmbedPainel(config) {
 // 🎉 EMBED DO SORTEIO
 // ================================
 
-function criarEmbedPreview(config, participantes = []) {
-    const embed = new EmbedBuilder()
-        .setColor(normalizarCor(config.cor))
-        .setTitle(`🎉 ${config.titulo || "Sorteio"}`)
-        .setDescription(
-            config.descricao || "🎁 Participe deste sorteio!"
-        )
-        .addFields({
-            name: "🏆 Vencedores",
-            value: String(config.vencedores || 1),
-            inline: true
-        });
+function criarEmbedPreview(
+    config,
+    participantes = []
+) {
+    const embed =
+        new EmbedBuilder()
+            .setColor(
+                normalizarCor(config.cor)
+            )
+            .setTitle(
+                `🎉 ${
+                    config.titulo ||
+                    "Sorteio"
+                }`
+            )
+            .setDescription(
+                config.descricao ||
+                "🎁 Participe deste sorteio!"
+            )
+            .addFields({
+                name: "🏆 Vencedores",
+                value: String(
+                    config.vencedores || 1
+                ),
+                inline: true
+            });
 
-    if (config.data && config.horario) {
+    if (
+        config.data &&
+        config.horario
+    ) {
         embed.addFields({
             name: "⏰ Encerramento",
-            value: `${config.data} às ${config.horario}`,
+            value:
+                `${config.data} às ${config.horario}`,
             inline: true
         });
     }
 
-    if (config.mostrarParticipantes) {
-        const lista = participantes.slice(0, 20);
+    if (
+        config.mostrarParticipantes
+    ) {
+        const lista =
+            participantes.slice(
+                0,
+                20
+            );
 
-        let texto = lista.length
-            ? lista.map(id => `<@${id}>`).join("\n")
-            : "Ninguém participou ainda.";
+        let texto =
+            lista.length
+                ? lista
+                    .map(
+                        id =>
+                            `<@${id}>`
+                    )
+                    .join("\n")
+                : "Ninguém participou ainda.";
 
-        if (participantes.length > 20) {
-            texto += `\n... e mais **${participantes.length - 20}** pessoa(s).`;
+        if (
+            participantes.length >
+            20
+        ) {
+            texto +=
+                `\n... e mais **${
+                    participantes.length - 20
+                }** pessoa(s).`;
         }
 
         embed.addFields({
-            name: `👥 Participantes (${participantes.length})`,
-            value: texto.slice(0, 1024)
+            name:
+                `👥 Participantes (${participantes.length})`,
+            value:
+                texto.slice(
+                    0,
+                    1024
+                )
         });
     }
 
     if (config.imagem) {
-        embed.setImage(config.imagem);
+        embed.setImage(
+            config.imagem
+        );
     }
 
     if (config.thumbnail) {
-        embed.setThumbnail(config.thumbnail);
+        embed.setThumbnail(
+            config.thumbnail
+        );
     }
 
     embed.setFooter({
-        text: "🎉 Clique no botão abaixo para participar!"
+        text:
+            "🎉 Clique no botão abaixo para participar!"
     });
 
     return embed;
@@ -255,60 +353,109 @@ function criarEmbedPreview(config, participantes = []) {
 
 function criarBotoesSorteio(
     id,
-    quantidade = 0
+    quantidade = 0,
+    mostrarParticipantes = false
 ) {
-    return [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`sorteio_participar_${id}`)
-                .setLabel(`Participar (${quantidade})`)
-                .setEmoji("🎟️")
-                .setStyle(ButtonStyle.Success),
+    const botoes = [
+        new ButtonBuilder()
+            .setCustomId(
+                `sorteio_participar_${id}`
+            )
+            .setLabel(
+                `Participar (${quantidade})`
+            )
+            .setEmoji("🎟️")
+            .setStyle(
+                ButtonStyle.Success
+            )
+    ];
 
+    if (mostrarParticipantes) {
+        botoes.push(
             new ButtonBuilder()
-                .setCustomId(`sorteio_editar_${id}`)
-                .setLabel("Editar sorteio")
-                .setEmoji("✏️")
-                .setStyle(ButtonStyle.Secondary)
-        )
+                .setCustomId(
+                    `sorteio_ver_participantes_${id}`
+                )
+                .setLabel(
+                    "Ver participantes"
+                )
+                .setEmoji("👥")
+                .setStyle(
+                    ButtonStyle.Secondary
+                )
+        );
+    }
+
+    return [
+        new ActionRowBuilder()
+            .addComponents(
+                botoes
+            )
     ];
 }
 
-function criarBotaoParticipar(id) {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`sorteio_participar_${id}`)
-            .setLabel("Participar")
-            .setEmoji("🎟️")
-            .setStyle(ButtonStyle.Success)
-    );
+function criarBotaoParticipar(
+    id
+) {
+    return new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(
+                    `sorteio_participar_${id}`
+                )
+                .setLabel(
+                    "Participar"
+                )
+                .setEmoji("🎟️")
+                .setStyle(
+                    ButtonStyle.Success
+                )
+        );
 }
 
 // ================================
 // 📅 DATA
 // ================================
 
-function converterData(data, horario) {
-    if (!data || !horario) return null;
+function converterData(
+    data,
+    horario
+) {
+    if (!data || !horario) {
+        return null;
+    }
 
-    const timestamp = new Date(
-        `${data}T${horario}:00-03:00`
-    ).getTime();
+    const timestamp =
+        new Date(
+            `${data}T${horario}:00-03:00`
+        ).getTime();
 
     return Number.isNaN(timestamp)
         ? null
         : timestamp;
 }
 
-function formatarData(timestamp) {
-    const data = new Date(Number(timestamp));
+function formatarData(
+    timestamp
+) {
+    const data =
+        new Date(
+            Number(timestamp)
+        );
 
     return {
-        data: data.toLocaleDateString("pt-BR"),
-        horario: data.toLocaleTimeString("pt-BR", {
-            hour: "2-digit",
-            minute: "2-digit"
-        })
+        data:
+            data.toLocaleDateString(
+                "pt-BR"
+            ),
+        horario:
+            data.toLocaleTimeString(
+                "pt-BR",
+                {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                }
+            )
     };
 }
 
@@ -328,26 +475,49 @@ async function atualizarPainelCriacao(
             return false;
         }
 
-        const canal = await client.channels
-            .fetch(config.painelCanalId)
-            .catch(() => null);
+        const canal =
+            await client.channels
+                .fetch(
+                    config.painelCanalId
+                )
+                .catch(
+                    () => null
+                );
 
-        if (!canal) return false;
+        if (!canal) {
+            return false;
+        }
 
-        const mensagem = await canal.messages
-            .fetch(config.painelMensagemId)
-            .catch(() => null);
+        const mensagem =
+            await canal.messages
+                .fetch(
+                    config.painelMensagemId
+                )
+                .catch(
+                    () => null
+                );
 
-        if (!mensagem) return false;
+        if (!mensagem) {
+            return false;
+        }
 
         await mensagem.edit({
-            embeds: [criarEmbedPainel(config)],
-            components: criarPainelSorteio(
-                config.usuarioId
-            )
+            embeds: [
+                criarEmbedPainel(
+                    config
+                )
+            ],
+            components:
+                criarPainelSorteio(
+                    config.usuarioId,
+                    Boolean(
+                        config.sorteioId
+                    )
+                )
         });
 
         return true;
+
     } catch (erro) {
         console.error(
             "❌ Erro ao atualizar painel:",
@@ -362,11 +532,14 @@ async function atualizarPainelCriacao(
 // 🗄️ CRIAR SORTEIO
 // ================================
 
-async function criarSorteio(config) {
-    const encerraEm = converterData(
-        config.data,
-        config.horario
-    );
+async function criarSorteio(
+    config
+) {
+    const encerraEm =
+        converterData(
+            config.data,
+            config.horario
+        );
 
     if (!encerraEm) {
         throw new Error(
@@ -374,73 +547,88 @@ async function criarSorteio(config) {
         );
     }
 
-    if (encerraEm <= Date.now()) {
+    if (
+        encerraEm <= Date.now()
+    ) {
         throw new Error(
             "A data e o horário precisam estar no futuro."
         );
     }
 
-    const resultado = await pool.query(
-        `
-        INSERT INTO sorteios (
-            guild_id,
-            canal_id,
-            criador_id,
-            titulo,
-            descricao,
-            cor,
-            imagem,
-            thumbnail,
-            encerra_em,
-            vencedores,
-            mostrar_participantes
-        )
-        VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
-        )
-        RETURNING *
-        `,
-        [
-            config.guildId,
-            config.canalId,
-            config.usuarioId,
-            config.titulo,
-            config.descricao,
-            config.cor,
-            config.imagem || null,
-            config.thumbnail || null,
-            encerraEm,
-            config.vencedores || 1,
-            config.mostrarParticipantes
-        ]
-    );
+    const resultado =
+        await pool.query(
+            `
+            INSERT INTO sorteios (
+                guild_id,
+                canal_id,
+                criador_id,
+                titulo,
+                descricao,
+                cor,
+                imagem,
+                thumbnail,
+                encerra_em,
+                vencedores,
+                mostrar_participantes
+            )
+            VALUES (
+                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+            )
+            RETURNING *
+            `,
+            [
+                config.guildId,
+                config.canalId,
+                config.usuarioId,
+                config.titulo,
+                config.descricao,
+                config.cor,
+                config.imagem ||
+                    null,
+                config.thumbnail ||
+                    null,
+                encerraEm,
+                config.vencedores ||
+                    1,
+                config.mostrarParticipantes
+            ]
+        );
 
     return resultado.rows[0];
 }
 
-async function buscarSorteio(id) {
-    const resultado = await pool.query(
-        `
-        SELECT *
-        FROM sorteios
-        WHERE id = $1
-        `,
-        [id]
-    );
+async function buscarSorteio(
+    id
+) {
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM sorteios
+            WHERE id = $1
+            `,
+            [id]
+        );
 
-    return resultado.rows[0] || null;
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
-async function buscarParticipantes(id) {
-    const resultado = await pool.query(
-        `
-        SELECT user_id
-        FROM sorteio_participantes
-        WHERE sorteio_id = $1
-        ORDER BY user_id
-        `,
-        [id]
-    );
+async function buscarParticipantes(
+    id
+) {
+    const resultado =
+        await pool.query(
+            `
+            SELECT user_id
+            FROM sorteio_participantes
+            WHERE sorteio_id = $1
+            ORDER BY user_id
+            `,
+            [id]
+        );
 
     return resultado.rows.map(
         p => p.user_id
@@ -457,7 +645,9 @@ async function atualizarMensagemSorteio(
 ) {
     try {
         const sorteio =
-            await buscarSorteio(id);
+            await buscarSorteio(
+                id
+            );
 
         if (
             !sorteio ||
@@ -466,35 +656,61 @@ async function atualizarMensagemSorteio(
             return false;
         }
 
-        const canal = await client.channels
-            .fetch(sorteio.canal_id)
-            .catch(() => null);
+        const canal =
+            await client.channels
+                .fetch(
+                    sorteio.canal_id
+                )
+                .catch(
+                    () => null
+                );
 
-        if (!canal) return false;
+        if (!canal) {
+            return false;
+        }
 
-        const mensagem = await canal.messages
-            .fetch(sorteio.mensagem_id)
-            .catch(() => null);
+        const mensagem =
+            await canal.messages
+                .fetch(
+                    sorteio.mensagem_id
+                )
+                .catch(
+                    () => null
+                );
 
-        if (!mensagem) return false;
+        if (!mensagem) {
+            return false;
+        }
 
         const participantes =
-            await buscarParticipantes(id);
+            await buscarParticipantes(
+                id
+            );
 
         const data =
-            formatarData(sorteio.encerra_em);
+            formatarData(
+                sorteio.encerra_em
+            );
 
         const config = {
-            titulo: sorteio.titulo,
-            descricao: sorteio.descricao,
-            cor: sorteio.cor,
-            imagem: sorteio.imagem,
-            thumbnail: sorteio.thumbnail,
-            vencedores: sorteio.vencedores,
+            titulo:
+                sorteio.titulo,
+            descricao:
+                sorteio.descricao,
+            cor:
+                sorteio.cor,
+            imagem:
+                sorteio.imagem,
+            thumbnail:
+                sorteio.thumbnail,
+            vencedores:
+                sorteio.vencedores,
             mostrarParticipantes:
                 sorteio.mostrar_participantes,
-            data: data.data,
-            horario: data.horario
+            data:
+                data.data,
+            horario:
+                data.horario
         };
 
         await mensagem.edit({
@@ -504,13 +720,16 @@ async function atualizarMensagemSorteio(
                     participantes
                 )
             ],
-            components: criarBotoesSorteio(
-                id,
-                participantes.length
-            )
+            components:
+                criarBotoesSorteio(
+                    id,
+                    participantes.length,
+                    sorteio.mostrar_participantes
+                )
         });
 
         return true;
+
     } catch (erro) {
         console.error(
             "❌ Erro ao atualizar mensagem do sorteio:",
@@ -518,6 +737,96 @@ async function atualizarMensagemSorteio(
         );
 
         return false;
+    }
+}
+
+// ================================
+// 👥 LISTA DE PARTICIPANTES
+// ================================
+
+async function mostrarParticipantes(
+    interaction,
+    id
+) {
+    try {
+        const sorteio =
+            await buscarSorteio(
+                id
+            );
+
+        if (!sorteio) {
+            return interaction.reply({
+                content:
+                    "❌ Esse sorteio não existe.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            !sorteio.mostrar_participantes
+        ) {
+            return interaction.reply({
+                content:
+                    "🔒 A lista de participantes está oculta neste sorteio.",
+                ephemeral: true
+            });
+        }
+
+        const participantes =
+            await buscarParticipantes(
+                id
+            );
+
+        if (!participantes.length) {
+            return interaction.reply({
+                content:
+                    "👥 Ninguém participou deste sorteio ainda.",
+                ephemeral: true
+            });
+        }
+
+        const lista =
+            participantes
+                .slice(0, 50)
+                .map(
+                    (userId, index) =>
+                        `**${index + 1}.** <@${userId}>`
+                )
+                .join("\n");
+
+        let texto =
+            `👥 **Participantes (${participantes.length})**\n\n${lista}`;
+
+        if (
+            participantes.length >
+            50
+        ) {
+            texto +=
+                `\n\n... e mais **${
+                    participantes.length - 50
+                }** pessoa(s).`;
+        }
+
+        return interaction.reply({
+            content:
+                texto.slice(
+                    0,
+                    2000
+                ),
+            ephemeral: true
+        });
+
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao mostrar participantes:",
+            erro
+        );
+
+        return interaction.reply({
+            content:
+                "❌ Não foi possível mostrar os participantes.",
+            ephemeral: true
+        });
     }
 }
 
@@ -532,7 +841,9 @@ async function participarSorteio(
 ) {
     try {
         const sorteio =
-            await buscarSorteio(id);
+            await buscarSorteio(
+                id
+            );
 
         if (!sorteio) {
             return {
@@ -551,8 +862,9 @@ async function participarSorteio(
         }
 
         if (
-            Number(sorteio.encerra_em) <=
-            Date.now()
+            Number(
+                sorteio.encerra_em
+            ) <= Date.now()
         ) {
             return {
                 sucesso: false,
@@ -570,10 +882,15 @@ async function participarSorteio(
                 ON CONFLICT DO NOTHING
                 RETURNING user_id
                 `,
-                [id, userId]
+                [
+                    id,
+                    userId
+                ]
             );
 
-        if (!resultado.rows.length) {
+        if (
+            !resultado.rows.length
+        ) {
             return {
                 sucesso: false,
                 mensagem:
@@ -591,6 +908,7 @@ async function participarSorteio(
             mensagem:
                 "🎟️ Você está participando do sorteio!"
         };
+
     } catch (erro) {
         console.error(
             "❌ Erro ao registrar participante:",
@@ -620,6 +938,7 @@ async function finalizarSorteio(
             );
 
         if (!lista.length) {
+
             await pool.query(
                 `
                 UPDATE sorteios
@@ -631,8 +950,12 @@ async function finalizarSorteio(
 
             const canal =
                 await client.channels
-                    .fetch(sorteio.canal_id)
-                    .catch(() => null);
+                    .fetch(
+                        sorteio.canal_id
+                    )
+                    .catch(
+                        () => null
+                    );
 
             if (canal) {
                 await canal.send(
@@ -643,16 +966,21 @@ async function finalizarSorteio(
             return;
         }
 
-        const embaralhados = [...lista];
+        const embaralhados =
+            [...lista];
 
         for (
-            let i = embaralhados.length - 1;
+            let i =
+                embaralhados.length -
+                1;
             i > 0;
             i--
         ) {
-            const j = Math.floor(
-                Math.random() * (i + 1)
-            );
+            const j =
+                Math.floor(
+                    Math.random() *
+                    (i + 1)
+                );
 
             [
                 embaralhados[i],
@@ -663,10 +991,13 @@ async function finalizarSorteio(
             ];
         }
 
-        const quantidade = Math.min(
-            Number(sorteio.vencedores) || 1,
-            embaralhados.length
-        );
+        const quantidade =
+            Math.min(
+                Number(
+                    sorteio.vencedores
+                ) || 1,
+                embaralhados.length
+            );
 
         const vencedores =
             embaralhados.slice(
@@ -689,19 +1020,30 @@ async function finalizarSorteio(
 
         const canal =
             await client.channels
-                .fetch(sorteio.canal_id)
-                .catch(() => null);
+                .fetch(
+                    sorteio.canal_id
+                )
+                .catch(
+                    () => null
+                );
 
-        if (!canal) return;
+        if (!canal) {
+            return;
+        }
 
         const mencoes =
             vencedores
-                .map(id => `<@${id}>`)
+                .map(
+                    id =>
+                        `<@${id}>`
+                )
                 .join(", ");
 
         const embed =
             new EmbedBuilder()
-                .setColor(0x57F287)
+                .setColor(
+                    0x57F287
+                )
                 .setTitle(
                     "🏆 Sorteio encerrado!"
                 )
@@ -722,7 +1064,9 @@ async function finalizarSorteio(
     }
 }
 
-async function verificarSorteios(client) {
+async function verificarSorteios(
+    client
+) {
     try {
         const resultado =
             await pool.query(
@@ -744,6 +1088,7 @@ async function verificarSorteios(client) {
                 sorteio
             );
         }
+
     } catch (erro) {
         console.error(
             "❌ Erro ao verificar sorteios:",
@@ -752,12 +1097,20 @@ async function verificarSorteios(client) {
     }
 }
 
-function iniciarSistemaSorteios(client) {
+function iniciarSistemaSorteios(
+    client
+) {
     prepararBanco();
-    verificarSorteios(client);
+
+    verificarSorteios(
+        client
+    );
 
     setInterval(
-        () => verificarSorteios(client),
+        () =>
+            verificarSorteios(
+                client
+            ),
         10000
     );
 
@@ -775,7 +1128,9 @@ async function verificarCriador(
     id
 ) {
     const sorteio =
-        await buscarSorteio(id);
+        await buscarSorteio(
+            id
+        );
 
     if (!sorteio) {
         await interaction.reply({
@@ -788,8 +1143,12 @@ async function verificarCriador(
     }
 
     if (
-        String(sorteio.criador_id) !==
-        String(interaction.user.id)
+        String(
+            sorteio.criador_id
+        ) !==
+        String(
+            interaction.user.id
+        )
     ) {
         await interaction.reply({
             content:
@@ -819,20 +1178,23 @@ async function verificarCriador(
 
 module.exports = {
 
-    data: new SlashCommandBuilder()
-        .setName("sorteio")
-        .setDescription(
-            "Cria um novo sorteio."
-        )
-        .setDefaultMemberPermissions(
-            PermissionFlagsBits.Administrator
-        ),
+    data:
+        new SlashCommandBuilder()
+            .setName("sorteio")
+            .setDescription(
+                "Cria um novo sorteio."
+            )
+            .setDefaultMemberPermissions(
+                PermissionFlagsBits.Administrator
+            ),
 
     // ================================
     // /SORTEIO
     // ================================
 
-    async execute(interaction) {
+    async execute(
+        interaction
+    ) {
 
         if (
             !interaction.memberPermissions.has(
@@ -859,11 +1221,14 @@ module.exports = {
 
         await interaction.reply({
             embeds: [
-                criarEmbedPainel(config)
+                criarEmbedPainel(
+                    config
+                )
             ],
             components:
                 criarPainelSorteio(
-                    interaction.user.id
+                    interaction.user.id,
+                    false
                 )
         });
 
@@ -881,7 +1246,9 @@ module.exports = {
     // 🔘 BOTÕES
     // ================================
 
-    async handleButton(interaction) {
+    async handleButton(
+        interaction
+    ) {
 
         const customId =
             interaction.customId;
@@ -890,101 +1257,24 @@ module.exports = {
             interaction.user.id;
 
         // ================================
-        // ✏️ EDITAR SORTEIO EXISTENTE
+        // 👥 VER PARTICIPANTES
         // ================================
 
         if (
             customId.startsWith(
-                "sorteio_editar_"
+                "sorteio_ver_participantes_"
             )
         ) {
             const id =
                 customId.replace(
-                    "sorteio_editar_",
+                    "sorteio_ver_participantes_",
                     ""
                 );
 
-            const sorteio =
-                await verificarCriador(
-                    interaction,
-                    id
-                );
-
-            if (!sorteio) return;
-
-            const config =
-                criarConfig(
-                    sorteio.guild_id,
-                    sorteio.criador_id
-                );
-
-            config.sorteioId =
-                sorteio.id;
-
-            config.canalId =
-                sorteio.canal_id;
-
-            config.titulo =
-                sorteio.titulo;
-
-            config.descricao =
-                sorteio.descricao;
-
-            config.cor =
-                sorteio.cor;
-
-            config.imagem =
-                sorteio.imagem;
-
-            config.thumbnail =
-                sorteio.thumbnail;
-
-            config.vencedores =
-                Number(
-                    sorteio.vencedores
-                ) || 1;
-
-            config.mostrarParticipantes =
-                sorteio.mostrar_participantes;
-
-            config.painelMensagemId =
-                sorteio.mensagem_id;
-
-            config.painelCanalId =
-                sorteio.canal_id;
-
-            const data =
-                formatarData(
-                    sorteio.encerra_em
-                );
-
-            config.data =
-                data.data
-                    .split("/")
-                    .reverse()
-                    .join("-");
-
-            config.horario =
-                data.horario;
-
-            sessoes.set(
-                userId,
-                config
+            return mostrarParticipantes(
+                interaction,
+                id
             );
-
-            // A PRÓPRIA MENSAGEM DO SORTEIO
-            // vira o painel de edição.
-            return interaction.update({
-                embeds: [
-                    criarEmbedPainel(
-                        config
-                    )
-                ],
-                components:
-                    criarPainelSorteio(
-                        userId
-                    )
-            });
         }
 
         // ================================
@@ -995,7 +1285,9 @@ module.exports = {
             customId.split("_");
 
         const donoId =
-            partes[partes.length - 1];
+            partes[
+                partes.length - 1
+            ];
 
         const idsComDono = [
             "sorteio_config",
@@ -1008,10 +1300,14 @@ module.exports = {
         ];
 
         const tipo =
-            partes.slice(0, -1).join("_");
+            partes
+                .slice(0, -1)
+                .join("_");
 
         if (
-            idsComDono.includes(tipo) &&
+            idsComDono.includes(
+                tipo
+            ) &&
             donoId !== userId
         ) {
             return interaction.reply({
@@ -1022,7 +1318,9 @@ module.exports = {
         }
 
         const config =
-            sessoes.get(userId);
+            sessoes.get(
+                userId
+            );
 
         if (!config) {
             return interaction.reply({
@@ -1153,19 +1451,24 @@ module.exports = {
 
             const data =
                 new TextInputBuilder()
-                    .setCustomId("data")
+                    .setCustomId(
+                        "data"
+                    )
                     .setLabel(
                         "Data de encerramento"
                     )
                     .setStyle(
                         TextInputStyle.Short
                     )
-                    .setRequired(true)
+                    .setRequired(
+                        true
+                    )
                     .setPlaceholder(
                         "2026-12-31"
                     )
                     .setValue(
-                        config.data || ""
+                        config.data ||
+                        ""
                     );
 
             const horario =
@@ -1179,20 +1482,26 @@ module.exports = {
                     .setStyle(
                         TextInputStyle.Short
                     )
-                    .setRequired(true)
+                    .setRequired(
+                        true
+                    )
                     .setPlaceholder(
                         "23:59"
                     )
                     .setValue(
-                        config.horario || ""
+                        config.horario ||
+                        ""
                     );
 
             modal.addComponents(
                 new ActionRowBuilder()
-                    .addComponents(data),
-
+                    .addComponents(
+                        data
+                    ),
                 new ActionRowBuilder()
-                    .addComponents(horario)
+                    .addComponents(
+                        horario
+                    )
             );
 
             return interaction.showModal(
@@ -1212,41 +1521,6 @@ module.exports = {
             config.mostrarParticipantes =
                 !config.mostrarParticipantes;
 
-            if (config.sorteioId) {
-
-                await pool.query(
-                    `
-                    UPDATE sorteios
-                    SET mostrar_participantes = $1
-                    WHERE id = $2
-                    `,
-                    [
-                        config.mostrarParticipantes,
-                        config.sorteioId
-                    ]
-                );
-
-                return interaction.update({
-                    embeds: [
-                        criarEmbedPreview(
-                            config,
-                            await buscarParticipantes(
-                                config.sorteioId
-                            )
-                        )
-                    ],
-                    components:
-                        criarBotoesSorteio(
-                            config.sorteioId,
-                            (
-                                await buscarParticipantes(
-                                    config.sorteioId
-                                )
-                            ).length
-                        )
-                });
-            }
-
             return interaction.update({
                 embeds: [
                     criarEmbedPainel(
@@ -1255,7 +1529,10 @@ module.exports = {
                 ],
                 components:
                     criarPainelSorteio(
-                        userId
+                        userId,
+                        Boolean(
+                            config.sorteioId
+                        )
                     )
             });
         }
@@ -1269,7 +1546,9 @@ module.exports = {
             "sorteio_canal"
         ) {
 
-            if (config.sorteioId) {
+            if (
+                config.sorteioId
+            ) {
                 return interaction.reply({
                     content:
                         "❌ O canal não pode ser alterado depois que o sorteio foi enviado.",
@@ -1305,7 +1584,9 @@ module.exports = {
                 ],
                 components: [
                     new ActionRowBuilder()
-                        .addComponents(menu)
+                        .addComponents(
+                            menu
+                        )
                 ]
             });
         }
@@ -1385,7 +1666,9 @@ module.exports = {
                 ],
                 components: [
                     new ActionRowBuilder()
-                        .addComponents(menu)
+                        .addComponents(
+                            menu
+                        )
                 ]
             });
         }
@@ -1417,7 +1700,7 @@ module.exports = {
         }
 
         // ================================
-        // 🚀 ENVIAR / SALVAR
+        // 🚀 ENVIAR / ✏️ EDITAR
         // ================================
 
         if (
@@ -1483,7 +1766,9 @@ module.exports = {
                 // ✏️ EDITANDO SORTEIO EXISTENTE
                 // ================================
 
-                if (config.sorteioId) {
+                if (
+                    config.sorteioId
+                ) {
 
                     await pool.query(
                         `
@@ -1516,27 +1801,16 @@ module.exports = {
                         config.sorteioId
                     );
 
-                    sessoes.delete(
-                        userId
-                    );
-
                     return interaction.update({
                         embeds: [
-                            criarEmbedPreview(
-                                config,
-                                await buscarParticipantes(
-                                    config.sorteioId
-                                )
+                            criarEmbedPainel(
+                                config
                             )
                         ],
                         components:
-                            criarBotoesSorteio(
-                                config.sorteioId,
-                                (
-                                    await buscarParticipantes(
-                                        config.sorteioId
-                                    )
-                                ).length
+                            criarPainelSorteio(
+                                userId,
+                                true
                             )
                     });
                 }
@@ -1567,63 +1841,10 @@ module.exports = {
                         config
                     );
 
-                // Se o painel está no mesmo canal,
-                // transforma ele na mensagem do sorteio.
-                if (
-                    config.painelCanalId ===
-                    config.canalId
-                ) {
+                // ================================
+                // 📩 SEMPRE CRIA UMA NOVA MENSAGEM
+                // ================================
 
-                    const painel =
-                        await interaction.channel.messages
-                            .fetch(
-                                config.painelMensagemId
-                            )
-                            .catch(
-                                () => null
-                            );
-
-                    if (!painel) {
-                        throw new Error(
-                            "Não consegui encontrar o painel original."
-                        );
-                    }
-
-                    await painel.edit({
-                        embeds: [
-                            criarEmbedPreview(
-                                config
-                            )
-                        ],
-                        components:
-                            criarBotoesSorteio(
-                                sorteio.id,
-                                0
-                            )
-                    });
-
-                    await pool.query(
-                        `
-                        UPDATE sorteios
-                        SET mensagem_id = $1
-                        WHERE id = $2
-                        `,
-                        [
-                            painel.id,
-                            sorteio.id
-                        ]
-                    );
-
-                    sessoes.delete(
-                        userId
-                    );
-
-                    return interaction.deferUpdate();
-                }
-
-                // Se o canal escolhido for diferente,
-                // o painel original não pode virar mensagem
-                // porque são canais diferentes.
                 const mensagem =
                     await canal.send({
                         embeds: [
@@ -1634,7 +1855,8 @@ module.exports = {
                         components:
                             criarBotoesSorteio(
                                 sorteio.id,
-                                0
+                                0,
+                                config.mostrarParticipantes
                             )
                     });
 
@@ -1650,14 +1872,24 @@ module.exports = {
                     ]
                 );
 
-                sessoes.delete(
-                    userId
-                );
+                // ================================
+                // 💾 MANTER PAINEL EXISTENTE
+                // ================================
 
-                return interaction.reply({
-                    content:
-                        `✅ Sorteio enviado em ${canal}!`,
-                    ephemeral: true
+                config.sorteioId =
+                    sorteio.id;
+
+                return interaction.update({
+                    embeds: [
+                        criarEmbedPainel(
+                            config
+                        )
+                    ],
+                    components:
+                        criarPainelSorteio(
+                            userId,
+                            true
+                        )
                 });
 
             } catch (erro) {
@@ -1680,7 +1912,9 @@ module.exports = {
     // 📝 MODAIS
     // ================================
 
-    async handleModal(interaction) {
+    async handleModal(
+        interaction
+    ) {
 
         const config =
             sessoes.get(
@@ -1743,73 +1977,33 @@ module.exports = {
             }
 
             config.cor =
-                cor || "5865F2";
+                cor ||
+                "5865F2";
 
             config.imagem =
                 interaction.fields
                     .getTextInputValue(
                         "imagem"
                     )
-                    .trim() || null;
+                    .trim() ||
+                null;
 
             config.thumbnail =
                 interaction.fields
                     .getTextInputValue(
                         "thumbnail"
                     )
-                    .trim() || null;
+                    .trim() ||
+                null;
 
-            if (config.sorteioId) {
+            await interaction.deferUpdate();
 
-                await pool.query(
-                    `
-                    UPDATE sorteios
-                    SET titulo = $1,
-                        descricao = $2,
-                        cor = $3,
-                        imagem = $4,
-                        thumbnail = $5
-                    WHERE id = $6
-                    `,
-                    [
-                        config.titulo,
-                        config.descricao,
-                        config.cor,
-                        config.imagem,
-                        config.thumbnail,
-                        config.sorteioId
-                    ]
-                );
-            }
+            await atualizarPainelCriacao(
+                interaction.client,
+                config
+            );
 
-            // EDITA A MESMA MENSAGEM
-            return interaction.update({
-                embeds: [
-                    config.sorteioId
-                        ? criarEmbedPreview(
-                            config,
-                            await buscarParticipantes(
-                                config.sorteioId
-                            )
-                        )
-                        : criarEmbedPainel(
-                            config
-                        )
-                ],
-                components:
-                    config.sorteioId
-                        ? criarBotoesSorteio(
-                            config.sorteioId,
-                            (
-                                await buscarParticipantes(
-                                    config.sorteioId
-                                )
-                            ).length
-                        )
-                        : criarPainelSorteio(
-                            interaction.user.id
-                        )
-            });
+            return;
         }
 
         // ================================
@@ -1876,54 +2070,20 @@ module.exports = {
                 });
             }
 
-            config.data = data;
-            config.horario = horario;
+            config.data =
+                data;
 
-            if (config.sorteioId) {
+            config.horario =
+                horario;
 
-                await pool.query(
-                    `
-                    UPDATE sorteios
-                    SET encerra_em = $1
-                    WHERE id = $2
-                    `,
-                    [
-                        encerraEm,
-                        config.sorteioId
-                    ]
-                );
+            await interaction.deferUpdate();
 
-                const participantes =
-                    await buscarParticipantes(
-                        config.sorteioId
-                    );
+            await atualizarPainelCriacao(
+                interaction.client,
+                config
+            );
 
-                return interaction.update({
-                    embeds: [
-                        criarEmbedPreview(
-                            config,
-                            participantes
-                        )
-                    ],
-                    components:
-                        criarBotoesSorteio(
-                            config.sorteioId,
-                            participantes.length
-                        )
-                });
-            }
-
-            return interaction.update({
-                embeds: [
-                    criarEmbedPainel(
-                        config
-                    )
-                ],
-                components:
-                    criarPainelSorteio(
-                        interaction.user.id
-                    )
-            });
+            return;
         }
     },
 
@@ -1931,7 +2091,9 @@ module.exports = {
     // 🔽 SELECTS
     // ================================
 
-    async handleSelect(interaction) {
+    async handleSelect(
+        interaction
+    ) {
 
         const customId =
             interaction.customId;
@@ -1940,7 +2102,9 @@ module.exports = {
             interaction.user.id;
 
         const config =
-            sessoes.get(userId);
+            sessoes.get(
+                userId
+            );
 
         if (!config) {
             return interaction.reply({
@@ -1987,7 +2151,10 @@ module.exports = {
                 ],
                 components:
                     criarPainelSorteio(
-                        userId
+                        userId,
+                        Boolean(
+                            config.sorteioId
+                        )
                     )
             });
         }
@@ -2023,40 +2190,6 @@ module.exports = {
                     interaction.values[0]
                 );
 
-            if (config.sorteioId) {
-
-                await pool.query(
-                    `
-                    UPDATE sorteios
-                    SET vencedores = $1
-                    WHERE id = $2
-                    `,
-                    [
-                        config.vencedores,
-                        config.sorteioId
-                    ]
-                );
-
-                const participantes =
-                    await buscarParticipantes(
-                        config.sorteioId
-                    );
-
-                return interaction.update({
-                    embeds: [
-                        criarEmbedPreview(
-                            config,
-                            participantes
-                        )
-                    ],
-                    components:
-                        criarBotoesSorteio(
-                            config.sorteioId,
-                            participantes.length
-                        )
-                });
-            }
-
             return interaction.update({
                 embeds: [
                     criarEmbedPainel(
@@ -2065,7 +2198,10 @@ module.exports = {
                 ],
                 components:
                     criarPainelSorteio(
-                        userId
+                        userId,
+                        Boolean(
+                            config.sorteioId
+                        )
                     )
             });
         }
@@ -2085,7 +2221,9 @@ module.exports = {
                 ""
             );
 
-        if (id === "preview") {
+        if (
+            id === "preview"
+        ) {
             return interaction.reply({
                 content:
                     "👀 Essa é apenas uma prévia. O sorteio ainda não começou.",
