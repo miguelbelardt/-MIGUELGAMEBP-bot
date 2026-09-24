@@ -141,15 +141,14 @@ client.once(
         // 🟡 STATUS DE INICIALIZAÇÃO
         // =================================================
 
-        await client.user.setPresence({
-            status: "idle",
-            activities: [
-                {
-                    name: "🔄 Iniciando o bot...",
-                    type: 0
-                }
-            ]
-        });
+        client.user.setStatus("idle");
+
+        client.user.setActivity(
+            "🔄 Iniciando o bot...",
+            {
+                type: 0
+            }
+        );
 
         console.log(
             "🟡 Status: Ausente — Iniciando o bot..."
@@ -576,9 +575,6 @@ client.on(
 
         // =================================================
         // 📋 SISTEMA DE LOGS
-        // =================================================
-        // Todas as interações com customId logs_ são
-        // encaminhadas para comandos/logs.js
         // =================================================
 
         if (
