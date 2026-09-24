@@ -133,6 +133,7 @@ for (const arquivo of arquivosComandos) {
 client.once(
     "clientReady",
     async () => {
+
         console.log(
             `🤖 Bot online como ${client.user.tag}`
         );
@@ -141,14 +142,15 @@ client.once(
         // 🟡 STATUS DE INICIALIZAÇÃO
         // =================================================
 
-        client.user.setStatus("idle");
-
-        client.user.setActivity(
-            "🔄 Iniciando o bot...",
-            {
-                type: 0
-            }
-        );
+        await client.user.setPresence({
+            status: "idle",
+            activities: [
+                {
+                    name: "🔄 Iniciando o bot...",
+                    type: 0
+                }
+            ]
+        });
 
         console.log(
             "🟡 Status: Ausente — Iniciando o bot..."
@@ -1117,7 +1119,7 @@ client.on(
             return;
         }
 
-        // =================================================
+        // =====================================================
         // 📝 MODAIS
         // =====================================================
 
