@@ -248,10 +248,7 @@ function criarEmbedPainel(config) {
 // 🎉 EMBED DO SORTEIO
 // ================================
 
-function criarEmbedPreview(
-    config,
-    participantes = []
-) {
+function criarEmbedPreview(config) {
     const embed =
         new EmbedBuilder()
             .setColor(
@@ -284,46 +281,6 @@ function criarEmbedPreview(
             value:
                 `${config.data} às ${config.horario}`,
             inline: true
-        });
-    }
-
-    if (
-        config.mostrarParticipantes
-    ) {
-        const lista =
-            participantes.slice(
-                0,
-                20
-            );
-
-        let texto =
-            lista.length
-                ? lista
-                    .map(
-                        id =>
-                            `<@${id}>`
-                    )
-                    .join("\n")
-                : "Ninguém participou ainda.";
-
-        if (
-            participantes.length >
-            20
-        ) {
-            texto +=
-                `\n... e mais **${
-                    participantes.length - 20
-                }** pessoa(s).`;
-        }
-
-        embed.addFields({
-            name:
-                `👥 Participantes (${participantes.length})`,
-            value:
-                texto.slice(
-                    0,
-                    1024
-                )
         });
     }
 
@@ -394,23 +351,52 @@ function criarBotoesSorteio(
     ];
 }
 
-function criarBotaoParticipar(
-    id
+// ================================
+// 👀 BOTÕES DA PRÉVIA
+// ================================
+
+function criarBotoesPreview(
+    config
 ) {
-    return new ActionRowBuilder()
-        .addComponents(
+    const botoes = [
+        new ButtonBuilder()
+            .setCustomId(
+                "sorteio_participar_preview"
+            )
+            .setLabel(
+                "Participar"
+            )
+            .setEmoji("🎟️")
+            .setStyle(
+                ButtonStyle.Success
+            )
+    ];
+
+    if (
+        config.mostrarParticipantes &&
+        config.sorteioId
+    ) {
+        botoes.push(
             new ButtonBuilder()
                 .setCustomId(
-                    `sorteio_participar_${id}`
+                    `sorteio_ver_participantes_${config.sorteioId}`
                 )
                 .setLabel(
-                    "Participar"
+                    "Ver participantes"
                 )
-                .setEmoji("🎟️")
+                .setEmoji("👥")
                 .setStyle(
-                    ButtonStyle.Success
+                    ButtonStyle.Secondary
                 )
         );
+    }
+
+    return [
+        new ActionRowBuilder()
+            .addComponents(
+                botoes
+            )
+    ];
 }
 
 // ================================
@@ -716,8 +702,7 @@ async function atualizarMensagemSorteio(
         await mensagem.edit({
             embeds: [
                 criarEmbedPreview(
-                    config,
-                    participantes
+                    config
                 )
             ],
             components:
@@ -841,13 +826,12 @@ async function participarSorteio(
 ) {
     try {
         const sorteio =
-            await buscarSorteio(
-                id
-            );
+            await buscarSorteio(id);
 
         if (!sorteio) {
             return {
                 sucesso: false,
+                jaParticipa: false,
                 mensagem:
                     "❌ Esse sorteio não existe."
             };
@@ -856,6 +840,7 @@ async function participarSorteio(
         if (sorteio.encerrado) {
             return {
                 sucesso: false,
+                jaParticipa: false,
                 mensagem:
                     "❌ Esse sorteio já foi encerrado."
             };
@@ -868,6 +853,7 @@ async function participarSorteio(
         ) {
             return {
                 sucesso: false,
+                jaParticipa: false,
                 mensagem:
                     "❌ Esse sorteio já terminou."
             };
@@ -893,8 +879,9 @@ async function participarSorteio(
         ) {
             return {
                 sucesso: false,
+                jaParticipa: true,
                 mensagem:
-                    "⚠️ Você já está participando desse sorteio."
+                    "🎟️ Você já está participando desse sorteio."
             };
         }
 
@@ -905,6 +892,7 @@ async function participarSorteio(
 
         return {
             sucesso: true,
+            jaParticipa: false,
             mensagem:
                 "🎟️ Você está participando do sorteio!"
         };
@@ -917,9 +905,99 @@ async function participarSorteio(
 
         return {
             sucesso: false,
+            jaParticipa: false,
             mensagem:
                 "❌ Não foi possível registrar sua participação."
         };
+    }
+}
+
+// ================================
+// 🚪 SAIR DO SORTEIO
+// ================================
+
+async function sairDoSorteio(
+    interaction,
+    id
+) {
+    try {
+        const sorteio =
+            await buscarSorteio(id);
+
+        if (!sorteio) {
+            return interaction.reply({
+                content:
+                    "❌ Esse sorteio não existe.",
+                ephemeral: true
+            });
+        }
+
+        if (sorteio.encerrado) {
+            return interaction.reply({
+                content:
+                    "❌ Esse sorteio já foi encerrado.",
+                ephemeral: true
+            });
+        }
+
+        if (
+            Number(
+                sorteio.encerra_em
+            ) <= Date.now()
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Esse sorteio já terminou.",
+                ephemeral: true
+            });
+        }
+
+        const resultado =
+            await pool.query(
+                `
+                DELETE FROM sorteio_participantes
+                WHERE sorteio_id = $1
+                AND user_id = $2
+                RETURNING user_id
+                `,
+                [
+                    id,
+                    interaction.user.id
+                ]
+            );
+
+        if (!resultado.rows.length) {
+            return interaction.reply({
+                content:
+                    "⚠️ Você não está participando desse sorteio.",
+                ephemeral: true
+            });
+        }
+
+        await atualizarMensagemSorteio(
+            interaction.client,
+            id
+        );
+
+        return interaction.update({
+            content:
+                "🚪 Você saiu do sorteio.",
+            components: []
+        });
+
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao sair do sorteio:",
+            erro
+        );
+
+        if (!interaction.replied) {
+            return interaction.reply({
+                content:
+                    "❌ Não foi possível sair do sorteio.",
+                ephemeral: true
+            });
+        }
     }
 }
 
@@ -1255,6 +1333,27 @@ module.exports = {
 
         const userId =
             interaction.user.id;
+
+        // ================================
+        // 🚪 SAIR DO SORTEIO
+        // ================================
+
+        if (
+            customId.startsWith(
+                "sorteio_sair_"
+            )
+        ) {
+            const id =
+                customId.replace(
+                    "sorteio_sair_",
+                    ""
+                );
+
+            return sairDoSorteio(
+                interaction,
+                id
+            );
+        }
 
         // ================================
         // 👥 VER PARTICIPANTES
@@ -1690,11 +1789,10 @@ module.exports = {
                         config
                     )
                 ],
-                components: [
-                    criarBotaoParticipar(
-                        "preview"
-                    )
-                ],
+                components:
+                    criarBotoesPreview(
+                        config
+                    ),
                 ephemeral: true
             });
         }
@@ -1841,10 +1939,6 @@ module.exports = {
                         config
                     );
 
-                // ================================
-                // 📩 SEMPRE CRIA UMA NOVA MENSAGEM
-                // ================================
-
                 const mensagem =
                     await canal.send({
                         embeds: [
@@ -1871,10 +1965,6 @@ module.exports = {
                         sorteio.id
                     ]
                 );
-
-                // ================================
-                // 💾 MANTER PAINEL EXISTENTE
-                // ================================
 
                 config.sorteioId =
                     sorteio.id;
@@ -2237,6 +2327,36 @@ module.exports = {
                 interaction.user.id,
                 interaction.client
             );
+
+        // ================================
+        // 🔄 JÁ ESTÁ PARTICIPANDO
+        // ================================
+
+        if (
+            resultado.jaParticipa
+        ) {
+            return interaction.reply({
+                content:
+                    "🎟️ Você já está participando deste sorteio.\n\nDeseja sair dele?",
+                components: [
+                    new ActionRowBuilder()
+                        .addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(
+                                    `sorteio_sair_${id}`
+                                )
+                                .setLabel(
+                                    "Sair do sorteio"
+                                )
+                                .setEmoji("🚪")
+                                .setStyle(
+                                    ButtonStyle.Danger
+                                )
+                        )
+                ],
+                ephemeral: true
+            });
+        }
 
         return interaction.reply({
             content:
