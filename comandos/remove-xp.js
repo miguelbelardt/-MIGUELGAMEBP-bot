@@ -1,11 +1,11 @@
 const {
-    SlashCommandBuilder,
-    PermissionFlagsBits
+    SlashCommandBuilder
 } = require("discord.js");
 
 const {
     removerXP,
-    getXP
+    getXP,
+    isAdm
 } = require("../database/database.js");
 
 module.exports = {
@@ -24,21 +24,22 @@ module.exports = {
                 .setDescription("Quantidade de XP que será removida.")
                 .setRequired(true)
                 .setMinValue(1)
-        )
-        .setDefaultMemberPermissions(
-            PermissionFlagsBits.Administrator
         ),
 
     async execute(interaction) {
 
-        if (
-            !interaction.memberPermissions?.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
+        // =================================================
+        // 👑 VERIFICAR ADM DO BOT
+        // =================================================
+
+        const adm = await isAdm(
+            interaction.user.id
+        );
+
+        if (!adm) {
             return interaction.reply({
                 content:
-                    "❌ Você precisa ter a permissão de **Administrador** para usar este comando.",
+                    "❌ Você não tem permissão para usar este comando.",
                 ephemeral: true
             });
         }
@@ -95,13 +96,17 @@ module.exports = {
 
     async handlePrefix(message, args) {
 
-        if (
-            !message.member?.permissions.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
+        // =================================================
+        // 👑 VERIFICAR ADM DO BOT
+        // =================================================
+
+        const adm = await isAdm(
+            message.author.id
+        );
+
+        if (!adm) {
             return message.reply(
-                "❌ Você precisa ter a permissão de **Administrador** para usar este comando."
+                "❌ Você não tem permissão para usar este comando."
             );
         }
 
