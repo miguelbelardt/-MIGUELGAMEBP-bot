@@ -523,11 +523,25 @@ async function verificarNotificacoesDaily(
                         userId
                     );
 
-                await discordUser.send(
-                    "🔔 **Seu daily está disponível!**\n\n" +
-                    "Já passou da meia-noite! 🌙\n" +
-                    "Use `/daily` no servidor para receber sua recompensa. 💰"
-                );
+                const embedNotificacao =
+                    new EmbedBuilder()
+                        .setTitle("🔔 Seu Daily está disponível!")
+                        .setDescription(
+                            `Olá, ${discordUser}!\n\n` +
+                            `🌙 Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
+                            `💰 Entre em um servidor e resgate sua recompensa usando:\n` +
+                            `</daily:ID_DO_DAILY>`
+                        )
+                        .setFooter({
+                            text:
+                                "Não esqueça de pegar seu Daily hoje!"
+                        });
+
+                await discordUser.send({
+                    embeds: [
+                        embedNotificacao
+                    ]
+                });
 
                 console.log(
                     `🔔 Notificação do Daily enviada para ${discordUser.tag}`
@@ -843,7 +857,7 @@ module.exports = {
 
             return interaction.reply({
                 content:
-                    "🔔 Você já ativou a notificação do daily!",
+                    "🔔 Você já ativou a notificação do Daily!",
                 ephemeral: true
             });
         }
@@ -857,7 +871,7 @@ module.exports = {
 
             return interaction.reply({
                 content:
-                    "❌ Você ainda não possui um daily para aguardar. Use `/daily` primeiro.",
+                    "❌ Você ainda não possui um Daily para aguardar. Use `/daily` primeiro.",
                 ephemeral: true
             });
         }
@@ -874,7 +888,7 @@ module.exports = {
 
             return interaction.reply({
                 content:
-                    "🎁 Seu daily já está disponível! Use `/daily`.",
+                    "🎁 Seu Daily já está disponível! Use `/daily`.",
                 ephemeral: true
             });
         }
@@ -895,7 +909,7 @@ module.exports = {
 
         await interaction.reply({
             content:
-                `✅ Pronto! Vou te avisar amanhã em um horário aleatório entre **00:00 e 00:30**. 🔔`,
+                "✅ Pronto! Vou te enviar uma notificação depois das **00:00**, quando seu Daily estiver disponível. 🔔",
             ephemeral: true
         });
     }
