@@ -91,6 +91,29 @@ async function inicializarBanco() {
         )
     `);
 
+    // Dados usados para editar o sorteio depois de enviado
+    await pool.query(`
+        ALTER TABLE sorteios
+        ADD COLUMN IF NOT EXISTS criador_id VARCHAR(30)
+    `);
+
+    await pool.query(`
+        ALTER TABLE sorteios
+        ADD COLUMN IF NOT EXISTS mensagem_id VARCHAR(30)
+    `);
+
+    await pool.query(`
+        ALTER TABLE sorteios
+        ADD COLUMN IF NOT EXISTS mostrar_participantes BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    // Corrigir possíveis valores antigos nulos
+    await pool.query(`
+        UPDATE sorteios
+        SET mostrar_participantes = FALSE
+        WHERE mostrar_participantes IS NULL
+    `);
+
     // ================================
     // 🎟️ PARTICIPANTES DOS SORTEIOS
     // ================================
@@ -407,7 +430,6 @@ async function getUsuariosComNotificacaoDaily() {
 // 🏆 RANKING DE MOEDAS
 // ================================
 
-// Ranking global/local com paginação
 async function getRankingMoedasPaginado(
     userId,
     tipo = "global",
@@ -424,10 +446,6 @@ async function getRankingMoedasPaginado(
 
     let rankingResult;
     let totalResult;
-
-    // ================================
-    // 🌎 RANKING GLOBAL
-    // ================================
 
     if (tipo === "global") {
 
@@ -451,13 +469,7 @@ async function getRankingMoedasPaginado(
             `
         );
 
-    }
-
-    // ================================
-    // 🏠 RANKING LOCAL
-    // ================================
-
-    else {
+    } else {
 
         if (
             !Array.isArray(usuariosServidor) ||
@@ -506,10 +518,6 @@ async function getRankingMoedasPaginado(
         );
     }
 
-    // ================================
-    // 📊 MONTAR RANKING
-    // ================================
-
     const ranking = rankingResult.rows.map(
         (usuario, index) => ({
             id: usuario.id,
@@ -527,16 +535,8 @@ async function getRankingMoedasPaginado(
             Math.ceil(totalUsuarios / limite)
         );
 
-    // ================================
-    // 👤 POSIÇÃO DO USUÁRIO
-    // ================================
-
     let saldoUsuario = 0;
     let posicaoUsuario = null;
-
-    // ================================
-    // 🌎 POSIÇÃO GLOBAL
-    // ================================
 
     if (tipo === "global") {
 
@@ -582,13 +582,7 @@ async function getRankingMoedasPaginado(
                 );
         }
 
-    }
-
-    // ================================
-    // 🏠 POSIÇÃO LOCAL
-    // ================================
-
-    else {
+    } else {
 
         if (
             Array.isArray(usuariosServidor) &&
@@ -658,7 +652,6 @@ async function getRankingMoedasPaginado(
 // 🔄 RANKING ANTIGO
 // ================================
 
-// Mantido para não quebrar comandos antigos
 async function getRankingMoedas(
     userId,
     limite = 10
