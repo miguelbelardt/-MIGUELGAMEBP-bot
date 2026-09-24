@@ -432,12 +432,18 @@ function formatarData(
     return {
         data:
             data.toLocaleDateString(
-                "pt-BR"
+                "pt-BR",
+                {
+                    timeZone:
+                        "America/Sao_Paulo"
+                }
             ),
         horario:
             data.toLocaleTimeString(
                 "pt-BR",
                 {
+                    timeZone:
+                        "America/Sao_Paulo",
                     hour: "2-digit",
                     minute: "2-digit"
                 }
