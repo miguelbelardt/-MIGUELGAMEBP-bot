@@ -99,8 +99,67 @@ function normalizarCor(cor) {
 
 function criarPainelSorteio(
     usuarioId,
-    enviado = false
+    enviado = false,
+    encerrado = false
 ) {
+    const botoesSegundaLinha = [
+        new ButtonBuilder()
+            .setCustomId(
+                `sorteio_data_${usuarioId}`
+            )
+            .setLabel("Data e horário")
+            .setEmoji("📅")
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(encerrado),
+
+        new ButtonBuilder()
+            .setCustomId(
+                `sorteio_participantes_${usuarioId}`
+            )
+            .setLabel("Participantes")
+            .setEmoji("👥")
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(encerrado),
+
+        new ButtonBuilder()
+            .setCustomId(
+                `sorteio_preview_${usuarioId}`
+            )
+            .setLabel("Visualizar sorteio")
+            .setEmoji("👀")
+            .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+            .setCustomId(
+                `sorteio_enviar_${usuarioId}`
+            )
+            .setLabel(
+                enviado
+                    ? "Editar sorteio"
+                    : "Enviar sorteio"
+            )
+            .setEmoji(
+                enviado
+                    ? "✏️"
+                    : "🚀"
+            )
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(encerrado)
+    ];
+
+    if (enviado) {
+        botoesSegundaLinha.push(
+            new ButtonBuilder()
+                .setCustomId(
+                    `sorteio_encerrar_${usuarioId}`
+                )
+                .setLabel("Encerrar sorteio")
+                .setEmoji("⏹️")
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(encerrado)
+        );
+    }
+
     return [
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -109,7 +168,8 @@ function criarPainelSorteio(
                 )
                 .setLabel("Configurar")
                 .setEmoji("⚙️")
-                .setStyle(ButtonStyle.Primary),
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(encerrado),
 
             new ButtonBuilder()
                 .setCustomId(
@@ -118,7 +178,7 @@ function criarPainelSorteio(
                 .setLabel("Escolher canal")
                 .setEmoji("📢")
                 .setStyle(ButtonStyle.Secondary)
-                .setDisabled(enviado),
+                .setDisabled(enviado || encerrado),
 
             new ButtonBuilder()
                 .setCustomId(
@@ -127,60 +187,33 @@ function criarPainelSorteio(
                 .setLabel("Vencedores")
                 .setEmoji("🏆")
                 .setStyle(ButtonStyle.Secondary)
+                .setDisabled(encerrado)
         ),
 
         new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_data_${usuarioId}`
-                )
-                .setLabel("Data e horário")
-                .setEmoji("📅")
-                .setStyle(ButtonStyle.Secondary),
-
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_participantes_${usuarioId}`
-                )
-                .setLabel("Participantes")
-                .setEmoji("👥")
-                .setStyle(ButtonStyle.Secondary),
-
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_preview_${usuarioId}`
-                )
-                .setLabel("Visualizar sorteio")
-                .setEmoji("👀")
-                .setStyle(ButtonStyle.Success),
-
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_enviar_${usuarioId}`
-                )
-                .setLabel(
-                    enviado
-                        ? "Editar sorteio"
-                        : "Enviar sorteio"
-                )
-                .setEmoji(
-                    enviado
-                        ? "✏️"
-                        : "🚀"
-                )
-                .setStyle(ButtonStyle.Primary)
+            ...botoesSegundaLinha
         )
     ];
 }
 
 function criarEmbedPainel(config) {
+    const encerrado = Boolean(
+        config.sorteioEncerrado
+    );
+
     return new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(
+            encerrado
+                ? 0xED4245
+                : 0x5865F2
+        )
         .setTitle("🎉 Criador de Sorteio")
         .setDescription(
-            config.sorteioId
-                ? "⚙️ Sorteio já enviado. Altere as opções e clique em **✏️ Editar sorteio** para salvar."
-                : "Configure o sorteio usando os botões abaixo."
+            encerrado
+                ? "🔴 Este sorteio já foi encerrado."
+                : config.sorteioId
+                    ? "⚙️ Sorteio já enviado. Altere as opções e clique em **✏️ Editar sorteio** para salvar."
+                    : "Configure o sorteio usando os botões abaixo."
         )
         .addFields(
             {
@@ -237,9 +270,11 @@ function criarEmbedPainel(config) {
             {
                 name: "📌 Status",
                 value:
-                    config.sorteioId
-                        ? "🟢 Sorteio enviado"
-                        : "🟡 Em configuração"
+                    encerrado
+                        ? "🔴 Sorteio encerrado"
+                        : config.sorteioId
+                            ? "🟢 Sorteio enviado"
+                            : "🟡 Em configuração"
             }
         );
 }
@@ -248,11 +283,16 @@ function criarEmbedPainel(config) {
 // 🎉 EMBED DO SORTEIO
 // ================================
 
-function criarEmbedPreview(config) {
+function criarEmbedPreview(
+    config,
+    encerrado = false
+) {
     const embed =
         new EmbedBuilder()
             .setColor(
-                normalizarCor(config.cor)
+                encerrado
+                    ? 0xED4245
+                    : normalizarCor(config.cor)
             )
             .setTitle(
                 `🎉 ${
@@ -261,8 +301,15 @@ function criarEmbedPreview(config) {
                 }`
             )
             .setDescription(
-                config.descricao ||
-                "🎁 Participe deste sorteio!"
+                encerrado
+                    ? (
+                        config.descricao ||
+                        "🎁 Sorteio encerrado."
+                    )
+                    : (
+                        config.descricao ||
+                        "🎁 Participe deste sorteio!"
+                    )
             )
             .addFields({
                 name: "🏆 Vencedores",
@@ -277,7 +324,10 @@ function criarEmbedPreview(config) {
         config.horario
     ) {
         embed.addFields({
-            name: "⏰ Encerramento",
+            name:
+                encerrado
+                    ? "🔴 Encerramento"
+                    : "⏰ Encerramento",
             value:
                 `${config.data} às ${config.horario}`,
             inline: true
@@ -298,7 +348,9 @@ function criarEmbedPreview(config) {
 
     embed.setFooter({
         text:
-            "🎉 Clique no botão abaixo para participar!"
+            encerrado
+                ? "🔴 Este sorteio foi encerrado."
+                : "🎉 Clique no botão abaixo para participar!"
     });
 
     return embed;
@@ -311,7 +363,8 @@ function criarEmbedPreview(config) {
 function criarBotoesSorteio(
     id,
     quantidade = 0,
-    mostrarParticipantes = false
+    mostrarParticipantes = false,
+    encerrado = false
 ) {
     const botoes = [
         new ButtonBuilder()
@@ -319,12 +372,21 @@ function criarBotoesSorteio(
                 `sorteio_participar_${id}`
             )
             .setLabel(
-                `Participar (${quantidade})`
+                encerrado
+                    ? "Sorteio encerrado"
+                    : `Participar (${quantidade})`
             )
-            .setEmoji("🎟️")
+            .setEmoji(
+                encerrado
+                    ? "🔴"
+                    : "🎟️"
+            )
             .setStyle(
-                ButtonStyle.Success
+                encerrado
+                    ? ButtonStyle.Secondary
+                    : ButtonStyle.Success
             )
+            .setDisabled(encerrado)
     ];
 
     if (mostrarParticipantes) {
@@ -504,6 +566,9 @@ async function atualizarPainelCriacao(
                     config.usuarioId,
                     Boolean(
                         config.sorteioId
+                    ),
+                    Boolean(
+                        config.sorteioEncerrado
                     )
                 )
         });
@@ -708,14 +773,16 @@ async function atualizarMensagemSorteio(
         await mensagem.edit({
             embeds: [
                 criarEmbedPreview(
-                    config
+                    config,
+                    sorteio.encerrado
                 )
             ],
             components:
                 criarBotoesSorteio(
                     id,
                     participantes.length,
-                    sorteio.mostrar_participantes
+                    sorteio.mostrar_participantes,
+                    sorteio.encerrado
                 )
         });
 
@@ -1016,78 +1083,57 @@ async function finalizarSorteio(
     sorteio
 ) {
     try {
+        if (sorteio.encerrado) {
+            return;
+        }
+
         const lista =
             await buscarParticipantes(
                 sorteio.id
             );
 
-        if (!lista.length) {
+        let vencedores = [];
 
-            await pool.query(
-                `
-                UPDATE sorteios
-                SET encerrado = TRUE
-                WHERE id = $1
-                `,
-                [sorteio.id]
-            );
+        if (lista.length) {
+            const embaralhados =
+                [...lista];
 
-            const canal =
-                await client.channels
-                    .fetch(
-                        sorteio.canal_id
-                    )
-                    .catch(
-                        () => null
+            for (
+                let i =
+                    embaralhados.length -
+                    1;
+                i > 0;
+                i--
+            ) {
+                const j =
+                    Math.floor(
+                        Math.random() *
+                        (i + 1)
                     );
 
-            if (canal) {
-                await canal.send(
-                    `🎉 O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
-                );
+                [
+                    embaralhados[i],
+                    embaralhados[j]
+                ] = [
+                    embaralhados[j],
+                    embaralhados[i]
+                ];
             }
 
-            return;
-        }
-
-        const embaralhados =
-            [...lista];
-
-        for (
-            let i =
-                embaralhados.length -
-                1;
-            i > 0;
-            i--
-        ) {
-            const j =
-                Math.floor(
-                    Math.random() *
-                    (i + 1)
+            const quantidade =
+                Math.min(
+                    Number(
+                        sorteio.vencedores
+                    ) || 1,
+                    embaralhados.length
                 );
 
-            [
-                embaralhados[i],
-                embaralhados[j]
-            ] = [
-                embaralhados[j],
-                embaralhados[i]
-            ];
+            vencedores =
+                embaralhados.slice(
+                    0,
+                    quantidade
+                );
         }
-
-        const quantidade =
-            Math.min(
-                Number(
-                    sorteio.vencedores
-                ) || 1,
-                embaralhados.length
-            );
-
-        const vencedores =
-            embaralhados.slice(
-                0,
-                quantidade
-            );
 
         await pool.query(
             `
@@ -1102,6 +1148,11 @@ async function finalizarSorteio(
             ]
         );
 
+        await atualizarMensagemSorteio(
+            client,
+            sorteio.id
+        );
+
         const canal =
             await client.channels
                 .fetch(
@@ -1113,6 +1164,12 @@ async function finalizarSorteio(
 
         if (!canal) {
             return;
+        }
+
+        if (!vencedores.length) {
+            return canal.send(
+                `🎉 O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
+            );
         }
 
         const mencoes =
@@ -1401,7 +1458,8 @@ module.exports = {
             "sorteio_data",
             "sorteio_participantes",
             "sorteio_preview",
-            "sorteio_enviar"
+            "sorteio_enviar",
+            "sorteio_encerrar"
         ];
 
         const tipo =
@@ -1436,6 +1494,70 @@ module.exports = {
         }
 
         // ================================
+        // ⏹️ ENCERRAR SORTEIO
+        // ================================
+
+        if (
+            tipo ===
+            "sorteio_encerrar"
+        ) {
+
+            if (!config.sorteioId) {
+                return interaction.reply({
+                    content:
+                        "❌ O sorteio ainda não foi enviado.",
+                    ephemeral: true
+                });
+            }
+
+            const sorteio =
+                await verificarCriador(
+                    interaction,
+                    config.sorteioId
+                );
+
+            if (!sorteio) {
+                return;
+            }
+
+            try {
+                await finalizarSorteio(
+                    interaction.client,
+                    sorteio
+                );
+
+                config.sorteioEncerrado =
+                    true;
+
+                return interaction.update({
+                    embeds: [
+                        criarEmbedPainel(
+                            config
+                        )
+                    ],
+                    components:
+                        criarPainelSorteio(
+                            userId,
+                            true,
+                            true
+                        )
+                });
+
+            } catch (erro) {
+                console.error(
+                    "❌ Erro ao encerrar sorteio manualmente:",
+                    erro
+                );
+
+                return interaction.reply({
+                    content:
+                        "❌ Não foi possível encerrar o sorteio.",
+                    ephemeral: true
+                });
+            }
+        }
+
+        // ================================
         // ⚙️ CONFIGURAR
         // ================================
 
@@ -1443,6 +1565,18 @@ module.exports = {
             tipo ===
             "sorteio_config"
         ) {
+
+            if (config.sorteioId) {
+                const sorteio =
+                    await verificarCriador(
+                        interaction,
+                        config.sorteioId
+                    );
+
+                if (!sorteio) {
+                    return;
+                }
+            }
 
             const modal =
                 new ModalBuilder()
@@ -1545,6 +1679,18 @@ module.exports = {
             "sorteio_data"
         ) {
 
+            if (config.sorteioId) {
+                const sorteio =
+                    await verificarCriador(
+                        interaction,
+                        config.sorteioId
+                    );
+
+                if (!sorteio) {
+                    return;
+                }
+            }
+
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -1623,6 +1769,18 @@ module.exports = {
             "sorteio_participantes"
         ) {
 
+            if (config.sorteioId) {
+                const sorteio =
+                    await verificarCriador(
+                        interaction,
+                        config.sorteioId
+                    );
+
+                if (!sorteio) {
+                    return;
+                }
+            }
+
             config.mostrarParticipantes =
                 !config.mostrarParticipantes;
 
@@ -1637,6 +1795,9 @@ module.exports = {
                         userId,
                         Boolean(
                             config.sorteioId
+                        ),
+                        Boolean(
+                            config.sorteioEncerrado
                         )
                     )
             });
@@ -1704,6 +1865,18 @@ module.exports = {
             tipo ===
             "sorteio_vencedores"
         ) {
+
+            if (config.sorteioId) {
+                const sorteio =
+                    await verificarCriador(
+                        interaction,
+                        config.sorteioId
+                    );
+
+                if (!sorteio) {
+                    return;
+                }
+            }
 
             const menu =
                 new StringSelectMenuBuilder()
@@ -1812,6 +1985,18 @@ module.exports = {
             "sorteio_enviar"
         ) {
 
+            if (config.sorteioId) {
+                const sorteio =
+                    await verificarCriador(
+                        interaction,
+                        config.sorteioId
+                    );
+
+                if (!sorteio) {
+                    return;
+                }
+            }
+
             if (!config.titulo) {
                 return interaction.reply({
                     content:
@@ -1914,7 +2099,8 @@ module.exports = {
                         components:
                             criarPainelSorteio(
                                 userId,
-                                true
+                                true,
+                                false
                             )
                     });
                 }
@@ -1956,7 +2142,8 @@ module.exports = {
                             criarBotoesSorteio(
                                 sorteio.id,
                                 0,
-                                config.mostrarParticipantes
+                                config.mostrarParticipantes,
+                                false
                             )
                     });
 
@@ -1975,6 +2162,9 @@ module.exports = {
                 config.sorteioId =
                     sorteio.id;
 
+                config.sorteioEncerrado =
+                    false;
+
                 return interaction.update({
                     embeds: [
                         criarEmbedPainel(
@@ -1984,7 +2174,8 @@ module.exports = {
                     components:
                         criarPainelSorteio(
                             userId,
-                            true
+                            true,
+                            false
                         )
                 });
 
@@ -2023,6 +2214,26 @@ module.exports = {
                     "❌ Sua sessão de sorteio expirou.",
                 ephemeral: true
             });
+        }
+
+        if (
+            config.sorteioId
+        ) {
+            const sorteio =
+                await buscarSorteio(
+                    config.sorteioId
+                );
+
+            if (
+                !sorteio ||
+                sorteio.encerrado
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Esse sorteio já foi encerrado e não pode mais ser editado.",
+                    ephemeral: true
+                });
+            }
         }
 
         // ================================
@@ -2149,6 +2360,22 @@ module.exports = {
                 });
             }
 
+            const [hora, minuto] =
+                horario
+                    .split(":")
+                    .map(Number);
+
+            if (
+                hora > 23 ||
+                minuto > 59
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ O horário informado é inválido.",
+                    ephemeral: true
+                });
+            }
+
             const encerraEm =
                 converterData(
                     data,
@@ -2250,6 +2477,9 @@ module.exports = {
                         userId,
                         Boolean(
                             config.sorteioId
+                        ),
+                        Boolean(
+                            config.sorteioEncerrado
                         )
                     )
             });
@@ -2297,6 +2527,9 @@ module.exports = {
                         userId,
                         Boolean(
                             config.sorteioId
+                        ),
+                        Boolean(
+                            config.sorteioEncerrado
                         )
                     )
             });
