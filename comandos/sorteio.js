@@ -39,6 +39,12 @@ async function prepararBanco() {
             BOOLEAN NOT NULL DEFAULT FALSE
         `);
 
+        // Guarda o momento REAL em que o sorteio foi encerrado.
+        await pool.query(`
+            ALTER TABLE sorteios
+            ADD COLUMN IF NOT EXISTS encerrado_em BIGINT
+        `);
+
         console.log("💾 Banco de sorteios preparado.");
     } catch (erro) {
         console.error(
