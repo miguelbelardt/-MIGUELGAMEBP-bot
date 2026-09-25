@@ -94,6 +94,7 @@ const arquivosComandos = fs
 
 for (const arquivo of arquivosComandos) {
     try {
+
         const caminho = path.join(
             comandosPath,
             arquivo
@@ -105,6 +106,7 @@ for (const arquivo of arquivosComandos) {
             "data" in comando &&
             "execute" in comando
         ) {
+
             client.commands.set(
                 comando.data.name,
                 comando
@@ -113,12 +115,16 @@ for (const arquivo of arquivosComandos) {
             console.log(
                 `✅ Comando carregado: ${comando.data.name}`
             );
+
         } else {
+
             console.log(
                 `⚠️ Comando inválido: ${arquivo}`
             );
         }
+
     } catch (erro) {
+
         console.error(
             `❌ Erro ao carregar ${arquivo}:`,
             erro
@@ -168,10 +174,13 @@ client.once(
             typeof comandoDaily.iniciarSistemaNotificacoes ===
                 "function"
         ) {
+
             comandoDaily.iniciarSistemaNotificacoes(
                 client
             );
+
         } else {
+
             console.log(
                 "⚠️ Sistema automático de notificações do Daily não foi encontrado."
             );
@@ -189,10 +198,13 @@ client.once(
             typeof comandoSorteio.iniciarSistemaSorteios ===
                 "function"
         ) {
+
             comandoSorteio.iniciarSistemaSorteios(
                 client
             );
+
         } else {
+
             console.log(
                 "⚠️ Sistema automático de sorteios não foi encontrado."
             );
@@ -618,7 +630,6 @@ client.on(
                                     "❌ Deu erro ao executar o sistema de logs.",
                                 ephemeral: true
                             });
-
                         }
 
                     } catch (erroResposta) {
@@ -690,6 +701,57 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao selecionar a opção do sorteio.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // 🎫 MENUS DO TICKET
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "ticket_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "ticket"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleSelectMenu ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleSelectMenu(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no menu do ticket:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao configurar o ticket.",
                                 ephemeral: true
                             });
                         }
@@ -903,6 +965,57 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // 🎫 TICKETS
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "ticket_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "ticket"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão do ticket:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao configurar o ticket.",
                                 ephemeral: true
                             });
                         }
@@ -1169,6 +1282,57 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+                }
+
+                return;
+            }
+
+            // =================================================
+            // 🎫 TICKETS
+            // =================================================
+
+            if (
+                interaction.customId.startsWith(
+                    "ticket_"
+                )
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "ticket"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleModal ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleModal(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no modal do ticket:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao configurar o ticket.",
                                 ephemeral: true
                             });
                         }
