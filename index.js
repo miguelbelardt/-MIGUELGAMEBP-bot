@@ -884,6 +884,63 @@ client.on(
         ) {
 
             // =================================================
+            // 🔕 DESATIVAR NOTIFICAÇÃO DO DAILY
+            // =================================================
+
+            if (
+                interaction.customId ===
+                "daily_notificar_desativar"
+            ) {
+
+                const comando =
+                    client.commands.get(
+                        "daily-notificar"
+                    );
+
+                if (
+                    comando &&
+                    typeof comando.handleButton ===
+                    "function"
+                ) {
+
+                    try {
+
+                        await comando.handleButton(
+                            interaction
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            "❌ Erro no botão de desativar notificação do Daily:",
+                            erro
+                        );
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao desativar a notificação do Daily.",
+                                ephemeral: true
+                            });
+                        }
+                    }
+
+                } else {
+
+                    console.error(
+                        "❌ O comando daily-notificar não foi carregado."
+                    );
+
+                }
+
+                return;
+            }
+
+            // =================================================
             // 🔔 DAILY
             // =================================================
 
