@@ -153,6 +153,62 @@ async function inicializarBanco() {
         )
     `);
 
+    // ================================
+    // 🎫 MODELOS DE TICKETS
+    // ================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS ticket_modelos (
+            id BIGSERIAL PRIMARY KEY,
+            guild_id VARCHAR(30) NOT NULL,
+            nome VARCHAR(100) NOT NULL,
+
+            autor_nome VARCHAR(256),
+            autor_icone TEXT,
+
+            titulo VARCHAR(256),
+            descricao TEXT,
+
+            cor VARCHAR(20),
+
+            imagem TEXT,
+            thumbnail TEXT,
+
+            rodape VARCHAR(2048),
+            rodape_icone TEXT,
+
+            botao_texto VARCHAR(80) NOT NULL DEFAULT 'Fazer Ticket',
+            botao_emoji VARCHAR(100),
+            botao_estilo VARCHAR(20) NOT NULL DEFAULT 'Primary',
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                EXTRACT(EPOCH FROM NOW()) * 1000
+            )
+        )
+    `);
+
+    // ================================
+    // 🎫 CONFIGURAÇÃO DOS TICKETS
+    // ================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS ticket_config (
+            guild_id VARCHAR(30) PRIMARY KEY,
+
+            modelo_id BIGINT,
+
+            canal_painel_id VARCHAR(30),
+
+            configurado BOOLEAN NOT NULL DEFAULT FALSE,
+
+            FOREIGN KEY (
+                modelo_id
+            )
+            REFERENCES ticket_modelos(id)
+            ON DELETE SET NULL
+        )
+    `);
+
     console.log(
         "💾 Banco de dados conectado e tabelas prontas!"
     );
