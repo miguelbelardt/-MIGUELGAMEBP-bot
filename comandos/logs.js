@@ -16,26 +16,27 @@ const TIPOS_LOG = {
         nome: "💬 Mensagens",
         descricao: "Exclusões e alterações de mensagens."
     },
+
     membros: {
         nome: "👤 Membros",
         descricao: "Entrada e saída de membros."
     },
+
     moderacao: {
         nome: "🔨 Moderação",
         descricao: "Banimentos e ações de moderação."
     },
+
     voz: {
         nome: "🎙️ Voz",
         descricao: "Entrada, saída e mudança de canal de voz."
     },
-    comandos: {
-        nome: "🤖 Comandos",
-        descricao: "Comandos utilizados no servidor."
-    },
+
     sorteios: {
         nome: "🎉 Sorteios",
         descricao: "Eventos relacionados aos sorteios."
     },
+
     economia: {
         nome: "💰 Economia",
         descricao: "Eventos relacionados à economia."
@@ -103,7 +104,7 @@ async function removerConfig(guildId, tipo) {
     );
 }
 
-async function criarMenuCanal(tipo) {
+function criarMenuCanal(tipo) {
     return new ChannelSelectMenuBuilder()
         .setCustomId(`logs_canal_${tipo}`)
         .setPlaceholder("📢 Escolha o canal dos logs")
@@ -145,10 +146,13 @@ async function mostrarTipo(interaction, tipo) {
 
     if (!dados) return;
 
-    const config = await buscarConfig(interaction.guild.id, tipo);
+    const config = await buscarConfig(
+        interaction.guild.id,
+        tipo
+    );
 
     const embed = new EmbedBuilder()
-        .setTitle(`${dados.nome}`)
+        .setTitle(dados.nome)
         .setDescription(
             `${dados.descricao}\n\n` +
             (
@@ -157,14 +161,18 @@ async function mostrarTipo(interaction, tipo) {
                     : "❌ **Não configurado.**\n\nEscolha um canal para ativar este log."
             )
         )
-        .setColor(config ? 0x57F287 : 0xED4245);
+        .setColor(
+            config
+                ? 0x57F287
+                : 0xED4245
+        );
 
     const componentes = [];
 
     if (!config) {
         componentes.push(
             new ActionRowBuilder().addComponents(
-                await criarMenuCanal(tipo)
+                criarMenuCanal(tipo)
             )
         );
     } else {
@@ -204,7 +212,9 @@ async function mostrarStatus(interaction) {
     let descricao = "";
 
     for (const [tipo, dados] of Object.entries(TIPOS_LOG)) {
-        const config = resultado.rows.find(row => row.tipo === tipo);
+        const config = resultado.rows.find(
+            row => row.tipo === tipo
+        );
 
         descricao += config
             ? `${dados.nome} → <#${config.canal_id}>\n`
@@ -225,11 +235,16 @@ async function mostrarStatus(interaction) {
 async function registrarLog(guild, tipo, embed) {
     if (!guild) return;
 
-    const config = await buscarConfig(guild.id, tipo);
+    const config = await buscarConfig(
+        guild.id,
+        tipo
+    );
 
     if (!config) return;
 
-    const canal = guild.channels.cache.get(config.canal_id);
+    const canal = guild.channels.cache.get(
+        config.canal_id
+    );
 
     if (!canal || !canal.isTextBased()) return;
 
@@ -252,23 +267,33 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName("configurar")
-                .setDescription("Configura os canais dos logs.")
+                .setDescription(
+                    "Configura os canais dos logs."
+                )
         )
         .addSubcommand(subcommand =>
             subcommand
                 .setName("status")
-                .setDescription("Mostra a configuração atual dos logs.")
+                .setDescription(
+                    "Mostra a configuração atual dos logs."
+                )
         ),
 
     async execute(interaction) {
-        if (!interaction.memberPermissions?.has("Administrator")) {
+        if (
+            !interaction.memberPermissions?.has(
+                "Administrator"
+            )
+        ) {
             return interaction.reply({
-                content: "❌ Você precisa ser administrador para configurar os logs.",
+                content:
+                    "❌ Você precisa ser administrador para configurar os logs.",
                 ephemeral: true
             });
         }
 
-        const subcomando = interaction.options.getSubcommand();
+        const subcomando =
+            interaction.options.getSubcommand();
 
         if (subcomando === "status") {
             return mostrarStatus(interaction);
@@ -289,11 +314,17 @@ module.exports = {
         if (!interaction.guild) return;
 
         if (
-            !interaction.memberPermissions?.has("Administrator")
+            !interaction.memberPermissions?.has(
+                "Administrator"
+            )
         ) {
-            if (!interaction.replied && !interaction.deferred) {
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
                 await interaction.reply({
-                    content: "❌ Você precisa ser administrador.",
+                    content:
+                        "❌ Você precisa ser administrador.",
                     ephemeral: true
                 });
             }
@@ -301,22 +332,45 @@ module.exports = {
             return;
         }
 
+        // MENU DE TIPOS DE LOG
         if (interaction.isStringSelectMenu()) {
-            if (interaction.customId === "logs_tipo") {
-                const tipo = interaction.values[0];
+            if (
+                interaction.customId ===
+                "logs_tipo"
+            ) {
+                const tipo =
+                    interaction.values[0];
 
-                return mostrarTipo(interaction, tipo);
+                return mostrarTipo(
+                    interaction,
+                    tipo
+                );
             }
         }
 
+        // MENU DE ESCOLHA DO CANAL
         if (interaction.isChannelSelectMenu()) {
-            if (interaction.customId.startsWith("logs_canal_")) {
-                const tipo = interaction.customId.replace(
-                    "logs_canal_",
-                    ""
-                );
+            if (
+                interaction.customId.startsWith(
+                    "logs_canal_"
+                )
+            ) {
+                const tipo =
+                    interaction.customId.replace(
+                        "logs_canal_",
+                        ""
+                    );
 
-                const canalId = interaction.values[0];
+                const canalId =
+                    interaction.values[0];
+
+                if (!TIPOS_LOG[tipo]) {
+                    return interaction.reply({
+                        content:
+                            "❌ Tipo de log inválido.",
+                        ephemeral: true
+                    });
+                }
 
                 await salvarConfig(
                     interaction.guild.id,
@@ -324,82 +378,123 @@ module.exports = {
                     canalId
                 );
 
-                const dados = TIPOS_LOG[tipo];
+                const dados =
+                    TIPOS_LOG[tipo];
 
-                const embed = new EmbedBuilder()
-                    .setTitle("✅ Log configurado")
-                    .setDescription(
-                        `${dados.nome} foi configurado com sucesso.\n\n` +
-                        `📢 Canal: <#${canalId}>`
-                    )
-                    .setColor(0x57F287);
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "✅ Log configurado"
+                        )
+                        .setDescription(
+                            `${dados.nome} foi configurado com sucesso.\n\n` +
+                            `📢 Canal: <#${canalId}>`
+                        )
+                        .setColor(0x57F287);
 
                 return interaction.update({
                     embeds: [embed],
                     components: [
-                        criarBotoesConfig(tipo, true)
+                        criarBotoesConfig(
+                            tipo,
+                            true
+                        )
                     ]
                 });
             }
         }
 
+        // BOTÕES
         if (interaction.isButton()) {
-            if (interaction.customId === "logs_voltar") {
-                return mostrarPainel(interaction);
+
+            // VOLTAR PARA O PAINEL
+            if (
+                interaction.customId ===
+                "logs_voltar"
+            ) {
+                return mostrarPainel(
+                    interaction
+                );
             }
 
-            if (interaction.customId.startsWith("logs_alterar_")) {
-                const tipo = interaction.customId.replace(
-                    "logs_alterar_",
-                    ""
-                );
+            // ALTERAR CANAL
+            if (
+                interaction.customId.startsWith(
+                    "logs_alterar_"
+                )
+            ) {
+                const tipo =
+                    interaction.customId.replace(
+                        "logs_alterar_",
+                        ""
+                    );
 
-                const dados = TIPOS_LOG[tipo];
+                const dados =
+                    TIPOS_LOG[tipo];
 
-                const embed = new EmbedBuilder()
-                    .setTitle(`${dados.nome}`)
-                    .setDescription(
-                        "📢 Escolha o novo canal para este log."
-                    )
-                    .setColor(0x5865F2);
+                if (!dados) return;
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(dados.nome)
+                        .setDescription(
+                            "📢 Escolha o novo canal para este log."
+                        )
+                        .setColor(0x5865F2);
 
                 return interaction.update({
                     embeds: [embed],
                     components: [
                         new ActionRowBuilder().addComponents(
-                            await criarMenuCanal(tipo)
+                            criarMenuCanal(tipo)
                         ),
                         new ActionRowBuilder().addComponents(
                             new ButtonBuilder()
-                                .setCustomId(`logs_voltar_tipo_${tipo}`)
-                                .setLabel("Voltar")
+                                .setCustomId(
+                                    `logs_voltar_tipo_${tipo}`
+                                )
+                                .setLabel(
+                                    "Voltar"
+                                )
                                 .setEmoji("↩️")
-                                .setStyle(ButtonStyle.Secondary)
+                                .setStyle(
+                                    ButtonStyle.Secondary
+                                )
                         )
                     ]
                 });
             }
 
-            if (interaction.customId.startsWith("logs_remover_")) {
-                const tipo = interaction.customId.replace(
-                    "logs_remover_",
-                    ""
-                );
+            // REMOVER LOG
+            if (
+                interaction.customId.startsWith(
+                    "logs_remover_"
+                )
+            ) {
+                const tipo =
+                    interaction.customId.replace(
+                        "logs_remover_",
+                        ""
+                    );
 
                 await removerConfig(
                     interaction.guild.id,
                     tipo
                 );
 
-                const dados = TIPOS_LOG[tipo];
+                const dados =
+                    TIPOS_LOG[tipo];
 
-                const embed = new EmbedBuilder()
-                    .setTitle("🗑️ Log removido")
-                    .setDescription(
-                        `${dados.nome} foi removido da configuração.\n\n` +
-                        "Você pode adicioná-lo novamente quando quiser."
-                    )
-                    .setColor(0xED4245);
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🗑️ Log removido"
+                        )
+                        .setDescription(
+                            `${dados.nome} foi removido da configuração.\n\n` +
+                            "Você pode adicioná-lo novamente quando quiser."
+                        )
+                        .setColor(0xED4245);
 
                 return interaction.update({
                     embeds: [embed],
@@ -411,13 +506,22 @@ module.exports = {
                 });
             }
 
-            if (interaction.customId.startsWith("logs_voltar_tipo_")) {
-                const tipo = interaction.customId.replace(
-                    "logs_voltar_tipo_",
-                    ""
-                );
+            // VOLTAR PARA O TIPO
+            if (
+                interaction.customId.startsWith(
+                    "logs_voltar_tipo_"
+                )
+            ) {
+                const tipo =
+                    interaction.customId.replace(
+                        "logs_voltar_tipo_",
+                        ""
+                    );
 
-                return mostrarTipo(interaction, tipo);
+                return mostrarTipo(
+                    interaction,
+                    tipo
+                );
             }
         }
     },
