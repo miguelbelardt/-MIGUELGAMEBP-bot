@@ -1,3 +1,7 @@
+require("dotenv").config({
+    path: ".secrets/.env"
+});
+
 const { REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
@@ -65,20 +69,7 @@ for (const arquivo of arquivosComandos) {
         ) {
             const dados = comando.data.toJSON();
 
-            // =================================================
-            // 🌐 CONTEXTOS DO COMANDO
-            // =================================================
-            //
-            // 0 = Guild
-            // 1 = Bot DM
-            // 2 = DM entre usuários / grupo privado
-            //
-            // 0 = Guild Install
-            // 1 = User Install
-            //
-
             dados.integration_types = [0, 1];
-
             dados.contexts = [0, 1, 2];
 
             comandos.push(dados);
@@ -141,10 +132,6 @@ const rest = new REST({
             `🤖 Aplicação: ${CLIENT_ID}`
         );
 
-        // =================================================
-        // 🌐 REGISTRO GLOBAL
-        // =================================================
-
         await rest.put(
             Routes.applicationCommands(
                 CLIENT_ID
@@ -170,6 +157,7 @@ const rest = new REST({
         console.log(
             "👤 Instalação: servidor + usuário."
         );
+
     } catch (erro) {
         console.error("");
         console.error(
