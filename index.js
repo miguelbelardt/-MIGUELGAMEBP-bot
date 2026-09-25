@@ -218,81 +218,134 @@ client.once(
         }
 
         // =================================================
-        // ⏳ AGUARDAR 15 SEGUNDOS
+        // ⏳ PRIMEIROS 7 SEGUNDOS
         // =================================================
 
         console.log(
-            "⏳ Aguardando 15 segundos para finalizar a inicialização..."
+            "⏳ Bot ficará Ausente por 7 segundos..."
         );
 
-        setTimeout(async () => {
+        await new Promise(resolve =>
+            setTimeout(resolve, 7000)
+        );
 
-            // =================================================
-            // 🟢 VOLTAR PARA ONLINE
-            // =================================================
+        // =================================================
+        // 🔄 ÚLTIMOS 8 SEGUNDOS
+        // =================================================
 
-            await client.user.setPresence({
-                status: "online",
-                activities: []
-            });
+        console.log(
+            "🔄 Faltam 8 segundos! Reforçando status Ausente a cada 1 segundo..."
+        );
 
-            console.log(
-                "🟢 Status: Bot online!"
-            );
+        const intervaloInicializacao =
+            setInterval(async () => {
 
-            // =================================================
-            // 🔄 STATUS NORMAL DO BOT
-            // =================================================
+                try {
 
-            let mostrandoServidores = true;
-
-            const atualizarStatus = () => {
-
-                if (mostrandoServidores) {
-
-                    const servidores =
-                        client.guilds.cache.size;
-
-                    client.user.setActivity(
-                        `🌐 Estou em ${servidores} servidores`,
-                        {
-                            type: 0
-                        }
-                    );
+                    await client.user.setPresence({
+                        status: "idle",
+                        activities: [
+                            {
+                                name: "🔄 Iniciando o bot...",
+                                type: 0
+                            }
+                        ]
+                    });
 
                     console.log(
-                        `🌐 Status: Estou em ${servidores} servidores`
+                        "🟡 Status reforçado: Ausente — Iniciando o bot..."
                     );
 
-                } else {
+                } catch (erro) {
 
-                    const comandos =
-                        client.commands.size;
-
-                    client.user.setActivity(
-                        `📋 Tenho ${comandos} comandos disponíveis!`,
-                        {
-                            type: 0
-                        }
-                    );
-
-                    console.log(
-                        `📋 Status: Tenho ${comandos} comandos disponíveis!`
+                    console.error(
+                        "❌ Erro ao atualizar status de inicialização:",
+                        erro
                     );
                 }
 
-                mostrandoServidores =
-                    !mostrandoServidores;
-            };
+            }, 1000);
 
-            atualizarStatus();
+        // =================================================
+        // ⏳ AGUARDAR OS 8 SEGUNDOS RESTANTES
+        // =================================================
 
-            setInterval(
-                atualizarStatus,
-                5000
-            );
+        await new Promise(resolve =>
+            setTimeout(resolve, 8000)
+        );
 
-        }, 15000);
+        // =================================================
+        // 🛑 PARAR ATUALIZAÇÃO DE INICIALIZAÇÃO
+        // =================================================
+
+        clearInterval(
+            intervaloInicializacao
+        );
+
+        // =================================================
+        // 🟢 VOLTAR PARA ONLINE
+        // =================================================
+
+        await client.user.setPresence({
+            status: "online",
+            activities: []
+        });
+
+        console.log(
+            "🟢 Status: Bot online!"
+        );
+
+        // =================================================
+        // 🔄 STATUS NORMAL DO BOT
+        // =================================================
+
+        let mostrandoServidores = true;
+
+        const atualizarStatus = () => {
+
+            if (mostrandoServidores) {
+
+                const servidores =
+                    client.guilds.cache.size;
+
+                client.user.setActivity(
+                    `🌐 Estou em ${servidores} servidores`,
+                    {
+                        type: 0
+                    }
+                );
+
+                console.log(
+                    `🌐 Status: Estou em ${servidores} servidores`
+                );
+
+            } else {
+
+                const comandos =
+                    client.commands.size;
+
+                client.user.setActivity(
+                    `📋 Tenho ${comandos} comandos disponíveis!`,
+                    {
+                        type: 0
+                    }
+                );
+
+                console.log(
+                    `📋 Status: Tenho ${comandos} comandos disponíveis!`
+                );
+            }
+
+            mostrandoServidores =
+                !mostrandoServidores;
+        };
+
+        atualizarStatus();
+
+        setInterval(
+            atualizarStatus,
+            5000
+        );
     }
 );
 
