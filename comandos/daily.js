@@ -18,6 +18,14 @@ const dailyProcessando = new Set();
 const TIMEZONE = "America/Sao_Paulo";
 const OFFSET_BRASILIA = 3 * 60 * 60 * 1000;
 
+// =====================================================
+// 🎨 CORES DOS EMBEDS
+// =====================================================
+
+const COR_DAILY = 0x57F287;       // 🟢 Verde
+const COR_ESPERA = 0xFAA61A;      // 🟠 Laranja
+const COR_NOTIFICACAO = 0x5865F2; // 🔵 Azul
+
 // Horários aleatórios das notificações
 const notificacoesAgendadas = new Map();
 
@@ -414,6 +422,7 @@ async function resgatarDailyAtomico(
 
         const embed =
             new EmbedBuilder()
+                .setColor(COR_DAILY)
                 .setTitle("🎁 DAILY")
                 .setDescription(
                     `Parabéns, ${usuario}!\n\n` +
@@ -525,6 +534,7 @@ async function verificarNotificacoesDaily(
 
                 const embedNotificacao =
                     new EmbedBuilder()
+                        .setColor(COR_NOTIFICACAO)
                         .setTitle("🔔 Seu Daily está disponível!")
                         .setDescription(
                             `Olá, ${discordUser}!\n\n` +
@@ -677,6 +687,7 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
+                        .setColor(COR_ESPERA)
                         .setTitle("⏳ DAILY")
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
@@ -781,6 +792,7 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
+                        .setColor(COR_ESPERA)
                         .setTitle("⏳ DAILY")
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
@@ -855,11 +867,25 @@ module.exports = {
             notificacaoAtiva
         ) {
 
-            return interaction.reply({
-                content:
-                    "🔔 Você já ativou a notificação do Daily!",
-                ephemeral: true
-            });
+            // Garante que o botão fique desativado
+            // mesmo se a interação for antiga.
+            try {
+
+                await interaction.update({
+                    components: [
+                        criarBotaoNotificacao(true)
+                    ]
+                });
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro ao atualizar botão do Daily:",
+                    erro
+                );
+            }
+
+            return;
         }
 
         const ultimoDaily =
@@ -907,9 +933,24 @@ module.exports = {
             true
         );
 
-        await interaction.reply({
+        // =================================================
+        // 🔘 DESATIVAR BOTÃO
+        // =================================================
+
+        await interaction.update({
+            components: [
+                criarBotaoNotificacao(true)
+            ]
+        });
+
+        // =================================================
+        // ✅ CONFIRMAÇÃO
+        // =================================================
+
+        await interaction.followUp({
             content:
-                "✅ Pronto! Vou te enviar uma notificação depois das **00:00**, quando seu Daily estiver disponível. 🔔",
+                `✅ Pronto! Vou te enviar uma notificação depois das **00:00**, quando seu Daily estiver disponível. 🔔\n\n` +
+                `🕐 Horário previsto da notificação: **${formatarHorario(horarioNotificacao)}**.`,
             ephemeral: true
         });
     }
