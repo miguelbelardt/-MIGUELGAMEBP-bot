@@ -75,7 +75,8 @@ function criarConfig(guildId, usuarioId) {
         sorteioId: null,
 
         painelMensagemId: null,
-        painelCanalId: null
+        painelCanalId: null,
+        sorteioEncerrado: false
     };
 }
 
@@ -205,7 +206,7 @@ function criarEmbedPainel(config) {
         .setColor(
             encerrado
                 ? 0xED4245
-                : 0x5865F2
+                : normalizarCor(config.cor)
         )
         .setTitle("🎉 Criador de Sorteio")
         .setDescription(
@@ -473,10 +474,61 @@ function converterData(
         return null;
     }
 
+    const match =
+        String(data).match(
+            /^(\d{2})\/(\d{2})\/(\d{4})$/
+        );
+
+    if (!match) {
+        return null;
+    }
+
+    const dia = Number(match[1]);
+    const mes = Number(match[2]);
+    const ano = Number(match[3]);
+
+    if (
+        mes < 1 ||
+        mes > 12 ||
+        dia < 1 ||
+        dia > 31
+    ) {
+        return null;
+    }
+
+    const [hora, minuto] =
+        String(horario)
+            .split(":")
+            .map(Number);
+
+    if (
+        Number.isNaN(hora) ||
+        Number.isNaN(minuto) ||
+        hora < 0 ||
+        hora > 23 ||
+        minuto < 0 ||
+        minuto > 59
+    ) {
+        return null;
+    }
+
     const timestamp =
         new Date(
-            `${data}T${horario}:00-03:00`
+            `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}T${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}:00-03:00`
         ).getTime();
+
+    const dataVerificacao =
+        new Date(timestamp);
+
+    if (
+        dataVerificacao.getFullYear() !== ano ||
+        dataVerificacao.getMonth() + 1 !== mes ||
+        dataVerificacao.getDate() !== dia ||
+        dataVerificacao.getHours() !== hora ||
+        dataVerificacao.getMinutes() !== minuto
+    ) {
+        return null;
+    }
 
     return Number.isNaN(timestamp)
         ? null
@@ -497,7 +549,10 @@ function formatarData(
                 "pt-BR",
                 {
                     timeZone:
-                        "America/Sao_Paulo"
+                        "America/Sao_Paulo",
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric"
                 }
             ),
         horario:
@@ -507,7 +562,8 @@ function formatarData(
                     timeZone:
                         "America/Sao_Paulo",
                     hour: "2-digit",
-                    minute: "2-digit"
+                    minute: "2-digit",
+                    hour12: false
                 }
             )
     };
@@ -612,6 +668,15 @@ async function criarSorteio(
         );
     }
 
+    const quantidadeVencedores =
+        Math.min(
+            Math.max(
+                Number(config.vencedores) || 1,
+                1
+            ),
+            20
+        );
+
     const resultado =
         await pool.query(
             `
@@ -645,8 +710,7 @@ async function criarSorteio(
                 config.thumbnail ||
                     null,
                 encerraEm,
-                config.vencedores ||
-                    1,
+                quantidadeVencedores,
                 config.mostrarParticipantes
             ]
         );
@@ -1122,9 +1186,13 @@ async function finalizarSorteio(
 
             const quantidade =
                 Math.min(
-                    Number(
-                        sorteio.vencedores
-                    ) || 1,
+                    Math.max(
+                        Number(
+                            sorteio.vencedores
+                        ) || 1,
+                        1
+                    ),
+                    20,
                     embaralhados.length
                 );
 
@@ -1166,10 +1234,40 @@ async function finalizarSorteio(
             return;
         }
 
-        if (!vencedores.length) {
-            return canal.send(
-                `🎉 O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
+        const dataEncerramento =
+            formatarData(
+                sorteio.encerra_em
             );
+
+        const dataHoraEncerramento =
+            `${dataEncerramento.data} às ${dataEncerramento.horario}`;
+
+        if (!vencedores.length) {
+
+            const embedSemVencedores =
+                new EmbedBuilder()
+                    .setColor(
+                        normalizarCor(
+                            sorteio.cor
+                        )
+                    )
+                    .setTitle(
+                        "🎉 Sorteio encerrado!"
+                    )
+                    .setDescription(
+                        `O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
+                    )
+                    .addFields({
+                        name: "📅 Encerrado em",
+                        value:
+                            dataHoraEncerramento
+                    });
+
+            return canal.send({
+                embeds: [
+                    embedSemVencedores
+                ]
+            });
         }
 
         const mencoes =
@@ -1183,7 +1281,9 @@ async function finalizarSorteio(
         const embed =
             new EmbedBuilder()
                 .setColor(
-                    0x57F287
+                    normalizarCor(
+                        sorteio.cor
+                    )
                 )
                 .setTitle(
                     "🏆 Sorteio encerrado!"
@@ -1191,7 +1291,12 @@ async function finalizarSorteio(
                 .setDescription(
                     `🎉 O sorteio **${sorteio.titulo}** terminou!\n\n` +
                     `🏆 **Vencedores:**\n${mencoes}`
-                );
+                )
+                .addFields({
+                    name: "📅 Encerrado em",
+                    value:
+                        dataHoraEncerramento
+                });
 
         await canal.send({
             embeds: [embed]
@@ -1715,7 +1820,7 @@ module.exports = {
                         true
                     )
                     .setPlaceholder(
-                        "2026-12-31"
+                        "25/09/2026"
                     )
                     .setValue(
                         config.data ||
@@ -1839,7 +1944,9 @@ module.exports = {
                 embeds: [
                     new EmbedBuilder()
                         .setColor(
-                            0x5865F2
+                            normalizarCor(
+                                config.cor
+                            )
                         )
                         .setTitle(
                             "📢 Escolha o canal"
@@ -1878,6 +1985,34 @@ module.exports = {
                 }
             }
 
+            const opcoesVencedores =
+                [];
+
+            for (
+                let i = 1;
+                i <= 20;
+                i++
+            ) {
+                opcoesVencedores.push({
+                    label:
+                        `${i} ${
+                            i === 1
+                                ? "vencedor"
+                                : "vencedores"
+                        }`,
+                    value:
+                        String(i),
+                    emoji:
+                        i === 1
+                            ? "🥇"
+                            : i === 2
+                                ? "🥈"
+                                : i === 3
+                                    ? "🥉"
+                                    : "🏆"
+                });
+            }
+
             const menu =
                 new StringSelectMenuBuilder()
                     .setCustomId(
@@ -1887,59 +2022,22 @@ module.exports = {
                         "🏆 Quantos vencedores?"
                     )
                     .addOptions(
-                        {
-                            label:
-                                "1 vencedor",
-                            value:
-                                "1",
-                            emoji:
-                                "🥇"
-                        },
-                        {
-                            label:
-                                "2 vencedores",
-                            value:
-                                "2",
-                            emoji:
-                                "🥈"
-                        },
-                        {
-                            label:
-                                "3 vencedores",
-                            value:
-                                "3",
-                            emoji:
-                                "🥉"
-                        },
-                        {
-                            label:
-                                "5 vencedores",
-                            value:
-                                "5",
-                            emoji:
-                                "🏆"
-                        },
-                        {
-                            label:
-                                "10 vencedores",
-                            value:
-                                "10",
-                            emoji:
-                                "🎉"
-                        }
+                        opcoesVencedores
                     );
 
             return interaction.update({
                 embeds: [
                     new EmbedBuilder()
                         .setColor(
-                            0x5865F2
+                            normalizarCor(
+                                config.cor
+                            )
                         )
                         .setTitle(
                             "🏆 Vencedores"
                         )
                         .setDescription(
-                            "Escolha quantas pessoas poderão ganhar."
+                            "Escolha de 1 a 20 pessoas para vencer o sorteio."
                         )
                 ],
                 components: [
@@ -2049,6 +2147,20 @@ module.exports = {
                 });
             }
 
+            const quantidadeVencedores =
+                Math.min(
+                    Math.max(
+                        Number(
+                            config.vencedores
+                        ) || 1,
+                        1
+                    ),
+                    20
+                );
+
+            config.vencedores =
+                quantidadeVencedores;
+
             try {
 
                 // ================================
@@ -2079,7 +2191,7 @@ module.exports = {
                             config.imagem,
                             config.thumbnail,
                             encerraEm,
-                            config.vencedores,
+                            quantidadeVencedores,
                             config.mostrarParticipantes,
                             config.sorteioId
                         ]
@@ -2337,13 +2449,13 @@ module.exports = {
                     .trim();
 
             if (
-                !/^\d{4}-\d{2}-\d{2}$/.test(
+                !/^\d{2}\/\d{2}\/\d{4}$/.test(
                     data
                 )
             ) {
                 return interaction.reply({
                     content:
-                        "❌ A data precisa estar no formato `AAAA-MM-DD`.",
+                        "❌ A data precisa estar no formato `DD/MM/AAAA`.",
                     ephemeral: true
                 });
             }
@@ -2511,9 +2623,18 @@ module.exports = {
                 });
             }
 
-            config.vencedores =
+            const quantidade =
                 Number(
                     interaction.values[0]
+                );
+
+            config.vencedores =
+                Math.min(
+                    Math.max(
+                        quantidade || 1,
+                        1
+                    ),
+                    20
                 );
 
             return interaction.update({
@@ -2591,7 +2712,7 @@ module.exports = {
                                 .setStyle(
                                     ButtonStyle.Danger
                                 )
-                        )
+                        ]
                 ],
                 ephemeral: true
             });
