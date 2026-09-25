@@ -107,6 +107,11 @@ async function inicializarBanco() {
         ADD COLUMN IF NOT EXISTS mostrar_participantes BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
+    await pool.query(`
+        ALTER TABLE sorteios
+        ADD COLUMN IF NOT EXISTS encerrado_em BIGINT
+    `);
+
     // Corrigir possíveis valores antigos nulos
     await pool.query(`
         UPDATE sorteios
