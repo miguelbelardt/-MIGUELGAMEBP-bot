@@ -7,7 +7,9 @@ const {
     ButtonStyle,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    ChannelType,
+    PermissionFlagsBits
 } = require("discord.js");
 
 const { pool } = require("../database/database.js");
@@ -65,7 +67,7 @@ async function inicializarTickets() {
 }
 
 // ================================
-// 🎨 EMBED
+// 🎨 EMBED DO TICKET
 // ================================
 
 function criarEmbedTicket(modelo) {
@@ -122,7 +124,7 @@ function criarEmbedTicket(modelo) {
 }
 
 // ================================
-// 🔘 BOTÃO DO TICKET
+// 🔘 BOTÃO DO PAINEL
 // ================================
 
 function criarBotaoTicket(
@@ -158,6 +160,7 @@ function criarBotaoTicket(
 
     // Botões Link não usam customId
     if (estilo !== ButtonStyle.Link) {
+
         botao.setCustomId(
             `ticket_abrir_${modelo.id}`
         );
@@ -167,12 +170,30 @@ function criarBotaoTicket(
         modelo.botao_emoji &&
         estilo !== ButtonStyle.Link
     ) {
+
         botao.setEmoji(
             modelo.botao_emoji
         );
     }
 
     return botao;
+}
+
+// ================================
+// 🔒 BOTÃO FECHAR
+// ================================
+
+function criarBotaoFechar() {
+
+    return new ButtonBuilder()
+        .setCustomId(
+            "ticket_fechar"
+        )
+        .setLabel("Fechar Ticket")
+        .setEmoji("🔒")
+        .setStyle(
+            ButtonStyle.Danger
+        );
 }
 
 // ================================
@@ -637,6 +658,262 @@ function criarPainelModelo(
 }
 
 // ================================
+// 📂 ENCONTRAR / CRIAR CATEGORIA
+// ================================
+
+async function obterCategoriaTickets(
+    guild
+) {
+
+    let categoria =
+        guild.channels.cache.find(
+            canal =>
+                canal.type === ChannelType.GuildCategory &&
+                canal.name === "🎫 TICKETS"
+        );
+
+    if (categoria) {
+        return categoria;
+    }
+
+    categoria =
+        await guild.channels.create({
+            name: "🎫 TICKETS",
+            type: ChannelType.GuildCategory
+        });
+
+    console.log(
+        `🎫 Categoria de tickets criada em ${guild.name}.`
+    );
+
+    return categoria;
+}
+
+// ================================
+// 🔎 PROCURAR TICKET DO USUÁRIO
+// ================================
+
+function encontrarTicketDoUsuario(
+    guild,
+    userId
+) {
+
+    return guild.channels.cache.find(
+        canal =>
+            canal.parent &&
+            canal.parent.name === "🎫 TICKETS" &&
+            canal.topic === `ticket:${userId}`
+    );
+}
+
+// ================================
+// 🎫 ABRIR TICKET
+// ================================
+
+async function abrirTicket(
+    interaction,
+    modelo
+) {
+
+    const ticketExistente =
+        encontrarTicketDoUsuario(
+            interaction.guild,
+            interaction.user.id
+        );
+
+    if (ticketExistente) {
+
+        await interaction.reply({
+            content:
+                `❌ Você já possui um ticket aberto: ${ticketExistente}`,
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    const categoria =
+        await obterCategoriaTickets(
+            interaction.guild
+        );
+
+    const nomeUsuario =
+        interaction.user.username
+            .toLowerCase()
+            .replace(
+                /[^a-z0-9-]/g,
+                "-"
+            )
+            .slice(0, 20);
+
+    const nomeCanal =
+        `ticket-${nomeUsuario}`;
+
+    const canal =
+        await interaction.guild.channels.create({
+
+            name: nomeCanal,
+
+            type:
+                ChannelType.GuildText,
+
+            parent:
+                categoria.id,
+
+            topic:
+                `ticket:${interaction.user.id}`,
+
+            permissionOverwrites: [
+
+                {
+                    id:
+                        interaction.guild.roles.everyone.id,
+
+                    deny: [
+                        PermissionFlagsBits.ViewChannel
+                    ]
+                },
+
+                {
+                    id:
+                        interaction.user.id,
+
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.AttachFiles,
+                        PermissionFlagsBits.EmbedLinks
+                    ]
+                },
+
+                {
+                    id:
+                        interaction.client.user.id,
+
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageChannels,
+                        PermissionFlagsBits.ManageMessages
+                    ]
+                }
+            ]
+        });
+
+    const embed =
+        criarEmbedTicket(modelo)
+            .setTitle(
+                modelo.titulo ||
+                `🎫 Ticket de ${interaction.user.username}`
+            );
+
+    const botoes =
+        new ActionRowBuilder()
+            .addComponents(
+                criarBotaoFechar()
+            );
+
+    await canal.send({
+        content:
+            `${interaction.user}`,
+
+        embeds: [
+            embed
+        ],
+
+        components: [
+            botoes
+        ]
+    });
+
+    await interaction.reply({
+        content:
+            `✅ Seu ticket foi criado com sucesso: ${canal}`,
+        ephemeral: true
+    });
+
+    console.log(
+        `🎫 Ticket criado: ${canal.name} | Usuário: ${interaction.user.tag}`
+    );
+
+    return true;
+}
+
+// ================================
+// 🔒 FECHAR TICKET
+// ================================
+
+async function fecharTicket(
+    interaction
+) {
+
+    const canal =
+        interaction.channel;
+
+    if (
+        !canal ||
+        canal.type !== ChannelType.GuildText
+    ) {
+
+        await interaction.reply({
+            content:
+                "❌ Este botão só pode ser usado dentro de um ticket.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    if (
+        !canal.topic ||
+        !canal.topic.startsWith("ticket:")
+    ) {
+
+        await interaction.reply({
+            content:
+                "❌ Este canal não é um ticket.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    await interaction.reply({
+        content:
+            "🔒 Este ticket será fechado em 5 segundos..."
+    });
+
+    console.log(
+        `🔒 Ticket fechado: ${canal.name} | Por: ${interaction.user.tag}`
+    );
+
+    setTimeout(
+        async () => {
+
+            try {
+
+                await canal.delete(
+                    "Ticket fechado"
+                );
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro ao apagar ticket:",
+                    erro
+                );
+            }
+
+        },
+        5000
+    );
+
+    return true;
+}
+
+// ================================
 // 📋 COMANDO
 // ================================
 
@@ -720,6 +997,69 @@ module.exports = {
         }
 
         await inicializarTickets();
+
+        // ================================
+        // 🎫 ABRIR TICKET
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_abrir_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_abrir_",
+                    ""
+                );
+
+            const resultado =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        id,
+                        interaction.guildId
+                    ]
+                );
+
+            if (
+                !resultado.rows.length
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Esse modelo de ticket não existe mais.",
+                    ephemeral: true
+                });
+
+                return true;
+            }
+
+            return await abrirTicket(
+                interaction,
+                resultado.rows[0]
+            );
+        }
+
+        // ================================
+        // 🔒 FECHAR TICKET
+        // ================================
+
+        if (
+            interaction.customId ===
+            "ticket_fechar"
+        ) {
+
+            return await fecharTicket(
+                interaction
+            );
+        }
 
         // ================================
         // 🔄 ATUALIZAR
@@ -847,32 +1187,76 @@ module.exports = {
                 return true;
             }
 
+            const modelo =
+                resultado.rows[0];
+
             await pool.query(
                 `
                 INSERT INTO ticket_config (
                     guild_id,
                     modelo_id,
+                    canal_painel_id,
                     configurado
                 )
-                VALUES ($1, $2, TRUE)
+                VALUES (
+                    $1,
+                    $2,
+                    $3,
+                    TRUE
+                )
 
                 ON CONFLICT (guild_id)
                 DO UPDATE SET
                     modelo_id = EXCLUDED.modelo_id,
+                    canal_painel_id = EXCLUDED.canal_painel_id,
                     configurado = TRUE
                 `,
                 [
                     interaction.guildId,
-                    id
+                    id,
+                    interaction.channelId
                 ]
             );
 
+            // ================================
+            // 🎫 ENVIAR PAINEL NO CANAL
+            // ================================
+
+            const embed =
+                criarEmbedTicket(modelo)
+                    .setTitle(
+                        modelo.titulo ||
+                        "🎫 Abra um Ticket"
+                    );
+
+            const botao =
+                criarBotaoTicket(
+                    modelo
+                );
+
+            const painel =
+                await interaction.channel.send({
+                    embeds: [
+                        embed
+                    ],
+                    components: [
+                        new ActionRowBuilder()
+                            .addComponents(
+                                botao
+                            )
+                    ]
+                });
+
             await interaction.update({
                 content:
-                    `✅ O ticket **${resultado.rows[0].nome}** foi definido como o ticket ativo!`,
+                    `✅ O ticket **${modelo.nome}** foi configurado com sucesso!\n\n🎫 O painel foi enviado neste canal.`,
                 embeds: [],
                 components: []
             });
+
+            console.log(
+                `🎫 Painel de ticket criado: ${painel.id} | Servidor: ${interaction.guild.name}`
+            );
 
             return true;
         }
@@ -1024,7 +1408,7 @@ module.exports = {
         }
 
         // ================================
-        // ⚙️ ESCOLHER MODELO PARA CONFIGURAR
+        // ⚙️ ESCOLHER MODELO
         // ================================
 
         if (
