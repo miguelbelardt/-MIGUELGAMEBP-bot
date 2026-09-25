@@ -44,7 +44,9 @@ const servidor = http.createServer((req, res) => {
 });
 
 servidor.listen(PORT, "0.0.0.0", () => {
-    console.log(`🌐 Servidor HTTP rodando na porta ${PORT}`);
+    console.log(
+        `🌐 Servidor HTTP rodando na porta ${PORT}`
+    );
 });
 
 // =====================================================
@@ -86,11 +88,16 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const comandosPath = path.join(__dirname, "comandos");
+const comandosPath = path.join(
+    __dirname,
+    "comandos"
+);
 
 const arquivosComandos = fs
     .readdirSync(comandosPath)
-    .filter(arquivo => arquivo.endsWith(".js"));
+    .filter(
+        arquivo => arquivo.endsWith(".js")
+    );
 
 for (const arquivo of arquivosComandos) {
     try {
@@ -1396,9 +1403,9 @@ client.on(
             return;
         }
 
-        // =================================================
+        // =====================================================
         // 💬 SLASH COMMANDS
-        // =================================================
+        // =====================================================
 
         if (
             !interaction.isChatInputCommand()
