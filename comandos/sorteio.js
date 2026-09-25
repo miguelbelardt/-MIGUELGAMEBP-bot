@@ -2712,7 +2712,7 @@ module.exports = {
                                 .setStyle(
                                     ButtonStyle.Danger
                                 )
-                        ]
+                        )
                 ],
                 ephemeral: true
             });
