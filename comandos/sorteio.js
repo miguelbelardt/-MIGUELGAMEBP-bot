@@ -435,14 +435,15 @@ function criarBotoesPreview(
             )
     ];
 
-    if (
-        config.mostrarParticipantes &&
-        config.sorteioId
-    ) {
+    // Mostra o botão mesmo antes do sorteio ser enviado.
+    // Na prévia, o clique apenas informa que ainda não existem participantes.
+    if (config.mostrarParticipantes) {
         botoes.push(
             new ButtonBuilder()
                 .setCustomId(
-                    `sorteio_ver_participantes_${config.sorteioId}`
+                    config.sorteioId
+                        ? `sorteio_ver_participantes_${config.sorteioId}`
+                        : "sorteio_ver_participantes_preview"
                 )
                 .setLabel(
                     "Ver participantes"
@@ -490,20 +491,33 @@ function converterData(
     if (
         mes < 1 ||
         mes > 12 ||
-        dia < 1 ||
-        dia > 31
+        dia < 1
     ) {
         return null;
     }
 
-    const [hora, minuto] =
+    // Aceita HH:MM e HH.MM
+    const horarioNormalizado =
         String(horario)
-            .split(":")
-            .map(Number);
+            .trim()
+            .replace(".", ":");
+
+    const horarioMatch =
+        horarioNormalizado.match(
+            /^(\d{2}):(\d{2})$/
+        );
+
+    if (!horarioMatch) {
+        return null;
+    }
+
+    const hora =
+        Number(horarioMatch[1]);
+
+    const minuto =
+        Number(horarioMatch[2]);
 
     if (
-        Number.isNaN(hora) ||
-        Number.isNaN(minuto) ||
         hora < 0 ||
         hora > 23 ||
         minuto < 0 ||
@@ -512,27 +526,57 @@ function converterData(
         return null;
     }
 
-    const timestamp =
+    // Verifica corretamente quantos dias existem no mês.
+    const diasNoMes =
         new Date(
-            `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}T${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}:00-03:00`
-        ).getTime();
+            Date.UTC(
+                ano,
+                mes,
+                0
+            )
+        ).getUTCDate();
 
-    const dataVerificacao =
-        new Date(timestamp);
+    if (dia > diasNoMes) {
+        return null;
+    }
+
+    /*
+     * O horário informado é do Brasil / America/Sao_Paulo.
+     *
+     * Não usamos getHours(), getDate(), etc. do servidor
+     * para validar, porque a FadeHost pode estar usando UTC.
+     */
+    const iso =
+        `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}` +
+        `T${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}:00-03:00`;
+
+    const timestamp =
+        Date.parse(iso);
+
+    if (Number.isNaN(timestamp)) {
+        return null;
+    }
+
+    // Confirma usando o fuso correto do Brasil.
+    const verificado =
+        formatarData(timestamp);
+
+    const dataEsperada =
+        `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}/${ano}`;
+
+    const horarioEsperado =
+        `${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}`;
 
     if (
-        dataVerificacao.getFullYear() !== ano ||
-        dataVerificacao.getMonth() + 1 !== mes ||
-        dataVerificacao.getDate() !== dia ||
-        dataVerificacao.getHours() !== hora ||
-        dataVerificacao.getMinutes() !== minuto
+        verificado.data !==
+            dataEsperada ||
+        verificado.horario !==
+            horarioEsperado
     ) {
         return null;
     }
 
-    return Number.isNaN(timestamp)
-        ? null
-        : timestamp;
+    return timestamp;
 }
 
 function formatarData(
@@ -1059,7 +1103,9 @@ async function sairDoSorteio(
 ) {
     try {
         const sorteio =
-            await buscarSorteio(id);
+            await buscarSorteio(
+                id
+            );
 
         if (!sorteio) {
             return interaction.reply({
@@ -1537,6 +1583,15 @@ module.exports = {
                     "sorteio_ver_participantes_",
                     ""
                 );
+
+            // A prévia ainda não possui um sorteio no banco.
+            if (id === "preview") {
+                return interaction.reply({
+                    content:
+                        "👥 A prévia está com a opção de participantes ativada, mas o sorteio ainda não foi enviado.\n\n🎟️ Ainda não existem participantes.",
+                    ephemeral: true
+                });
+            }
 
             return mostrarParticipantes(
                 interaction,
@@ -2441,7 +2496,7 @@ module.exports = {
                     )
                     .trim();
 
-            const horario =
+            let horario =
                 interaction.fields
                     .getTextInputValue(
                         "horario"
@@ -2460,6 +2515,13 @@ module.exports = {
                 });
             }
 
+            // Aceita 18:50 ou 18.50
+            horario =
+                horario.replace(
+                    ".",
+                    ":"
+                );
+
             if (
                 !/^\d{2}:\d{2}$/.test(
                     horario
@@ -2467,7 +2529,7 @@ module.exports = {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ O horário precisa estar no formato `HH:MM`.",
+                        "❌ O horário precisa estar no formato `HH:MM` ou `HH.MM`.",
                     ephemeral: true
                 });
             }
