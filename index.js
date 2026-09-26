@@ -78,24 +78,12 @@ const XP_MAX = 15;
 // 🗑️ SISTEMA DE MENSAGENS APAGADAS
 // =====================================================
 
-// Guarda mensagens recentes para tentar preservar
-// o conteúdo mesmo depois que elas forem apagadas.
 const mensagensRecentes = new Map();
 
-// Guarda exclusões que estão esperando 1 segundo
-// para saber se foi apenas uma mensagem ou várias.
-//
-// CHAVE:
-// guild.id
-//
-// Assim cada servidor possui seu próprio grupo
-// de mensagens apagadas.
 const exclusoesPendentes = new Map();
 
-// Tempo máximo que uma mensagem fica no cache.
 const TEMPO_CACHE_MENSAGEM = 10 * 60 * 1000;
 
-// Tempo para agrupar mensagens apagadas.
 const TEMPO_AGRUPAMENTO = 1000;
 
 // =====================================================
@@ -471,10 +459,6 @@ async function enviarLogMensagemApagada(
         return;
     }
 
-    // =================================================
-    // 🔒 GARANTIR QUE AS MENSAGENS PERTENCEM AO SERVIDOR
-    // =================================================
-
     const mensagensDoServidor =
         mensagens.filter(
             mensagem =>
@@ -511,10 +495,6 @@ async function enviarLogMensagemApagada(
     }
 
     try {
-
-        // =========================================
-        // 🗑️ APENAS UMA MENSAGEM
-        // =========================================
 
         if (
             mensagensDoServidor.length === 1
@@ -602,10 +582,6 @@ async function enviarLogMensagemApagada(
 
             return;
         }
-
-        // =========================================
-        // 🗑️🗑️ VÁRIAS MENSAGENS
-        // =========================================
 
         const arquivo =
             criarArquivoMensagensApagadas(
@@ -783,10 +759,6 @@ function adicionarMensagemAoGrupo(
             guildId
         );
 
-    // =========================================
-    // 🆕 PRIMEIRA MENSAGEM DO GRUPO
-    // =========================================
-
     if (!grupo) {
 
         grupo = {
@@ -843,10 +815,6 @@ function adicionarMensagemAoGrupo(
 
         return;
     }
-
-    // =========================================
-    // ➕ OUTRA MENSAGEM NO MESMO SERVIDOR
-    // =========================================
 
     grupo.mensagens.push(
         dados
@@ -955,6 +923,224 @@ client.on(
 
             console.error(
                 "❌ Erro no evento messageDeleteBulk:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// 🎙️ LOGS DE VOZ
+// =====================================================
+
+client.on(
+    "voiceStateUpdate",
+    async (oldState, newState) => {
+
+        try {
+
+            // =========================================
+            // 🛑 GARANTIR QUE É UM SERVIDOR
+            // =========================================
+
+            if (
+                !newState.guild
+            ) {
+                return;
+            }
+
+            // =========================================
+            // 🆔 MEMBRO
+            // =========================================
+
+            const membro =
+                newState.member ||
+                oldState.member;
+
+            if (!membro) {
+                return;
+            }
+
+            const guild =
+                newState.guild;
+
+            const usuario =
+                `<@${membro.id}>`;
+
+            // =========================================
+            // 🎙️ ENTROU EM UM CANAL DE VOZ
+            // =========================================
+
+            if (
+                !oldState.channelId &&
+                newState.channelId
+            ) {
+
+                const canal =
+                    newState.channel;
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🎙️ Membro entrou em call"
+                        )
+                        .setDescription(
+                            `${usuario} entrou no canal de voz ${canal ? canal : "desconhecido"}.`
+                        )
+                        .addFields(
+                            {
+                                name:
+                                    "👤 Membro",
+
+                                value:
+                                    `${membro.user.tag}\n\`${membro.id}\``
+                            },
+                            {
+                                name:
+                                    "🎙️ Canal",
+
+                                value:
+                                    canal
+                                        ? `${canal}\n\`${canal.id}\``
+                                        : "Desconhecido"
+                            }
+                        )
+                        .setColor(
+                            0x5865F2
+                        )
+                        .setTimestamp();
+
+                await client.registrarLog(
+                    guild,
+                    "voz",
+                    embed
+                );
+
+                return;
+            }
+
+            // =========================================
+            // 🔴 SAIU DE UM CANAL DE VOZ
+            // =========================================
+
+            if (
+                oldState.channelId &&
+                !newState.channelId
+            ) {
+
+                const canal =
+                    oldState.channel;
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🔴 Membro saiu da call"
+                        )
+                        .setDescription(
+                            `${usuario} saiu do canal de voz ${canal ? canal : "desconhecido"}.`
+                        )
+                        .addFields(
+                            {
+                                name:
+                                    "👤 Membro",
+
+                                value:
+                                    `${membro.user.tag}\n\`${membro.id}\``
+                            },
+                            {
+                                name:
+                                    "🎙️ Canal anterior",
+
+                                value:
+                                    canal
+                                        ? `${canal}\n\`${canal.id}\``
+                                        : "Desconhecido"
+                            }
+                        )
+                        .setColor(
+                            0xED4245
+                        )
+                        .setTimestamp();
+
+                await client.registrarLog(
+                    guild,
+                    "voz",
+                    embed
+                );
+
+                return;
+            }
+
+            // =========================================
+            // 🔄 MUDOU DE CANAL
+            // =========================================
+
+            if (
+                oldState.channelId &&
+                newState.channelId &&
+                oldState.channelId !==
+                    newState.channelId
+            ) {
+
+                const canalAnterior =
+                    oldState.channel;
+
+                const canalNovo =
+                    newState.channel;
+
+                const embed =
+                    new EmbedBuilder()
+                        .setTitle(
+                            "🔄 Membro mudou de canal"
+                        )
+                        .setDescription(
+                            `${usuario} mudou de um canal de voz para outro.`
+                        )
+                        .addFields(
+                            {
+                                name:
+                                    "👤 Membro",
+
+                                value:
+                                    `${membro.user.tag}\n\`${membro.id}\``
+                            },
+                            {
+                                name:
+                                    "📤 Saiu de",
+
+                                value:
+                                    canalAnterior
+                                        ? `${canalAnterior}\n\`${canalAnterior.id}\``
+                                        : "Desconhecido"
+                            },
+                            {
+                                name:
+                                    "📥 Entrou em",
+
+                                value:
+                                    canalNovo
+                                        ? `${canalNovo}\n\`${canalNovo.id}\``
+                                        : "Desconhecido"
+                            }
+                        )
+                        .setColor(
+                            0xFEE75C
+                        )
+                        .setTimestamp();
+
+                await client.registrarLog(
+                    guild,
+                    "voz",
+                    embed
+                );
+
+                return;
+            }
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no sistema de logs de voz:",
                 erro
             );
         }
@@ -1240,10 +1426,6 @@ client.once(
             `🤖 Bot online como ${client.user.tag}`
         );
 
-        // =================================================
-        // 🟡 STATUS DE INICIALIZAÇÃO
-        // =================================================
-
         const atualizarStatusInicializacao =
             async () => {
 
@@ -1504,17 +1686,6 @@ client.on(
     "messageCreate",
     async message => {
 
-        // =================================================
-        // 🗑️ GUARDAR A MENSAGEM ANTES DE QUALQUER RETURN
-        // =================================================
-        //
-        // Isso permite que mensagens de bots também possam
-        // ser recuperadas caso sejam apagadas.
-        //
-        // O cache continua separado por ID da mensagem
-        // e contém o guildId para segurança.
-        // =================================================
-
         if (
             message.guild
         ) {
@@ -1524,19 +1695,11 @@ client.on(
             );
         }
 
-        // =================================================
-        // 🤖 IGNORAR BOTS PARA XP/PREFIXO
-        // =================================================
-
         if (
             message.author.bot
         ) {
             return;
         }
-
-        // =================================================
-        // ⭐ GANHAR XP POR MENSAGEM
-        // =================================================
 
         if (
             message.guild
@@ -1572,10 +1735,6 @@ client.on(
                 );
             }
         }
-
-        // =================================================
-        // 🔤 SISTEMA DE PREFIXO
-        // =================================================
 
         const conteudo =
             message.content.trim();
