@@ -22,15 +22,24 @@ const OFFSET_BRASILIA = 3 * 60 * 60 * 1000;
 // 🎨 CORES DOS EMBEDS
 // =====================================================
 
-const COR_DAILY = 0x57F287;       // 🟢 Verde
-const COR_ESPERA = 0xFAA61A;      // 🟠 Laranja
-const COR_NOTIFICACAO = 0x5865F2; // 🔵 Azul
+const COR_DAILY = 0x57F287;
+const COR_ESPERA = 0xFAA61A;
+const COR_NOTIFICACAO = 0x5865F2;
 
-// Horários aleatórios das notificações
-const notificacoesAgendadas = new Map();
+// =====================================================
+// 🔔 CONFIGURAÇÕES DAS NOTIFICAÇÕES
+// =====================================================
 
 const JANELA_NOTIFICACAO =
     30 * 60 * 1000;
+
+// Se a DM falhar, tenta novamente depois de 5 minutos.
+const TEMPO_RETRY_NOTIFICACAO =
+    5 * 60 * 1000;
+
+// Horários mantidos em memória apenas como cache.
+// O horário verdadeiro fica salvo no PostgreSQL.
+const notificacoesAgendadas = new Map();
 
 // =====================================================
 // 💰 SORTEIO DA RECOMPENSA
@@ -94,13 +103,21 @@ function obterDataBrasilia() {
 
     return {
         ano: Number(
-            partes.find(parte => parte.type === "year").value
+            partes.find(
+                parte => parte.type === "year"
+            ).value
         ),
+
         mes: Number(
-            partes.find(parte => parte.type === "month").value
+            partes.find(
+                parte => parte.type === "month"
+            ).value
         ),
+
         dia: Number(
-            partes.find(parte => parte.type === "day").value
+            partes.find(
+                parte => parte.type === "day"
+            ).value
         )
     };
 }
@@ -172,32 +189,57 @@ function sortearHorarioNotificacao() {
             (JANELA_NOTIFICACAO + 1)
         );
 
-    return proximaMeiaNoite + atrasoAleatorio;
+    return (
+        proximaMeiaNoite +
+        atrasoAleatorio
+    );
 }
 
 // =====================================================
-// 🔔 OBTER HORÁRIO AGENDADO
+// 🔔 SORTEAR HORÁRIO DE HOJE
 // =====================================================
 
-function obterHorarioNotificacao(userId) {
-    let horario =
-        notificacoesAgendadas.get(userId);
+function sortearHorarioNotificacaoHoje() {
+    const inicioDoDia =
+        calcularInicioDoDiaBrasilia();
 
-    if (
-        !horario ||
-        horario < calcularProximaMeiaNoite() -
-            JANELA_NOTIFICACAO
-    ) {
-        horario =
-            sortearHorarioNotificacao();
+    const fimDaJanela =
+        inicioDoDia +
+        JANELA_NOTIFICACAO;
 
-        notificacoesAgendadas.set(
-            userId,
-            horario
+    const agora =
+        Date.now();
+
+    // Ainda estamos dentro da janela dos 30 minutos.
+    if (agora < fimDaJanela) {
+
+        const inicioSorteio =
+            Math.max(
+                agora + 5000,
+                inicioDoDia
+            );
+
+        const intervalo =
+            fimDaJanela -
+            inicioSorteio;
+
+        if (intervalo <= 0) {
+            return agora;
+        }
+
+        return (
+            inicioSorteio +
+            Math.floor(
+                Math.random() *
+                intervalo
+            )
         );
     }
 
-    return horario;
+    // A janela já passou.
+    // Retornar agora faz o sistema enviar
+    // a notificação assim que possível.
+    return agora;
 }
 
 // =====================================================
@@ -228,7 +270,8 @@ function formatarTempo(restante) {
     const horas = Math.max(
         0,
         Math.floor(
-            restante / (1000 * 60 * 60)
+            restante /
+            (1000 * 60 * 60)
         )
     );
 
@@ -286,11 +329,15 @@ function pegouDailyHoje(timestamp) {
 // 🔔 BOTÃO DE NOTIFICAÇÃO
 // =====================================================
 
-function criarBotaoNotificacao(ativa = false) {
+function criarBotaoNotificacao(
+    ativa = false
+) {
     return new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId("daily_notificar")
+                .setCustomId(
+                    "daily_notificar"
+                )
                 .setLabel(
                     ativa
                         ? "🔔 Notificação ativada"
@@ -317,6 +364,7 @@ async function resgatarDailyAtomico(
         await pool.connect();
 
     try {
+
         await client.query("BEGIN");
 
         await client.query(`
@@ -324,13 +372,15 @@ async function resgatarDailyAtomico(
                 id,
                 saldo,
                 ultimo_daily,
-                notificacao_daily
+                notificacao_daily,
+                notificacao_daily_em
             )
             VALUES (
                 $1,
                 0,
                 NULL,
-                FALSE
+                FALSE,
+                NULL
             )
             ON CONFLICT (id)
             DO NOTHING
@@ -358,10 +408,14 @@ async function resgatarDailyAtomico(
                 dados.ultimo_daily
             )
         ) {
-            await client.query("COMMIT");
+
+            await client.query(
+                "COMMIT"
+            );
 
             return {
                 sucesso: false,
+
                 ultimoDaily:
                     Number(
                         dados.ultimo_daily
@@ -386,7 +440,9 @@ async function resgatarDailyAtomico(
 
                 ultimo_daily = $2,
 
-                notificacao_daily = FALSE
+                notificacao_daily = FALSE,
+
+                notificacao_daily_em = NULL
 
             WHERE id = $3
         `, [
@@ -395,15 +451,17 @@ async function resgatarDailyAtomico(
             userId
         ]);
 
-        await client.query("COMMIT");
+        await client.query(
+            "COMMIT"
+        );
 
-        // Remove qualquer horário antigo de notificação
+        // Remove qualquer horário antigo do cache.
         notificacoesAgendadas.delete(
             userId
         );
 
         const saldoAtual =
-            await client.query(`
+            await pool.query(`
                 SELECT saldo
                 FROM usuarios
                 WHERE id = $1
@@ -418,12 +476,17 @@ async function resgatarDailyAtomico(
 
         const {
             proximoDaily
-        } = calcularTempoRestante();
+        } =
+            calcularTempoRestante();
 
         const embed =
             new EmbedBuilder()
-                .setColor(COR_DAILY)
-                .setTitle("🎁 DAILY")
+                .setColor(
+                    COR_DAILY
+                )
+                .setTitle(
+                    "🎁 DAILY"
+                )
                 .setDescription(
                     `Parabéns, ${usuario}!\n\n` +
                     `🎲 Você ganhou **${recompensa} moedas**!\n` +
@@ -437,14 +500,20 @@ async function resgatarDailyAtomico(
 
         return {
             sucesso: true,
+
             embed,
+
             row:
-                criarBotaoNotificacao(false)
+                criarBotaoNotificacao(
+                    false
+                )
         };
 
     } catch (erro) {
 
-        await client.query("ROLLBACK");
+        await client.query(
+            "ROLLBACK"
+        );
 
         throw erro;
 
@@ -467,7 +536,8 @@ async function verificarNotificacoesDaily(
             await pool.query(`
                 SELECT
                     id,
-                    ultimo_daily
+                    ultimo_daily,
+                    notificacao_daily_em
                 FROM usuarios
                 WHERE
                     notificacao_daily = TRUE
@@ -487,7 +557,10 @@ async function verificarNotificacoesDaily(
                     usuario.ultimo_daily
                 );
 
-            // Ainda não chegou o próximo dia
+            // =========================================
+            // 📅 AINDA PEGOU O DAILY DE HOJE
+            // =========================================
+
             if (
                 pegouDailyHoje(
                     ultimoDaily
@@ -496,34 +569,81 @@ async function verificarNotificacoesDaily(
                 continue;
             }
 
-            // Cria um horário aleatório para este usuário
+            const agora =
+                Date.now();
+
             let horarioNotificacao =
-                notificacoesAgendadas.get(
-                    userId
-                );
+                usuario.notificacao_daily_em
+                    ? Number(
+                        usuario.notificacao_daily_em
+                    )
+                    : null;
 
-            if (!horarioNotificacao) {
+            // =========================================
+            // 🔄 RECUPERAR HORÁRIO APÓS RESTART
+            // =========================================
 
-                horarioNotificacao =
-                    sortearHorarioNotificacao();
+            if (
+                !horarioNotificacao ||
+                !Number.isFinite(
+                    horarioNotificacao
+                )
+            ) {
 
-                notificacoesAgendadas.set(
+                const inicioDoDia =
+                    calcularInicioDoDiaBrasilia();
+
+                const fimDaJanela =
+                    inicioDoDia +
+                    JANELA_NOTIFICACAO;
+
+                if (
+                    agora <= fimDaJanela
+                ) {
+
+                    horarioNotificacao =
+                        sortearHorarioNotificacaoHoje();
+
+                } else {
+
+                    // O bot voltou depois dos 30 minutos.
+                    // A notificação foi perdida durante o restart,
+                    // então enviamos agora.
+                    horarioNotificacao =
+                        agora;
+                }
+
+                await salvarNotificacaoDaily(
                     userId,
+                    true,
                     horarioNotificacao
                 );
 
                 console.log(
-                    `🎲 Notificação do Daily de ${userId} agendada para ${formatarHorario(horarioNotificacao)}`
+                    `🔄 Horário da notificação do Daily de ${userId} recuperado: ${formatarHorario(horarioNotificacao)}`
                 );
             }
 
-            // Ainda não chegou o horário sorteado
+            // Mantém o horário no cache.
+            notificacoesAgendadas.set(
+                userId,
+                horarioNotificacao
+            );
+
+            // =========================================
+            // ⏳ AINDA NÃO CHEGOU O HORÁRIO
+            // =========================================
+
             if (
-                Date.now() <
+                agora <
                 horarioNotificacao
             ) {
                 continue;
             }
+
+            // =========================================
+            // 📩 ENVIAR NOTIFICAÇÃO
+            // =========================================
 
             try {
 
@@ -534,13 +654,17 @@ async function verificarNotificacoesDaily(
 
                 const embedNotificacao =
                     new EmbedBuilder()
-                        .setColor(COR_NOTIFICACAO)
-                        .setTitle("🔔 Seu Daily está disponível!")
+                        .setColor(
+                            COR_NOTIFICACAO
+                        )
+                        .setTitle(
+                            "🔔 Seu Daily está disponível!"
+                        )
                         .setDescription(
                             `Olá, ${discordUser}!\n\n` +
                             `🌙 Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
                             `💰 Entre em um servidor e resgate sua recompensa usando:\n` +
-                            `</daily:ID_DO_DAILY>`
+                            `\`/daily\``
                         )
                         .setFooter({
                             text:
@@ -557,31 +681,62 @@ async function verificarNotificacoesDaily(
                     `🔔 Notificação do Daily enviada para ${discordUser.tag}`
                 );
 
-            } catch (erro) {
-
-                console.log(
-                    `⚠️ Não foi possível enviar DM do Daily para o usuário ${userId}.`
-                );
-            }
-
-            try {
+                // =====================================
+                // ✅ DM ENVIADA
+                // =====================================
 
                 await salvarNotificacaoDaily(
                     userId,
                     false
                 );
 
+                notificacoesAgendadas.delete(
+                    userId
+                );
+
             } catch (erro) {
 
-                console.error(
-                    `❌ Erro ao desativar notificação do Daily de ${userId}:`,
-                    erro
+                console.log(
+                    `⚠️ Não foi possível enviar DM do Daily para o usuário ${userId}.`
                 );
-            }
 
-            notificacoesAgendadas.delete(
-                userId
-            );
+                console.log(
+                    `⚠️ Motivo: ${erro?.message || erro}`
+                );
+
+                // =====================================
+                // 🔄 TENTAR NOVAMENTE DEPOIS
+                // =====================================
+
+                const novoHorario =
+                    Date.now() +
+                    TEMPO_RETRY_NOTIFICACAO;
+
+                notificacoesAgendadas.set(
+                    userId,
+                    novoHorario
+                );
+
+                try {
+
+                    await salvarNotificacaoDaily(
+                        userId,
+                        true,
+                        novoHorario
+                    );
+
+                    console.log(
+                        `🔄 Nova tentativa do Daily de ${userId} agendada para ${formatarHorario(novoHorario)}`
+                    );
+
+                } catch (erroBanco) {
+
+                    console.error(
+                        `❌ Erro ao salvar nova tentativa da notificação de ${userId}:`,
+                        erroBanco
+                    );
+                }
+            }
         }
 
     } catch (erro) {
@@ -687,8 +842,12 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
-                        .setColor(COR_ESPERA)
-                        .setTitle("⏳ DAILY")
+                        .setColor(
+                            COR_ESPERA
+                        )
+                        .setTitle(
+                            "⏳ DAILY"
+                        )
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
                             `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
@@ -699,11 +858,13 @@ module.exports = {
                     embeds: [
                         embed
                     ],
+
                     components: [
                         criarBotaoNotificacao(
                             notificacaoAtiva
                         )
                     ],
+
                     ephemeral: true
                 });
             }
@@ -712,6 +873,7 @@ module.exports = {
                 embeds: [
                     resultado.embed
                 ],
+
                 components: [
                     resultado.row
                 ]
@@ -792,8 +954,12 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
-                        .setColor(COR_ESPERA)
-                        .setTitle("⏳ DAILY")
+                        .setColor(
+                            COR_ESPERA
+                        )
+                        .setTitle(
+                            "⏳ DAILY"
+                        )
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
                             `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
@@ -804,6 +970,7 @@ module.exports = {
                     embeds: [
                         embed
                     ],
+
                     components: [
                         criarBotaoNotificacao(
                             notificacaoAtiva
@@ -816,6 +983,7 @@ module.exports = {
                 embeds: [
                     resultado.embed
                 ],
+
                 components: [
                     resultado.row
                 ]
@@ -867,13 +1035,13 @@ module.exports = {
             notificacaoAtiva
         ) {
 
-            // Garante que o botão fique desativado
-            // mesmo se a interação for antiga.
             try {
 
                 await interaction.update({
                     components: [
-                        criarBotaoNotificacao(true)
+                        criarBotaoNotificacao(
+                            true
+                        )
                     ]
                 });
 
@@ -903,7 +1071,6 @@ module.exports = {
         }
 
         const {
-            proximoDaily,
             restante
         } =
             calcularTempoRestante();
@@ -919,7 +1086,10 @@ module.exports = {
             });
         }
 
-        // Sorteia o horário da notificação
+        // =============================================
+        // 🔔 SORTEAR E SALVAR HORÁRIO
+        // =============================================
+
         const horarioNotificacao =
             sortearHorarioNotificacao();
 
@@ -930,22 +1100,25 @@ module.exports = {
 
         await salvarNotificacaoDaily(
             userId,
-            true
+            true,
+            horarioNotificacao
         );
 
-        // =================================================
+        // =============================================
         // 🔘 DESATIVAR BOTÃO
-        // =================================================
+        // =============================================
 
         await interaction.update({
             components: [
-                criarBotaoNotificacao(true)
+                criarBotaoNotificacao(
+                    true
+                )
             ]
         });
 
-        // =================================================
+        // =============================================
         // ✅ CONFIRMAÇÃO
-        // =================================================
+        // =============================================
 
         await interaction.followUp({
             content:
