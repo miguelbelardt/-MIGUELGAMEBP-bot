@@ -1096,7 +1096,7 @@ function criarModalPersonalizacao(
                 "Emoji do botão"
             )
             .setPlaceholder(
-                "🎫"
+                "ex: 🎫"
             )
             .setStyle(
                 TextInputStyle.Short
