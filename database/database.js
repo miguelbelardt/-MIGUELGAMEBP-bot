@@ -234,7 +234,7 @@ async function inicializarBanco() {
 
             guild_id VARCHAR(30) NOT NULL,
 
-            nome VARCHAR(100) NOT NULL,
+            nome VARCHAR(100) NOT NULL DEFAULT 'Embed',
 
             autor_nome VARCHAR(256),
             autor_icone TEXT,
@@ -265,6 +265,13 @@ async function inicializarBanco() {
                 EXTRACT(EPOCH FROM NOW()) * 1000
             )
         )
+    `);
+
+    // Corrige bancos antigos caso alguma coluna ainda não exista.
+
+    await pool.query(`
+        ALTER TABLE embeds_personalizados
+        ADD COLUMN IF NOT EXISTS nome VARCHAR(100)
     `);
 
     await pool.query(`
@@ -344,6 +351,12 @@ async function inicializarBanco() {
         ADD COLUMN IF NOT EXISTS atualizado_em BIGINT NOT NULL DEFAULT (
             EXTRACT(EPOCH FROM NOW()) * 1000
         )
+    `);
+
+    await pool.query(`
+        UPDATE embeds_personalizados
+        SET nome = 'Embed'
+        WHERE nome IS NULL OR nome = ''
     `);
 
     console.log(
@@ -929,165 +942,429 @@ async function isAdm(userId) {
 // 🎨 SISTEMA DE EMBEDS
 // ================================
 
+function normalizarConfigEmbed(config = {}) {
+    return {
+        nome:
+            config.nome ||
+            "Embed",
+
+        autorNome:
+            config.autorNome ??
+            config.autor ??
+            config.autor_nome ??
+            null,
+
+        autorIcone:
+            config.autorIcone ??
+            config.autor_icone ??
+            null,
+
+        titulo:
+            config.titulo ??
+            null,
+
+        descricao:
+            config.descricao ??
+            null,
+
+        cor:
+            config.cor ||
+            "#5865F2",
+
+        imagem:
+            config.imagem ||
+            null,
+
+        thumbnail:
+            config.thumbnail ||
+            null,
+
+        rodape:
+            config.rodape ??
+            config.footer ??
+            config.rodape_texto ??
+            null,
+
+        rodapeIcone:
+            config.rodapeIcone ??
+            config.footerIcone ??
+            config.footer_icone ??
+            null,
+
+        timestamp:
+            Boolean(
+                config.timestamp
+            ),
+
+        canalId:
+            config.canalId ??
+            config.canal_id ??
+            null,
+
+        mensagemId:
+            config.mensagemId ??
+            config.mensagem_id ??
+            null
+    };
+}
+
+// Criar um novo embed.
+//
+// Compatível com:
+// criarEmbedBanco(guildId, userId, config)
+// e também:
+// criarEmbedBanco(guildId, nome, config, userId)
+
 async function criarEmbedBanco(
     guildId,
-    nome,
-    config,
-    criadorId
+    segundoParametro,
+    terceiroParametro,
+    quartoParametro = null
 ) {
-    const resultado = await pool.query(
-        `
-        INSERT INTO embeds_personalizados (
-            guild_id,
-            nome,
-            autor_nome,
-            autor_icone,
-            titulo,
-            descricao,
-            cor,
-            imagem,
-            thumbnail,
-            rodape,
-            rodape_icone,
-            timestamp,
-            canal_id,
-            mensagem_id,
-            criado_por
-        )
-        VALUES (
-            $1, $2, $3, $4, $5, $6, $7,
-            $8, $9, $10, $11, $12,
-            $13, $14, $15
-        )
-        RETURNING *
-        `,
-        [
-            guildId,
-            nome,
-            config.autorNome || null,
-            config.autorIcone || null,
-            config.titulo || null,
-            config.descricao || null,
-            config.cor || "#5865F2",
-            config.imagem || null,
-            config.thumbnail || null,
-            config.rodape || null,
-            config.rodapeIcone || null,
-            Boolean(config.timestamp),
-            config.canalId || null,
-            config.mensagemId || null,
-            criadorId
-        ]
-    );
+    let nome;
+    let config;
+    let criadorId;
+
+    if (
+        quartoParametro !== null
+    ) {
+        // Formato antigo:
+        // guildId, nome, config, criadorId
+
+        nome =
+            segundoParametro ||
+            "Embed";
+
+        config =
+            terceiroParametro ||
+            {};
+
+        criadorId =
+            quartoParametro;
+    } else {
+        // Formato novo:
+        // guildId, criadorId, config
+
+        criadorId =
+            segundoParametro;
+
+        config =
+            terceiroParametro ||
+            {};
+
+        nome =
+            config.nome ||
+            "Embed";
+    }
+
+    const dados =
+        normalizarConfigEmbed(
+            config
+        );
+
+    const resultado =
+        await pool.query(
+            `
+            INSERT INTO embeds_personalizados (
+                guild_id,
+                nome,
+                autor_nome,
+                autor_icone,
+                titulo,
+                descricao,
+                cor,
+                imagem,
+                thumbnail,
+                rodape,
+                rodape_icone,
+                timestamp,
+                canal_id,
+                mensagem_id,
+                criado_por
+            )
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7,
+                $8, $9, $10, $11, $12,
+                $13, $14, $15
+            )
+            RETURNING *
+            `,
+            [
+                guildId,
+                nome,
+                dados.autorNome,
+                dados.autorIcone,
+                dados.titulo,
+                dados.descricao,
+                dados.cor,
+                dados.imagem,
+                dados.thumbnail,
+                dados.rodape,
+                dados.rodapeIcone,
+                dados.timestamp,
+                dados.canalId,
+                dados.mensagemId,
+                criadorId
+            ]
+        );
 
     return resultado.rows[0];
 }
 
+// Atualiza o conteúdo/configuração de um embed.
+//
+// Novo formato:
+// atualizarEmbedBanco(id, guildId, {
+//     config,
+//     canalId,
+//     mensagemId
+// })
+//
+// Também aceita o formato antigo:
+// atualizarEmbedBanco(id, guildId, config)
+
 async function atualizarEmbedBanco(
     id,
     guildId,
-    config
+    dados
 ) {
-    const resultado = await pool.query(
-        `
-        UPDATE embeds_personalizados
-        SET
-            nome = $1,
-            autor_nome = $2,
-            autor_icone = $3,
-            titulo = $4,
-            descricao = $5,
-            cor = $6,
-            imagem = $7,
-            thumbnail = $8,
-            rodape = $9,
-            rodape_icone = $10,
-            timestamp = $11,
-            canal_id = $12,
-            atualizado_em = (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
-        WHERE
-            id = $13
-            AND guild_id = $14
-        RETURNING *
-        `,
-        [
-            config.nome,
-            config.autorNome || null,
-            config.autorIcone || null,
-            config.titulo || null,
-            config.descricao || null,
-            config.cor || "#5865F2",
-            config.imagem || null,
-            config.thumbnail || null,
-            config.rodape || null,
-            config.rodapeIcone || null,
-            Boolean(config.timestamp),
-            config.canalId || null,
-            id,
-            guildId
-        ]
-    );
+    let config;
+    let canalId;
+    let mensagemId;
+
+    if (
+        dados &&
+        dados.config
+    ) {
+        config =
+            dados.config;
+
+        canalId =
+            dados.canalId ??
+            dados.config.canalId ??
+            null;
+
+        mensagemId =
+            dados.mensagemId ??
+            dados.config.mensagemId ??
+            null;
+    } else {
+        config =
+            dados ||
+            {};
+
+        canalId =
+            config.canalId ??
+            null;
+
+        mensagemId =
+            config.mensagemId ??
+            null;
+    }
+
+    const normalizado =
+        normalizarConfigEmbed(
+            config
+        );
+
+    const resultado =
+        await pool.query(
+            `
+            UPDATE embeds_personalizados
+            SET
+                nome = $1,
+                autor_nome = $2,
+                autor_icone = $3,
+                titulo = $4,
+                descricao = $5,
+                cor = $6,
+                imagem = $7,
+                thumbnail = $8,
+                rodape = $9,
+                rodape_icone = $10,
+                timestamp = $11,
+                canal_id = $12,
+                mensagem_id = $13,
+                atualizado_em = (
+                    EXTRACT(EPOCH FROM NOW()) * 1000
+                )
+            WHERE
+                id = $14
+                AND guild_id = $15
+            RETURNING *
+            `,
+            [
+                normalizado.nome,
+                normalizado.autorNome,
+                normalizado.autorIcone,
+                normalizado.titulo,
+                normalizado.descricao,
+                normalizado.cor,
+                normalizado.imagem,
+                normalizado.thumbnail,
+                normalizado.rodape,
+                normalizado.rodapeIcone,
+                normalizado.timestamp,
+                canalId,
+                mensagemId,
+                id,
+                guildId
+            ]
+        );
 
     return resultado.rows[0] || null;
 }
 
-async function getEmbedsDoServidor(guildId) {
-    const resultado = await pool.query(
-        `
-        SELECT *
-        FROM embeds_personalizados
-        WHERE guild_id = $1
-        ORDER BY id ASC
-        `,
-        [guildId]
-    );
+async function getEmbedsDoServidor(
+    guildId
+) {
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM embeds_personalizados
+            WHERE guild_id = $1
+            ORDER BY id ASC
+            `,
+            [guildId]
+        );
 
     return resultado.rows;
 }
 
-async function getEmbedPorId(id, guildId) {
-    const resultado = await pool.query(
-        `
-        SELECT *
-        FROM embeds_personalizados
-        WHERE id = $1
-        AND guild_id = $2
-        `,
-        [id, guildId]
-    );
+// Compatível com:
+// getEmbedPorId(id)
+// e:
+// getEmbedPorId(id, guildId)
 
-    return resultado.rows[0] || null;
+async function getEmbedPorId(
+    id,
+    guildId = null
+) {
+    let resultado;
+
+    if (guildId) {
+
+        resultado =
+            await pool.query(
+                `
+                SELECT *
+                FROM embeds_personalizados
+                WHERE
+                    id = $1
+                    AND guild_id = $2
+                `,
+                [
+                    id,
+                    guildId
+                ]
+            );
+
+    } else {
+
+        resultado =
+            await pool.query(
+                `
+                SELECT *
+                FROM embeds_personalizados
+                WHERE id = $1
+                `,
+                [id]
+            );
+    }
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
+
+// Salva a mensagem publicada.
+//
+// Novo formato:
+// salvarMensagemEmbed(id, canalId, mensagemId)
+//
+// Formato antigo:
+// salvarMensagemEmbed(id, guildId, canalId, mensagemId)
 
 async function salvarMensagemEmbed(
     id,
-    guildId,
-    canalId,
-    mensagemId
+    segundoParametro,
+    terceiroParametro,
+    quartoParametro = null
 ) {
-    const resultado = await pool.query(
-        `
-        UPDATE embeds_personalizados
-        SET
-            canal_id = $1,
-            mensagem_id = $2,
-            atualizado_em = (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
-        WHERE
-            id = $3
-            AND guild_id = $4
-        RETURNING *
-        `,
-        [
-            canalId,
-            mensagemId,
-            id,
-            guildId
-        ]
-    );
+    let guildId = null;
+    let canalId;
+    let mensagemId;
+
+    if (
+        quartoParametro !== null
+    ) {
+        guildId =
+            segundoParametro;
+
+        canalId =
+            terceiroParametro;
+
+        mensagemId =
+            quartoParametro;
+    } else {
+        canalId =
+            segundoParametro;
+
+        mensagemId =
+            terceiroParametro;
+    }
+
+    let resultado;
+
+    if (guildId) {
+
+        resultado =
+            await pool.query(
+                `
+                UPDATE embeds_personalizados
+                SET
+                    canal_id = $1,
+                    mensagem_id = $2,
+                    atualizado_em = (
+                        EXTRACT(EPOCH FROM NOW()) * 1000
+                    )
+                WHERE
+                    id = $3
+                    AND guild_id = $4
+                RETURNING *
+                `,
+                [
+                    canalId,
+                    mensagemId,
+                    id,
+                    guildId
+                ]
+            );
+
+    } else {
+
+        resultado =
+            await pool.query(
+                `
+                UPDATE embeds_personalizados
+                SET
+                    canal_id = $1,
+                    mensagem_id = $2,
+                    atualizado_em = (
+                        EXTRACT(EPOCH FROM NOW()) * 1000
+                    )
+                WHERE id = $3
+                RETURNING *
+                `,
+                [
+                    canalId,
+                    mensagemId,
+                    id
+                ]
+            );
+    }
 
     return resultado.rows[0] || null;
 }
@@ -1097,25 +1374,26 @@ async function atualizarCanalEmbed(
     guildId,
     canalId
 ) {
-    const resultado = await pool.query(
-        `
-        UPDATE embeds_personalizados
-        SET
-            canal_id = $1,
-            atualizado_em = (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
-        WHERE
-            id = $2
-            AND guild_id = $3
-        RETURNING *
-        `,
-        [
-            canalId,
-            id,
-            guildId
-        ]
-    );
+    const resultado =
+        await pool.query(
+            `
+            UPDATE embeds_personalizados
+            SET
+                canal_id = $1,
+                atualizado_em = (
+                    EXTRACT(EPOCH FROM NOW()) * 1000
+                )
+            WHERE
+                id = $2
+                AND guild_id = $3
+            RETURNING *
+            `,
+            [
+                canalId,
+                id,
+                guildId
+            ]
+        );
 
     return resultado.rows[0] || null;
 }
@@ -1124,15 +1402,20 @@ async function excluirEmbedBanco(
     id,
     guildId
 ) {
-    const resultado = await pool.query(
-        `
-        DELETE FROM embeds_personalizados
-        WHERE id = $1
-        AND guild_id = $2
-        RETURNING *
-        `,
-        [id, guildId]
-    );
+    const resultado =
+        await pool.query(
+            `
+            DELETE FROM embeds_personalizados
+            WHERE
+                id = $1
+                AND guild_id = $2
+            RETURNING *
+            `,
+            [
+                id,
+                guildId
+            ]
+        );
 
     return resultado.rows[0] || null;
 }
