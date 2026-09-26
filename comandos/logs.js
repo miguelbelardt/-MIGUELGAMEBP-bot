@@ -14,17 +14,67 @@ const { pool } = require("../database/database");
 const TIPOS_LOG = {
     mensagens: {
         nome: "💬 Mensagens",
-        descricao: "Exclusões e alterações de mensagens."
+        descricao: "Configure separadamente mensagens editadas e apagadas."
+    },
+
+    mensagens_editadas: {
+        nome: "✏️ Mensagens editadas",
+        descricao: "Registra quando uma mensagem é editada."
+    },
+
+    mensagens_apagadas: {
+        nome: "🗑️ Mensagens apagadas",
+        descricao: "Registra quando uma mensagem é apagada."
     },
 
     membros: {
         nome: "👤 Membros",
-        descricao: "Entrada e saída de membros."
+        descricao: "Configure alterações no perfil e cargos dos membros."
+    },
+
+    membros_nickname: {
+        nome: "🏷️ Nickname alterado",
+        descricao: "Registra quando o nickname de um membro é alterado."
+    },
+
+    membros_avatar: {
+        nome: "🖼️ Avatar alterado",
+        descricao: "Registra quando o avatar de um membro é alterado."
+    },
+
+    membros_banner: {
+        nome: "🎨 Banner alterado",
+        descricao: "Registra quando o banner de um membro é alterado."
+    },
+
+    membros_cargos: {
+        nome: "🛡️ Cargos alterados",
+        descricao: "Registra quando os cargos de um membro são adicionados ou removidos."
     },
 
     moderacao: {
         nome: "🔨 Moderação",
-        descricao: "Banimentos e ações de moderação."
+        descricao: "Configure separadamente as ações de moderação."
+    },
+
+    moderacao_ban: {
+        nome: "🔨 Banimentos",
+        descricao: "Registra quando um membro é banido."
+    },
+
+    moderacao_kick: {
+        nome: "👢 Expulsões",
+        descricao: "Registra quando um membro é expulso."
+    },
+
+    moderacao_timeout: {
+        nome: "🔇 Timeouts",
+        descricao: "Registra quando um membro recebe ou perde um timeout."
+    },
+
+    moderacao_clear: {
+        nome: "🧹 Mensagens limpas",
+        descricao: "Registra quando mensagens são apagadas usando o comando clear."
     },
 
     voz: {
@@ -43,6 +93,40 @@ const TIPOS_LOG = {
     }
 };
 
+const TIPOS_PRINCIPAIS = {
+    mensagens: TIPOS_LOG.mensagens,
+    membros: TIPOS_LOG.membros,
+    moderacao: TIPOS_LOG.moderacao,
+    voz: TIPOS_LOG.voz,
+    sorteios: TIPOS_LOG.sorteios,
+    economia: TIPOS_LOG.economia
+};
+
+const SUBTIPOS_MENSAGENS = [
+    "mensagens_editadas",
+    "mensagens_apagadas"
+];
+
+const SUBTIPOS_MEMBROS = [
+    "membros_nickname",
+    "membros_avatar",
+    "membros_banner",
+    "membros_cargos"
+];
+
+const SUBTIPOS_MODERACAO = [
+    "moderacao_ban",
+    "moderacao_kick",
+    "moderacao_timeout",
+    "moderacao_clear"
+];
+
+const SUBTIPOS = [
+    ...SUBTIPOS_MENSAGENS,
+    ...SUBTIPOS_MEMBROS,
+    ...SUBTIPOS_MODERACAO
+];
+
 function criarEmbedConfig() {
     return new EmbedBuilder()
         .setTitle("⚙️ Configuração de Logs")
@@ -58,12 +142,16 @@ function criarMenuTipos() {
         .setCustomId("logs_tipo")
         .setPlaceholder("📋 Escolha o tipo de log")
         .addOptions(
-            Object.entries(TIPOS_LOG).map(([id, dados]) => ({
-                label: dados.nome.replace(/^.{2}/, "").trim(),
-                description: dados.descricao,
-                value: id,
-                emoji: dados.nome.substring(0, 2)
-            }))
+            Object.entries(TIPOS_PRINCIPAIS).map(
+                ([id, dados]) => ({
+                    label: dados.nome
+                        .replace(/^.{2}/, "")
+                        .trim(),
+                    description: dados.descricao,
+                    value: id,
+                    emoji: dados.nome.substring(0, 2)
+                })
+            )
         );
 }
 
@@ -111,37 +199,318 @@ function criarMenuCanal(tipo) {
         .setChannelTypes(ChannelType.GuildText);
 }
 
-function criarBotoesConfig(tipo, configurado) {
-    const botoes = [];
-
-    if (configurado) {
-        botoes.push(
-            new ButtonBuilder()
-                .setCustomId(`logs_alterar_${tipo}`)
-                .setLabel("Alterar canal")
-                .setEmoji("🔄")
-                .setStyle(ButtonStyle.Primary),
-
-            new ButtonBuilder()
-                .setCustomId(`logs_remover_${tipo}`)
-                .setLabel("Remover log")
-                .setEmoji("🗑️")
-                .setStyle(ButtonStyle.Danger)
-        );
-    }
-
-    botoes.push(
-        new ButtonBuilder()
-            .setCustomId("logs_voltar")
-            .setLabel("Voltar")
-            .setEmoji("↩️")
-            .setStyle(ButtonStyle.Secondary)
-    );
-
-    return new ActionRowBuilder().addComponents(botoes);
+function criarBotaoVoltar(customId) {
+    return new ButtonBuilder()
+        .setCustomId(customId)
+        .setLabel("Voltar")
+        .setEmoji("↩️")
+        .setStyle(ButtonStyle.Secondary);
 }
 
-async function mostrarTipo(interaction, tipo) {
+function ehSubtipo(tipo) {
+    return (
+        SUBTIPOS_MENSAGENS.includes(tipo) ||
+        SUBTIPOS_MEMBROS.includes(tipo) ||
+        SUBTIPOS_MODERACAO.includes(tipo)
+    );
+}
+
+function criarBotoesConfig(tipo) {
+    let voltarId = "logs_voltar";
+
+    if (ehSubtipo(tipo)) {
+        voltarId = "logs_voltar_subtipo";
+    }
+
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`logs_alterar_${tipo}`)
+            .setLabel("Alterar canal")
+            .setEmoji("🔄")
+            .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+            .setCustomId(`logs_remover_${tipo}`)
+            .setLabel("Desativar")
+            .setEmoji("🔴")
+            .setStyle(ButtonStyle.Danger),
+
+        criarBotaoVoltar(voltarId)
+    );
+}
+
+async function mostrarMensagens(interaction) {
+    const editadas = await buscarConfig(
+        interaction.guild.id,
+        "mensagens_editadas"
+    );
+
+    const apagadas = await buscarConfig(
+        interaction.guild.id,
+        "mensagens_apagadas"
+    );
+
+    const embed = new EmbedBuilder()
+        .setTitle("💬 Mensagens")
+        .setDescription(
+            "Configure separadamente os logs de mensagens editadas e apagadas.\n\n" +
+
+            `✏️ **Mensagens editadas:** ${
+                editadas
+                    ? `🟢 Ativado → <#${editadas.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🗑️ **Mensagens apagadas:** ${
+                apagadas
+                    ? `🟢 Ativado → <#${apagadas.canal_id}>`
+                    : "🔴 Desativado"
+            }`
+        )
+        .setColor(0x5865F2);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("logs_mensagens_editadas")
+                    .setLabel("Editadas")
+                    .setEmoji("✏️")
+                    .setStyle(
+                        editadas
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_mensagens_apagadas")
+                    .setLabel("Apagadas")
+                    .setEmoji("🗑️")
+                    .setStyle(
+                        apagadas
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                criarBotaoVoltar("logs_voltar")
+            )
+        ]
+    });
+}
+
+async function mostrarMembros(interaction) {
+    const nickname = await buscarConfig(
+        interaction.guild.id,
+        "membros_nickname"
+    );
+
+    const avatar = await buscarConfig(
+        interaction.guild.id,
+        "membros_avatar"
+    );
+
+    const banner = await buscarConfig(
+        interaction.guild.id,
+        "membros_banner"
+    );
+
+    const cargos = await buscarConfig(
+        interaction.guild.id,
+        "membros_cargos"
+    );
+
+    const embed = new EmbedBuilder()
+        .setTitle("👤 Membros")
+        .setDescription(
+            "Configure separadamente os logs de alterações nos membros.\n\n" +
+
+            `🏷️ **Nickname:** ${
+                nickname
+                    ? `🟢 Ativado → <#${nickname.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🖼️ **Avatar:** ${
+                avatar
+                    ? `🟢 Ativado → <#${avatar.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🎨 **Banner:** ${
+                banner
+                    ? `🟢 Ativado → <#${banner.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🛡️ **Cargos:** ${
+                cargos
+                    ? `🟢 Ativado → <#${cargos.canal_id}>`
+                    : "🔴 Desativado"
+            }`
+        )
+        .setColor(0x5865F2);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("logs_membros_nickname")
+                    .setLabel("Nickname")
+                    .setEmoji("🏷️")
+                    .setStyle(
+                        nickname
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_membros_avatar")
+                    .setLabel("Avatar")
+                    .setEmoji("🖼️")
+                    .setStyle(
+                        avatar
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_membros_banner")
+                    .setLabel("Banner")
+                    .setEmoji("🎨")
+                    .setStyle(
+                        banner
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    )
+            ),
+
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("logs_membros_cargos")
+                    .setLabel("Cargos")
+                    .setEmoji("🛡️")
+                    .setStyle(
+                        cargos
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                criarBotaoVoltar("logs_voltar")
+            )
+        ]
+    });
+}
+
+async function mostrarModeracao(interaction) {
+    const ban = await buscarConfig(
+        interaction.guild.id,
+        "moderacao_ban"
+    );
+
+    const kick = await buscarConfig(
+        interaction.guild.id,
+        "moderacao_kick"
+    );
+
+    const timeout = await buscarConfig(
+        interaction.guild.id,
+        "moderacao_timeout"
+    );
+
+    const clear = await buscarConfig(
+        interaction.guild.id,
+        "moderacao_clear"
+    );
+
+    const embed = new EmbedBuilder()
+        .setTitle("🔨 Moderação")
+        .setDescription(
+            "Configure separadamente os logs das ações de moderação.\n\n" +
+
+            `🔨 **Banimentos:** ${
+                ban
+                    ? `🟢 Ativado → <#${ban.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `👢 **Expulsões:** ${
+                kick
+                    ? `🟢 Ativado → <#${kick.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🔇 **Timeouts:** ${
+                timeout
+                    ? `🟢 Ativado → <#${timeout.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🧹 **Mensagens limpas:** ${
+                clear
+                    ? `🟢 Ativado → <#${clear.canal_id}>`
+                    : "🔴 Desativado"
+            }`
+        )
+        .setColor(0x5865F2);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("logs_moderacao_ban")
+                    .setLabel("Banimentos")
+                    .setEmoji("🔨")
+                    .setStyle(
+                        ban
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_moderacao_kick")
+                    .setLabel("Expulsões")
+                    .setEmoji("👢")
+                    .setStyle(
+                        kick
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_moderacao_timeout")
+                    .setLabel("Timeouts")
+                    .setEmoji("🔇")
+                    .setStyle(
+                        timeout
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    )
+            ),
+
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("logs_moderacao_clear")
+                    .setLabel("Mensagens limpas")
+                    .setEmoji("🧹")
+                    .setStyle(
+                        clear
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                criarBotaoVoltar("logs_voltar")
+            )
+        ]
+    });
+}
+
+async function mostrarConfiguracaoSubtipo(
+    interaction,
+    tipo
+) {
     const dados = TIPOS_LOG[tipo];
 
     if (!dados) return;
@@ -155,10 +524,76 @@ async function mostrarTipo(interaction, tipo) {
         .setTitle(dados.nome)
         .setDescription(
             `${dados.descricao}\n\n` +
+
             (
                 config
-                    ? `📢 **Canal atual:** <#${config.canal_id}>\n\nEscolha uma ação abaixo.`
-                    : "❌ **Não configurado.**\n\nEscolha um canal para ativar este log."
+                    ? `🟢 **Ativado**\n\n📢 **Canal atual:** <#${config.canal_id}>\n\nEscolha uma ação abaixo.`
+                    : "🔴 **Desativado**\n\nEscolha um canal para ativar este log."
+            )
+        )
+        .setColor(
+            config
+                ? 0x57F287
+                : 0xED4245
+        );
+
+    const componentes = [];
+
+    if (!config) {
+        componentes.push(
+            new ActionRowBuilder().addComponents(
+                criarMenuCanal(tipo)
+            )
+        );
+
+        componentes.push(
+            new ActionRowBuilder().addComponents(
+                criarBotaoVoltar("logs_voltar_subtipo")
+            )
+        );
+    } else {
+        componentes.push(
+            criarBotoesConfig(tipo)
+        );
+    }
+
+    await interaction.update({
+        embeds: [embed],
+        components: componentes
+    });
+}
+
+async function mostrarTipo(interaction, tipo) {
+    if (tipo === "mensagens") {
+        return mostrarMensagens(interaction);
+    }
+
+    if (tipo === "membros") {
+        return mostrarMembros(interaction);
+    }
+
+    if (tipo === "moderacao") {
+        return mostrarModeracao(interaction);
+    }
+
+    const dados = TIPOS_LOG[tipo];
+
+    if (!dados) return;
+
+    const config = await buscarConfig(
+        interaction.guild.id,
+        tipo
+    );
+
+    const embed = new EmbedBuilder()
+        .setTitle(dados.nome)
+        .setDescription(
+            `${dados.descricao}\n\n` +
+
+            (
+                config
+                    ? `🟢 **Ativado**\n\n📢 **Canal atual:** <#${config.canal_id}>\n\nEscolha uma ação abaixo.`
+                    : "🔴 **Desativado**\n\nEscolha um canal para ativar este log."
             )
         )
         .setColor(
@@ -177,7 +612,7 @@ async function mostrarTipo(interaction, tipo) {
         );
     } else {
         componentes.push(
-            criarBotoesConfig(tipo, true)
+            criarBotoesConfig(tipo)
         );
     }
 
@@ -209,16 +644,115 @@ async function mostrarStatus(interaction) {
         [interaction.guild.id]
     );
 
-    let descricao = "";
-
-    for (const [tipo, dados] of Object.entries(TIPOS_LOG)) {
-        const config = resultado.rows.find(
+    const buscarCanal = tipo =>
+        resultado.rows.find(
             row => row.tipo === tipo
         );
 
+    const editadas =
+        buscarCanal("mensagens_editadas");
+
+    const apagadas =
+        buscarCanal("mensagens_apagadas");
+
+    const nickname =
+        buscarCanal("membros_nickname");
+
+    const avatar =
+        buscarCanal("membros_avatar");
+
+    const banner =
+        buscarCanal("membros_banner");
+
+    const cargos =
+        buscarCanal("membros_cargos");
+
+    const ban =
+        buscarCanal("moderacao_ban");
+
+    const kick =
+        buscarCanal("moderacao_kick");
+
+    const timeout =
+        buscarCanal("moderacao_timeout");
+
+    const clear =
+        buscarCanal("moderacao_clear");
+
+    let descricao =
+        `💬 **Mensagens**\n` +
+        `✏️ Editadas → ${
+            editadas
+                ? `<#${editadas.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🗑️ Apagadas → ${
+            apagadas
+                ? `<#${apagadas.canal_id}>`
+                : "❌ Desativado"
+        }\n\n` +
+
+        `👤 **Membros**\n` +
+        `🏷️ Nickname → ${
+            nickname
+                ? `<#${nickname.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🖼️ Avatar → ${
+            avatar
+                ? `<#${avatar.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🎨 Banner → ${
+            banner
+                ? `<#${banner.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🛡️ Cargos → ${
+            cargos
+                ? `<#${cargos.canal_id}>`
+                : "❌ Desativado"
+        }\n\n` +
+
+        `🔨 **Moderação**\n` +
+        `🔨 Banimentos → ${
+            ban
+                ? `<#${ban.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `👢 Expulsões → ${
+            kick
+                ? `<#${kick.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🔇 Timeouts → ${
+            timeout
+                ? `<#${timeout.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🧹 Mensagens limpas → ${
+            clear
+                ? `<#${clear.canal_id}>`
+                : "❌ Desativado"
+        }\n\n`;
+
+    for (
+        const [tipo, dados]
+        of Object.entries(TIPOS_PRINCIPAIS)
+    ) {
+        if (
+            tipo === "mensagens" ||
+            tipo === "membros" ||
+            tipo === "moderacao"
+        ) {
+            continue;
+        }
+
+        const config = buscarCanal(tipo);
+
         descricao += config
-            ? `${dados.nome} → <#${config.canal_id}>\n`
-            : `${dados.nome} → ❌ Não configurado\n`;
+            ? `${dados.nome} → 🟢 <#${config.canal_id}>\n`
+            : `${dados.nome} → 🔴 Desativado\n`;
     }
 
     const embed = new EmbedBuilder()
@@ -260,10 +794,203 @@ async function registrarLog(guild, tipo, embed) {
     }
 }
 
+// =====================================================
+// 🗑️ REGISTRAR MENSAGENS APAGADAS
+// =====================================================
+
+async function registrarMensagensApagadas(
+    guild,
+    mensagens
+) {
+    if (
+        !guild ||
+        !Array.isArray(mensagens) ||
+        mensagens.length === 0
+    ) {
+        return;
+    }
+
+    const config = await buscarConfig(
+        guild.id,
+        "mensagens_apagadas"
+    );
+
+    if (!config) return;
+
+    const canal = guild.channels.cache.get(
+        config.canal_id
+    );
+
+    if (!canal || !canal.isTextBased()) return;
+
+    try {
+        // ==========================================
+        // UMA MENSAGEM
+        // ==========================================
+
+        if (mensagens.length === 1) {
+            const mensagem = mensagens[0];
+
+            const embed = new EmbedBuilder()
+                .setTitle("🗑️ Mensagem apagada")
+                .setColor(0xED4245)
+                .setDescription(
+                    `👤 **Autor:** ${
+                        mensagem.authorId
+                            ? `<@${mensagem.authorId}>`
+                            : "Desconhecido"
+                    }\n` +
+
+                    `📢 **Canal:** ${
+                        mensagem.channelId
+                            ? `<#${mensagem.channelId}>`
+                            : "Desconhecido"
+                    }\n\n` +
+
+                    `💬 **Mensagem:**\n` +
+                    `${
+                        mensagem.content?.trim() ||
+                        "*Sem conteúdo de texto*"
+                    }`
+                )
+                .setTimestamp();
+
+            if (mensagem.messageId) {
+                embed.setFooter({
+                    text: `ID: ${mensagem.messageId}`
+                });
+            }
+
+            return await canal.send({
+                embeds: [embed]
+            });
+        }
+
+        // ==========================================
+        // VÁRIAS MENSAGENS
+        // ==========================================
+
+        let texto = "";
+
+        texto += "========================================\n";
+        texto += "        MENSAGENS APAGADAS\n";
+        texto += "========================================\n\n";
+
+        texto += `Servidor: ${guild.name}\n`;
+        texto += `Servidor ID: ${guild.id}\n`;
+        texto += `Quantidade: ${mensagens.length}\n`;
+        texto += `Data: ${new Date().toLocaleString("pt-BR")}\n\n`;
+
+        mensagens.forEach((mensagem, index) => {
+            texto += "----------------------------------------\n";
+            texto += `Mensagem ${index + 1}\n`;
+            texto += "----------------------------------------\n";
+
+            texto += `Autor: ${
+                mensagem.authorTag ||
+                (
+                    mensagem.authorId
+                        ? `<@${mensagem.authorId}>`
+                        : "Desconhecido"
+                )
+            }\n`;
+
+            texto += `Autor ID: ${
+                mensagem.authorId ||
+                "Desconhecido"
+            }\n`;
+
+            texto += `Canal: ${
+                mensagem.channelId
+                    ? `<#${mensagem.channelId}>`
+                    : "Desconhecido"
+            }\n`;
+
+            texto += `Mensagem ID: ${
+                mensagem.messageId ||
+                "Desconhecido"
+            }\n`;
+
+            texto += `Data: ${
+                mensagem.createdTimestamp
+                    ? new Date(
+                          mensagem.createdTimestamp
+                      ).toLocaleString("pt-BR")
+                    : "Desconhecida"
+            }\n\n`;
+
+            texto += "Conteúdo:\n";
+
+            texto += `${
+                mensagem.content?.trim() ||
+                "[Sem conteúdo de texto]"
+            }\n\n`;
+
+            if (
+                Array.isArray(mensagem.attachments) &&
+                mensagem.attachments.length > 0
+            ) {
+                texto += "Anexos:\n";
+
+                mensagem.attachments.forEach(
+                    (anexo, anexoIndex) => {
+                        texto += `${
+                            anexoIndex + 1
+                        }. ${
+                            anexo.name ||
+                            anexo.url ||
+                            "Anexo"
+                        }\n`;
+
+                        if (anexo.url) {
+                            texto += `   ${anexo.url}\n`;
+                        }
+                    }
+                );
+
+                texto += "\n";
+            }
+        });
+
+        const arquivo = Buffer.from(
+            texto,
+            "utf8"
+        );
+
+        const embed = new EmbedBuilder()
+            .setTitle("🗑️ Mensagens apagadas")
+            .setDescription(
+                `Foram apagadas **${mensagens.length} mensagens** em sequência.\n\n` +
+                "📄 O conteúdo completo foi enviado no arquivo `.txt`."
+            )
+            .setColor(0xED4245)
+            .setTimestamp();
+
+        await canal.send({
+            embeds: [embed],
+            files: [
+                {
+                    attachment: arquivo,
+                    name: `mensagens-apagadas-${Date.now()}.txt`
+                }
+            ]
+        });
+
+    } catch (erro) {
+        console.error(
+            "❌ Não foi possível registrar mensagens apagadas:",
+            erro
+        );
+    }
+}
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("logs")
-        .setDescription("Configura o sistema de logs.")
+        .setDescription(
+            "Configura o sistema de logs."
+        )
+
         .addSubcommand(subcommand =>
             subcommand
                 .setName("configurar")
@@ -271,6 +998,7 @@ module.exports = {
                     "Configura os canais dos logs."
                 )
         )
+
         .addSubcommand(subcommand =>
             subcommand
                 .setName("status")
@@ -332,7 +1060,10 @@ module.exports = {
             return;
         }
 
-        // MENU DE TIPOS DE LOG
+        // ==========================================
+        // MENU DE TIPOS
+        // ==========================================
+
         if (interaction.isStringSelectMenu()) {
             if (
                 interaction.customId ===
@@ -348,7 +1079,10 @@ module.exports = {
             }
         }
 
-        // MENU DE ESCOLHA DO CANAL
+        // ==========================================
+        // MENU DE CANAL
+        // ==========================================
+
         if (interaction.isChannelSelectMenu()) {
             if (
                 interaction.customId.startsWith(
@@ -384,35 +1118,214 @@ module.exports = {
                 const embed =
                     new EmbedBuilder()
                         .setTitle(
-                            "✅ Log configurado"
+                            "✅ Log ativado"
                         )
                         .setDescription(
-                            `${dados.nome} foi configurado com sucesso.\n\n` +
-                            `📢 Canal: <#${canalId}>`
+                            `${dados.nome} foi ativado com sucesso.\n\n` +
+                            `📢 **Canal:** <#${canalId}>`
                         )
                         .setColor(0x57F287);
+
+                const voltarId =
+                    ehSubtipo(tipo)
+                        ? "logs_voltar_subtipo"
+                        : "logs_voltar";
 
                 return interaction.update({
                     embeds: [embed],
                     components: [
-                        criarBotoesConfig(
-                            tipo,
-                            true
+                        new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(
+                                    `logs_alterar_${tipo}`
+                                )
+                                .setLabel(
+                                    "Alterar canal"
+                                )
+                                .setEmoji("🔄")
+                                .setStyle(
+                                    ButtonStyle.Primary
+                                ),
+
+                            new ButtonBuilder()
+                                .setCustomId(
+                                    `logs_remover_${tipo}`
+                                )
+                                .setLabel(
+                                    "Desativar"
+                                )
+                                .setEmoji("🔴")
+                                .setStyle(
+                                    ButtonStyle.Danger
+                                ),
+
+                            criarBotaoVoltar(
+                                voltarId
+                            )
                         )
                     ]
                 });
             }
         }
 
+        // ==========================================
         // BOTÕES
+        // ==========================================
+
         if (interaction.isButton()) {
 
-            // VOLTAR PARA O PAINEL
+            // VOLTAR AO PAINEL PRINCIPAL
             if (
                 interaction.customId ===
                 "logs_voltar"
             ) {
                 return mostrarPainel(
+                    interaction
+                );
+            }
+
+            // MENSAGENS
+            if (
+                interaction.customId ===
+                "logs_mensagens_editadas"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "mensagens_editadas"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_mensagens_apagadas"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "mensagens_apagadas"
+                );
+            }
+
+            // MEMBROS
+            if (
+                interaction.customId ===
+                "logs_membros_nickname"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "membros_nickname"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_membros_avatar"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "membros_avatar"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_membros_banner"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "membros_banner"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_membros_cargos"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "membros_cargos"
+                );
+            }
+
+            // MODERAÇÃO
+            if (
+                interaction.customId ===
+                "logs_moderacao_ban"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "moderacao_ban"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_moderacao_kick"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "moderacao_kick"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_moderacao_timeout"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "moderacao_timeout"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_moderacao_clear"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "moderacao_clear"
+                );
+            }
+
+            // VOLTAR DOS SUBTIPOS
+            if (
+                interaction.customId ===
+                "logs_voltar_subtipo"
+            ) {
+                const ultimaMensagem =
+                    interaction.message.embeds?.[0]?.title;
+
+                if (
+                    ultimaMensagem ===
+                    "🏷️ Nickname alterado" ||
+                    ultimaMensagem ===
+                    "🖼️ Avatar alterado" ||
+                    ultimaMensagem ===
+                    "🎨 Banner alterado" ||
+                    ultimaMensagem ===
+                    "🛡️ Cargos alterados"
+                ) {
+                    return mostrarMembros(
+                        interaction
+                    );
+                }
+
+                if (
+                    ultimaMensagem ===
+                    "🔨 Banimentos" ||
+                    ultimaMensagem ===
+                    "👢 Expulsões" ||
+                    ultimaMensagem ===
+                    "🔇 Timeouts" ||
+                    ultimaMensagem ===
+                    "🧹 Mensagens limpas"
+                ) {
+                    return mostrarModeracao(
+                        interaction
+                    );
+                }
+
+                return mostrarMensagens(
                     interaction
                 );
             }
@@ -434,6 +1347,11 @@ module.exports = {
 
                 if (!dados) return;
 
+                const voltarId =
+                    ehSubtipo(tipo)
+                        ? "logs_voltar_subtipo"
+                        : `logs_voltar_tipo_${tipo}`;
+
                 const embed =
                     new EmbedBuilder()
                         .setTitle(dados.nome)
@@ -448,24 +1366,17 @@ module.exports = {
                         new ActionRowBuilder().addComponents(
                             criarMenuCanal(tipo)
                         ),
+
                         new ActionRowBuilder().addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(
-                                    `logs_voltar_tipo_${tipo}`
-                                )
-                                .setLabel(
-                                    "Voltar"
-                                )
-                                .setEmoji("↩️")
-                                .setStyle(
-                                    ButtonStyle.Secondary
-                                )
+                            criarBotaoVoltar(
+                                voltarId
+                            )
                         )
                     ]
                 });
             }
 
-            // REMOVER LOG
+            // DESATIVAR LOG
             if (
                 interaction.customId.startsWith(
                     "logs_remover_"
@@ -488,13 +1399,26 @@ module.exports = {
                 const embed =
                     new EmbedBuilder()
                         .setTitle(
-                            "🗑️ Log removido"
+                            "🔴 Log desativado"
                         )
                         .setDescription(
-                            `${dados.nome} foi removido da configuração.\n\n` +
-                            "Você pode adicioná-lo novamente quando quiser."
+                            `${dados.nome} foi desativado.\n\n` +
+                            "Você pode ativá-lo novamente quando quiser."
                         )
                         .setColor(0xED4245);
+
+                if (ehSubtipo(tipo)) {
+                    return interaction.update({
+                        embeds: [embed],
+                        components: [
+                            new ActionRowBuilder().addComponents(
+                                criarBotaoVoltar(
+                                    "logs_voltar_subtipo"
+                                )
+                            )
+                        ]
+                    });
+                }
 
                 return interaction.update({
                     embeds: [embed],
@@ -506,7 +1430,7 @@ module.exports = {
                 });
             }
 
-            // VOLTAR PARA O TIPO
+            // VOLTAR PARA UM TIPO PRINCIPAL
             if (
                 interaction.customId.startsWith(
                     "logs_voltar_tipo_"
@@ -526,5 +1450,6 @@ module.exports = {
         }
     },
 
-    registrarLog
+    registrarLog,
+    registrarMensagensApagadas
 };
