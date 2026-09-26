@@ -128,7 +128,7 @@ async function inicializarTickets() {
 
     await pool.query(`
         CREATE TABLE IF NOT EXISTS ticket_modelos (
-            id BIGSERIAL PRIMARY KEY,
+            id BIGINT NOT NULL AUTO_INCREMENT,
             guild_id VARCHAR(30) NOT NULL,
             nome VARCHAR(100) NOT NULL,
 
@@ -151,8 +151,10 @@ async function inicializarTickets() {
             botao_estilo VARCHAR(20) NOT NULL DEFAULT 'Primary',
 
             criado_em BIGINT NOT NULL DEFAULT (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
+                ROUND(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000)
+            ),
+
+            PRIMARY KEY (id)
         )
     `);
 
@@ -174,6 +176,7 @@ async function inicializarTickets() {
 
             configurado BOOLEAN NOT NULL DEFAULT FALSE,
 
+            CONSTRAINT fk_ticket_config_modelo
             FOREIGN KEY (modelo_id)
             REFERENCES ticket_modelos(id)
             ON DELETE SET NULL
@@ -1572,8 +1575,8 @@ async function atualizarPainelPublicado(
         await pool.query(
             `
             UPDATE ticket_config
-            SET mensagem_painel_id = $1
-            WHERE guild_id = $2
+            SET mensagem_painel_id = ?
+            WHERE guild_id = ?
             `,
             [
                 mensagem.id,
@@ -1630,7 +1633,7 @@ async function abrirTicket(
             `
             SELECT *
             FROM ticket_config
-            WHERE guild_id = $1
+            WHERE guild_id = ?
             `,
             [
                 interaction.guildId
@@ -1703,13 +1706,23 @@ async function abrirTicket(
     // 🔢 GERAR NÚMERO DO TICKET
     // ================================
 
+    await pool.query(
+        `
+        UPDATE ticket_config
+        SET contador_tickets = contador_tickets + 1
+        WHERE guild_id = ?
+        `,
+        [
+            interaction.guildId
+        ]
+    );
+
     const contadorResult =
         await pool.query(
             `
-            UPDATE ticket_config
-            SET contador_tickets = contador_tickets + 1
-            WHERE guild_id = $1
-            RETURNING contador_tickets
+            SELECT contador_tickets
+            FROM ticket_config
+            WHERE guild_id = ?
             `,
             [
                 interaction.guildId
@@ -2067,7 +2080,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     ORDER BY id ASC
                     `,
                     [
@@ -2157,8 +2170,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -2218,7 +2231,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     ORDER BY id ASC
                     `,
                     [
@@ -2256,8 +2269,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -2310,8 +2323,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -2417,8 +2430,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -2456,7 +2469,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -2527,7 +2540,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -2565,8 +2578,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -2613,8 +2626,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -2645,7 +2658,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -2757,25 +2770,24 @@ module.exports = {
                     configurado
                 )
                 VALUES (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    $6,
-                    $7,
-                    $8,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
                     TRUE
                 )
 
-                ON CONFLICT (guild_id)
-                DO UPDATE SET
-                    modelo_id = EXCLUDED.modelo_id,
-                    canal_painel_id = EXCLUDED.canal_painel_id,
-                    categoria_id = EXCLUDED.categoria_id,
-                    mensagem_painel_id = EXCLUDED.mensagem_painel_id,
-                    cargo_mencao_id = EXCLUDED.cargo_mencao_id,
-                    contador_nome = EXCLUDED.contador_nome,
+                ON DUPLICATE KEY UPDATE
+                    modelo_id = VALUES(modelo_id),
+                    canal_painel_id = VALUES(canal_painel_id),
+                    categoria_id = VALUES(categoria_id),
+                    mensagem_painel_id = VALUES(mensagem_painel_id),
+                    cargo_mencao_id = VALUES(cargo_mencao_id),
+                    contador_nome = VALUES(contador_nome),
                     configurado = TRUE
                 `,
                 [
@@ -2810,7 +2822,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -2929,7 +2941,7 @@ module.exports = {
                         `
                         SELECT *
                         FROM ticket_modelos
-                        WHERE guild_id = $1
+                        WHERE guild_id = ?
                         ORDER BY id ASC
                         `,
                         [
@@ -2961,8 +2973,8 @@ module.exports = {
                         `
                         SELECT *
                         FROM ticket_modelos
-                        WHERE id = $1
-                        AND guild_id = $2
+                        WHERE id = ?
+                        AND guild_id = ?
                         `,
                         [
                             id,
@@ -2990,7 +3002,7 @@ module.exports = {
                         `
                         SELECT *
                         FROM ticket_config
-                        WHERE guild_id = $1
+                        WHERE guild_id = ?
                         `,
                         [
                             interaction.guildId
@@ -3031,8 +3043,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -3060,7 +3072,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -3117,7 +3129,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -3129,8 +3141,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         modeloId,
@@ -3188,7 +3200,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -3200,8 +3212,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         modeloId,
@@ -3259,7 +3271,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -3271,8 +3283,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         modeloId,
@@ -3342,8 +3354,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         modeloId,
@@ -3403,56 +3415,68 @@ module.exports = {
                     "#5865F2";
             }
 
-            const resultado =
+            await pool.query(
+                `
+                INSERT INTO ticket_modelos (
+                    guild_id,
+                    nome,
+                    autor_nome,
+                    titulo,
+                    descricao,
+                    cor
+                )
+                VALUES (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
+                )
+                `,
+                [
+                    interaction.guildId,
+
+                    interaction.fields
+                        .getTextInputValue("nome")
+                        .trim(),
+
+                    interaction.fields
+                        .getTextInputValue("autor")
+                        .trim() ||
+                        null,
+
+                    interaction.fields
+                        .getTextInputValue("titulo")
+                        .trim() ||
+                        null,
+
+                    interaction.fields
+                        .getTextInputValue("descricao")
+                        .trim() ||
+                        null,
+
+                    cor
+                ]
+            );
+
+            const modeloCriado =
                 await pool.query(
                     `
-                    INSERT INTO ticket_modelos (
-                        guild_id,
-                        nome,
-                        autor_nome,
-                        titulo,
-                        descricao,
-                        cor
-                    )
-                    VALUES (
-                        $1,
-                        $2,
-                        $3,
-                        $4,
-                        $5,
-                        $6
-                    )
-                    RETURNING *
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE guild_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
                     `,
                     [
-                        interaction.guildId,
-
-                        interaction.fields
-                            .getTextInputValue("nome")
-                            .trim(),
-
-                        interaction.fields
-                            .getTextInputValue("autor")
-                            .trim() ||
-                            null,
-
-                        interaction.fields
-                            .getTextInputValue("titulo")
-                            .trim() ||
-                            null,
-
-                        interaction.fields
-                            .getTextInputValue("descricao")
-                            .trim() ||
-                            null,
-
-                        cor
+                        interaction.guildId
                     ]
                 );
 
             await interaction.reply(
                 criarPainelModelo(
-                    resultado.rows[0]
+                    modeloCriado.rows[0]
                 )
             );
 
@@ -3493,13 +3517,13 @@ module.exports = {
                 `
                 UPDATE ticket_modelos
                 SET
-                    nome = $1,
-                    titulo = $2,
-                    descricao = $3,
-                    autor_nome = $4,
-                    cor = $5
-                WHERE id = $6
-                AND guild_id = $7
+                    nome = ?,
+                    titulo = ?,
+                    descricao = ?,
+                    autor_nome = ?,
+                    cor = ?
+                WHERE id = ?
+                AND guild_id = ?
                 `,
                 [
                     interaction.fields
@@ -3534,8 +3558,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -3548,7 +3572,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
@@ -3606,13 +3630,13 @@ module.exports = {
                 `
                 UPDATE ticket_modelos
                 SET
-                    imagem = $1,
-                    thumbnail = $2,
-                    rodape = $3,
-                    botao_texto = $4,
-                    botao_emoji = $5
-                WHERE id = $6
-                AND guild_id = $7
+                    imagem = ?,
+                    thumbnail = ?,
+                    rodape = ?,
+                    botao_texto = ?,
+                    botao_emoji = ?
+                WHERE id = ?
+                AND guild_id = ?
                 `,
                 [
                     interaction.fields
@@ -3651,8 +3675,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = $1
-                    AND guild_id = $2
+                    WHERE id = ?
+                    AND guild_id = ?
                     `,
                     [
                         id,
@@ -3665,7 +3689,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = $1
+                    WHERE guild_id = ?
                     `,
                     [
                         interaction.guildId
