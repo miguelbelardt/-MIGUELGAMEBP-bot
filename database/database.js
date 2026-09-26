@@ -1,17 +1,146 @@
-const { Pool } = require("pg");
+const mysql = require("mysql2/promise");
 
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL
+// =====================================================
+// 🔐 CONEXÃO COM MYSQL 8
+// =====================================================
+
+if (!process.env.DATABASE_URL) {
+    throw new Error(
+        "❌ DATABASE_URL não foi encontrada nas variáveis de ambiente."
+    );
+}
+
+const mysqlPool = mysql.createPool({
+    uri: process.env.DATABASE_URL,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-// Criar tabelas e corrigir dados antigos
+// =====================================================
+// 🔄 COMPATIBILIDADE COM O CÓDIGO ANTIGO
+// =====================================================
+//
+// O projeto antigo usava PostgreSQL com:
+// $1, $2, $3...
+//
+// Aqui convertemos automaticamente para:
+// ?, ?, ?
+//
+// Também devolvemos:
+// resultado.rows
+//
+// para manter o restante do bot compatível.
+// =====================================================
+
+function converterPlaceholders(sql) {
+    return sql.replace(/\$(\d+)/g, "?");
+}
+
+const pool = {
+    async query(sql, parametros = []) {
+
+        const sqlMySQL =
+            converterPlaceholders(sql);
+
+        const [resultado] =
+            await mysqlPool.query(
+                sqlMySQL,
+                parametros
+            );
+
+        if (Array.isArray(resultado)) {
+
+            return {
+                rows: resultado,
+                rowCount: resultado.length
+            };
+
+        }
+
+        return {
+            rows: [],
+            rowCount:
+                resultado.affectedRows || 0,
+
+            insertId:
+                resultado.insertId || 0,
+
+            affectedRows:
+                resultado.affectedRows || 0
+        };
+    }
+};
+
+// =====================================================
+// 🧰 FUNÇÕES AUXILIARES
+// =====================================================
+
+async function colunaExiste(
+    tabela,
+    coluna
+) {
+
+    const [resultado] =
+        await mysqlPool.query(
+            `
+            SELECT COUNT(*) AS total
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE
+                TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = ?
+                AND COLUMN_NAME = ?
+            `,
+            [
+                tabela,
+                coluna
+            ]
+        );
+
+    return Number(
+        resultado[0].total
+    ) > 0;
+}
+
+async function adicionarColunaSeNaoExiste(
+    tabela,
+    coluna,
+    definicao
+) {
+
+    const existe =
+        await colunaExiste(
+            tabela,
+            coluna
+        );
+
+    if (!existe) {
+
+        await mysqlPool.query(
+            `
+            ALTER TABLE \`${tabela}\`
+            ADD COLUMN \`${coluna}\`
+            ${definicao}
+            `
+        );
+    }
+}
+
+function agoraMs() {
+    return Date.now();
+}
+
+// =====================================================
+// 🏗️ INICIALIZAR BANCO
+// =====================================================
+
 async function inicializarBanco() {
 
     // ================================
     // 👤 USUÁRIOS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS usuarios (
             id VARCHAR(30) PRIMARY KEY,
             saldo BIGINT NOT NULL DEFAULT 0,
@@ -23,56 +152,61 @@ async function inicializarBanco() {
         )
     `);
 
-    await pool.query(`
-        ALTER TABLE usuarios
-        ADD COLUMN IF NOT EXISTS ultimo_daily BIGINT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "usuarios",
+        "ultimo_daily",
+        "BIGINT"
+    );
 
-    await pool.query(`
-        ALTER TABLE usuarios
-        ADD COLUMN IF NOT EXISTS daily_sequencia BIGINT NOT NULL DEFAULT 0
-    `);
+    await adicionarColunaSeNaoExiste(
+        "usuarios",
+        "daily_sequencia",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
 
-    await pool.query(`
-        ALTER TABLE usuarios
-        ADD COLUMN IF NOT EXISTS notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE
-    `);
+    await adicionarColunaSeNaoExiste(
+        "usuarios",
+        "notificacao_daily",
+        "BOOLEAN NOT NULL DEFAULT FALSE"
+    );
 
-    await pool.query(`
-        ALTER TABLE usuarios
-        ADD COLUMN IF NOT EXISTS notificacao_daily_em BIGINT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "usuarios",
+        "notificacao_daily_em",
+        "BIGINT"
+    );
 
-    await pool.query(`
-        ALTER TABLE usuarios
-        ADD COLUMN IF NOT EXISTS xp BIGINT NOT NULL DEFAULT 0
-    `);
+    await adicionarColunaSeNaoExiste(
+        "usuarios",
+        "xp",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE usuarios
         SET saldo = 0
         WHERE saldo IS NULL
     `);
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE usuarios
         SET xp = 0
         WHERE xp IS NULL
     `);
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE usuarios
         SET daily_sequencia = 0
         WHERE daily_sequencia IS NULL
     `);
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE usuarios
         SET notificacao_daily = FALSE
         WHERE notificacao_daily IS NULL
     `);
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE usuarios
         SET notificacao_daily_em = NULL
         WHERE notificacao_daily = FALSE
@@ -82,7 +216,7 @@ async function inicializarBanco() {
     // 👑 ADMS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS adms (
             id VARCHAR(30) PRIMARY KEY
         )
@@ -92,9 +226,9 @@ async function inicializarBanco() {
     // 🎉 SORTEIOS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS sorteios (
-            id BIGSERIAL PRIMARY KEY,
+            id BIGINT NOT NULL AUTO_INCREMENT,
             guild_id VARCHAR(30) NOT NULL,
             canal_id VARCHAR(30) NOT NULL,
             titulo TEXT NOT NULL,
@@ -103,36 +237,48 @@ async function inicializarBanco() {
             imagem TEXT,
             thumbnail TEXT,
             encerra_em BIGINT NOT NULL,
-            vencedores INTEGER NOT NULL DEFAULT 1,
-            vencedores_ids VARCHAR(30)[] DEFAULT '{}',
+            vencedores INT NOT NULL DEFAULT 1,
+            vencedores_ids JSON,
             encerrado BOOLEAN NOT NULL DEFAULT FALSE,
             criado_em BIGINT NOT NULL DEFAULT (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            PRIMARY KEY (id)
         )
     `);
 
-    await pool.query(`
-        ALTER TABLE sorteios
-        ADD COLUMN IF NOT EXISTS criador_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "sorteios",
+        "criador_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE sorteios
-        ADD COLUMN IF NOT EXISTS mensagem_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "sorteios",
+        "mensagem_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE sorteios
-        ADD COLUMN IF NOT EXISTS mostrar_participantes BOOLEAN NOT NULL DEFAULT FALSE
-    `);
+    await adicionarColunaSeNaoExiste(
+        "sorteios",
+        "mostrar_participantes",
+        "BOOLEAN NOT NULL DEFAULT FALSE"
+    );
 
-    await pool.query(`
-        ALTER TABLE sorteios
-        ADD COLUMN IF NOT EXISTS encerrado_em BIGINT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "sorteios",
+        "encerrado_em",
+        "BIGINT"
+    );
 
-    await pool.query(`
+    await adicionarColunaSeNaoExiste(
+        "sorteios",
+        "vencedores_ids",
+        "JSON"
+    );
+
+    await mysqlPool.query(`
         UPDATE sorteios
         SET mostrar_participantes = FALSE
         WHERE mostrar_participantes IS NULL
@@ -142,7 +288,7 @@ async function inicializarBanco() {
     // 🎟️ PARTICIPANTES DOS SORTEIOS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS sorteio_participantes (
             sorteio_id BIGINT NOT NULL,
             user_id VARCHAR(30) NOT NULL,
@@ -152,6 +298,7 @@ async function inicializarBanco() {
                 user_id
             ),
 
+            CONSTRAINT fk_sorteio_participantes
             FOREIGN KEY (
                 sorteio_id
             )
@@ -164,7 +311,7 @@ async function inicializarBanco() {
     // 📋 CONFIGURAÇÃO DE LOGS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS logs_config (
             guild_id VARCHAR(30) NOT NULL,
             tipo VARCHAR(30) NOT NULL,
@@ -181,9 +328,9 @@ async function inicializarBanco() {
     // 🎫 MODELOS DE TICKETS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS ticket_modelos (
-            id BIGSERIAL PRIMARY KEY,
+            id BIGINT NOT NULL AUTO_INCREMENT,
             guild_id VARCHAR(30) NOT NULL,
             nome VARCHAR(100) NOT NULL,
 
@@ -201,13 +348,19 @@ async function inicializarBanco() {
             rodape VARCHAR(2048),
             rodape_icone TEXT,
 
-            botao_texto VARCHAR(80) NOT NULL DEFAULT 'Fazer Ticket',
+            botao_texto VARCHAR(80)
+                NOT NULL DEFAULT 'Fazer Ticket',
+
             botao_emoji VARCHAR(100),
-            botao_estilo VARCHAR(20) NOT NULL DEFAULT 'Primary',
+
+            botao_estilo VARCHAR(20)
+                NOT NULL DEFAULT 'Primary',
 
             criado_em BIGINT NOT NULL DEFAULT (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            PRIMARY KEY (id)
         )
     `);
 
@@ -215,7 +368,7 @@ async function inicializarBanco() {
     // 🎫 CONFIGURAÇÃO DOS TICKETS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS ticket_config (
             guild_id VARCHAR(30) PRIMARY KEY,
 
@@ -231,10 +384,13 @@ async function inicializarBanco() {
 
             ticket_contador BIGINT NOT NULL DEFAULT 0,
 
-            mostrar_numero_nome BOOLEAN NOT NULL DEFAULT FALSE,
+            mostrar_numero_nome BOOLEAN
+                NOT NULL DEFAULT FALSE,
 
-            configurado BOOLEAN NOT NULL DEFAULT FALSE,
+            configurado BOOLEAN
+                NOT NULL DEFAULT FALSE,
 
+            CONSTRAINT fk_ticket_modelo
             FOREIGN KEY (
                 modelo_id
             )
@@ -247,54 +403,72 @@ async function inicializarBanco() {
     // 🔧 MIGRAÇÕES DOS TICKETS
     // ================================
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS categoria_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "ticket_config",
+        "categoria_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS mensagem_painel_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "ticket_config",
+        "mensagem_painel_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS cargo_mencao_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "ticket_config",
+        "cargo_mencao_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS ticket_contador BIGINT NOT NULL DEFAULT 0
-    `);
+    await adicionarColunaSeNaoExiste(
+        "ticket_config",
+        "ticket_contador",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS mostrar_numero_nome BOOLEAN NOT NULL DEFAULT FALSE
-    `);
+    await adicionarColunaSeNaoExiste(
+        "ticket_config",
+        "mostrar_numero_nome",
+        "BOOLEAN NOT NULL DEFAULT FALSE"
+    );
 
-    await pool.query(`
+    await adicionarColunaSeNaoExiste(
+        "ticket_config",
+        "configurado",
+        "BOOLEAN NOT NULL DEFAULT FALSE"
+    );
+
+    await mysqlPool.query(`
         UPDATE ticket_config
         SET ticket_contador = 0
         WHERE ticket_contador IS NULL
     `);
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE ticket_config
         SET mostrar_numero_nome = FALSE
         WHERE mostrar_numero_nome IS NULL
+    `);
+
+    await mysqlPool.query(`
+        UPDATE ticket_config
+        SET configurado = FALSE
+        WHERE configurado IS NULL
     `);
 
     // ================================
     // 🎨 EMBEDS PERSONALIZADOS
     // ================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS embeds_personalizados (
-            id BIGSERIAL PRIMARY KEY,
+            id BIGINT NOT NULL AUTO_INCREMENT,
 
             guild_id VARCHAR(30) NOT NULL,
 
-            nome VARCHAR(100) NOT NULL DEFAULT 'Embed',
+            nome VARCHAR(100)
+                NOT NULL DEFAULT 'Embed',
 
             autor_nome VARCHAR(256),
             autor_icone TEXT,
@@ -310,7 +484,8 @@ async function inicializarBanco() {
             rodape VARCHAR(2048),
             rodape_icone TEXT,
 
-            timestamp BOOLEAN NOT NULL DEFAULT FALSE,
+            timestamp BOOLEAN
+                NOT NULL DEFAULT FALSE,
 
             canal_id VARCHAR(30),
             mensagem_id VARCHAR(30),
@@ -318,119 +493,146 @@ async function inicializarBanco() {
             criado_por VARCHAR(30),
 
             criado_em BIGINT NOT NULL DEFAULT (
-                EXTRACT(EPOCH FROM NOW()) * 1000
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
             ),
 
             atualizado_em BIGINT NOT NULL DEFAULT (
-                EXTRACT(EPOCH FROM NOW()) * 1000
-            )
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            PRIMARY KEY (id)
         )
     `);
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS nome VARCHAR(100)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "nome",
+        "VARCHAR(100) NOT NULL DEFAULT 'Embed'"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS autor_nome VARCHAR(256)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "autor_nome",
+        "VARCHAR(256)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS autor_icone TEXT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "autor_icone",
+        "TEXT"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS titulo VARCHAR(256)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "titulo",
+        "VARCHAR(256)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS descricao TEXT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "descricao",
+        "TEXT"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS cor VARCHAR(20)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "cor",
+        "VARCHAR(20)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS imagem TEXT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "imagem",
+        "TEXT"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS thumbnail TEXT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "thumbnail",
+        "TEXT"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS rodape VARCHAR(2048)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "rodape",
+        "VARCHAR(2048)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS rodape_icone TEXT
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "rodape_icone",
+        "TEXT"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS timestamp BOOLEAN NOT NULL DEFAULT FALSE
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "timestamp",
+        "BOOLEAN NOT NULL DEFAULT FALSE"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS canal_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "canal_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS mensagem_id VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "mensagem_id",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS criado_por VARCHAR(30)
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "criado_por",
+        "VARCHAR(30)"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS criado_em BIGINT NOT NULL DEFAULT (
-            EXTRACT(EPOCH FROM NOW()) * 1000
-        )
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "criado_em",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
 
-    await pool.query(`
-        ALTER TABLE embeds_personalizados
-        ADD COLUMN IF NOT EXISTS atualizado_em BIGINT NOT NULL DEFAULT (
-            EXTRACT(EPOCH FROM NOW()) * 1000
-        )
-    `);
+    await adicionarColunaSeNaoExiste(
+        "embeds_personalizados",
+        "atualizado_em",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
 
-    await pool.query(`
+    await mysqlPool.query(`
         UPDATE embeds_personalizados
         SET nome = 'Embed'
-        WHERE nome IS NULL OR nome = ''
+        WHERE nome IS NULL
+        OR nome = ''
     `);
 
+    await mysqlPool.query(`
+        UPDATE embeds_personalizados
+        SET criado_em = ?
+        WHERE criado_em = 0
+    `, [agoraMs()]);
+
+    await mysqlPool.query(`
+        UPDATE embeds_personalizados
+        SET atualizado_em = ?
+        WHERE atualizado_em = 0
+    `, [agoraMs()]);
+
     console.log(
-        "💾 Banco de dados conectado e tabelas prontas!"
+        "💾 Banco de dados MySQL 8 conectado e tabelas prontas!"
     );
 }
 
-// ================================
+// =====================================================
 // 👤 USUÁRIO
-// ================================
+// =====================================================
 
 async function criarUsuario(userId) {
 
     await pool.query(
         `
-        INSERT INTO usuarios (
+        INSERT IGNORE INTO usuarios (
             id,
             saldo,
             xp,
@@ -448,7 +650,6 @@ async function criarUsuario(userId) {
             FALSE,
             NULL
         )
-        ON CONFLICT (id) DO NOTHING
         `,
         [userId]
     );
@@ -504,9 +705,9 @@ async function criarUsuario(userId) {
     );
 }
 
-// ================================
+// =====================================================
 // 💰 SISTEMA DE MOEDAS
-// ================================
+// =====================================================
 
 async function getSaldo(userId) {
 
@@ -551,9 +752,9 @@ async function alterarSaldo(
     );
 }
 
-// ================================
+// =====================================================
 // ⭐ SISTEMA DE XP
-// ================================
+// =====================================================
 
 async function getXP(userId) {
 
@@ -701,9 +902,9 @@ async function getRankingXP(
     );
 }
 
-// ================================
+// =====================================================
 // 🎁 SISTEMA DE DAILY
-// ================================
+// =====================================================
 
 async function getUltimoDaily(
     userId
@@ -749,9 +950,9 @@ async function salvarUltimoDaily(
     );
 }
 
-// ================================
+// =====================================================
 // 🔥 SEQUÊNCIA DO DAILY
-// ================================
+// =====================================================
 
 async function getSequenciaDaily(
     userId
@@ -820,7 +1021,10 @@ async function getNotificacaoDaily(
         );
 
     return (
-        resultado.rows[0]?.notificacao_daily === true
+        resultado.rows[0]?.notificacao_daily === true ||
+        Number(
+            resultado.rows[0]?.notificacao_daily
+        ) === 1
     );
 }
 
@@ -841,10 +1045,12 @@ async function salvarNotificacaoDaily(
         WHERE id = $3
         `,
         [
-            ativada,
+            ativada ? 1 : 0,
+
             ativada && horario
                 ? Number(horario)
                 : null,
+
             userId
         ]
     );
@@ -891,9 +1097,9 @@ async function getUsuariosComNotificacaoDaily() {
     );
 }
 
-// ================================
+// =====================================================
 // 🏆 RANKING DE MOEDAS
-// ================================
+// =====================================================
 
 async function getRankingMoedasPaginado(
     userId,
@@ -979,6 +1185,11 @@ async function getRankingMoedasPaginado(
             };
         }
 
+        const usuariosJSON =
+            JSON.stringify(
+                usuariosServidor
+            );
+
         rankingResult =
             await pool.query(
                 `
@@ -990,9 +1201,14 @@ async function getRankingMoedasPaginado(
                         0
                     ) AS saldo
 
-                FROM unnest(
-                    $1::varchar[]
-                ) AS membros(id)
+                FROM JSON_TABLE(
+                    $1,
+                    '$[*]'
+                    COLUMNS (
+                        id VARCHAR(30)
+                        PATH '$'
+                    )
+                ) AS membros
 
                 LEFT JOIN usuarios u
                     ON u.id = membros.id
@@ -1009,7 +1225,7 @@ async function getRankingMoedasPaginado(
                 OFFSET $3
                 `,
                 [
-                    usuariosServidor,
+                    usuariosJSON,
                     limite,
                     offset
                 ]
@@ -1019,12 +1235,18 @@ async function getRankingMoedasPaginado(
             await pool.query(
                 `
                 SELECT COUNT(*) AS total
-                FROM unnest(
-                    $1::varchar[]
-                ) AS membros(id)
+
+                FROM JSON_TABLE(
+                    $1,
+                    '$[*]'
+                    COLUMNS (
+                        id VARCHAR(30)
+                        PATH '$'
+                    )
+                ) AS membros
                 `,
                 [
-                    usuariosServidor
+                    usuariosJSON
                 ]
             );
     }
@@ -1153,15 +1375,25 @@ async function getRankingMoedasPaginado(
                     )
                     : 0;
 
+            const usuariosJSON =
+                JSON.stringify(
+                    usuariosServidor
+                );
+
             const posicao =
                 await pool.query(
                     `
                     SELECT
                         COUNT(*) + 1 AS posicao
 
-                    FROM unnest(
-                        $1::varchar[]
-                    ) AS membros(id)
+                    FROM JSON_TABLE(
+                        $1,
+                        '$[*]'
+                        COLUMNS (
+                            id VARCHAR(30)
+                            PATH '$'
+                        )
+                    ) AS membros
 
                     LEFT JOIN usuarios u
                         ON u.id = membros.id
@@ -1182,7 +1414,7 @@ async function getRankingMoedasPaginado(
                         )
                     `,
                     [
-                        usuariosServidor,
+                        usuariosJSON,
                         saldoUsuario,
                         userId
                     ]
@@ -1210,9 +1442,9 @@ async function getRankingMoedasPaginado(
     };
 }
 
-// ================================
+// =====================================================
 // 🔄 RANKING ANTIGO
-// ================================
+// =====================================================
 
 async function getRankingMoedas(
     userId,
@@ -1237,9 +1469,9 @@ async function getRankingMoedas(
     };
 }
 
-// ================================
-// 👑 SISTEMA DE ADM DO BOT
-// ================================
+// =====================================================
+// 👑 SISTEMA DE ADM
+// =====================================================
 
 async function adicionarAdm(
     userId
@@ -1247,9 +1479,8 @@ async function adicionarAdm(
 
     await pool.query(
         `
-        INSERT INTO adms (id)
+        INSERT IGNORE INTO adms (id)
         VALUES ($1)
-        ON CONFLICT (id) DO NOTHING
         `,
         [userId]
     );
@@ -1288,9 +1519,9 @@ async function isAdm(
     );
 }
 
-// ================================
+// =====================================================
 // 🎨 SISTEMA DE EMBEDS
-// ================================
+// =====================================================
 
 function normalizarConfigEmbed(
     config = {}
@@ -1361,6 +1592,10 @@ function normalizarConfigEmbed(
     };
 }
 
+// =====================================================
+// 🎨 CRIAR EMBED
+// =====================================================
+
 async function criarEmbedBanco(
     guildId,
     segundoParametro,
@@ -1406,8 +1641,11 @@ async function criarEmbedBanco(
             config
         );
 
-    const resultado =
-        await pool.query(
+    const criadoEm =
+        agoraMs();
+
+    const [resultado] =
+        await mysqlPool.query(
             `
             INSERT INTO embeds_personalizados (
                 guild_id,
@@ -1424,14 +1662,14 @@ async function criarEmbedBanco(
                 timestamp,
                 canal_id,
                 mensagem_id,
-                criado_por
+                criado_por,
+                criado_em,
+                atualizado_em
             )
             VALUES (
-                $1, $2, $3, $4, $5, $6, $7,
-                $8, $9, $10, $11, $12,
-                $13, $14, $15
+                ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?
             )
-            RETURNING *
             `,
             [
                 guildId,
@@ -1445,15 +1683,24 @@ async function criarEmbedBanco(
                 dados.thumbnail,
                 dados.rodape,
                 dados.rodapeIcone,
-                dados.timestamp,
+                dados.timestamp ? 1 : 0,
                 dados.canalId,
                 dados.mensagemId,
-                criadorId
+                criadorId,
+                criadoEm,
+                criadoEm
             ]
         );
 
-    return resultado.rows[0];
+    return getEmbedPorId(
+        resultado.insertId,
+        guildId
+    );
 }
+
+// =====================================================
+// 🎨 ATUALIZAR EMBED
+// =====================================================
 
 async function atualizarEmbedBanco(
     id,
@@ -1503,56 +1750,57 @@ async function atualizarEmbedBanco(
             config
         );
 
-    const resultado =
-        await pool.query(
-            `
-            UPDATE embeds_personalizados
-            SET
-                nome = $1,
-                autor_nome = $2,
-                autor_icone = $3,
-                titulo = $4,
-                descricao = $5,
-                cor = $6,
-                imagem = $7,
-                thumbnail = $8,
-                rodape = $9,
-                rodape_icone = $10,
-                timestamp = $11,
-                canal_id = $12,
-                mensagem_id = $13,
-                atualizado_em = (
-                    EXTRACT(EPOCH FROM NOW()) * 1000
-                )
-            WHERE
-                id = $14
-                AND guild_id = $15
-            RETURNING *
-            `,
-            [
-                normalizado.nome,
-                normalizado.autorNome,
-                normalizado.autorIcone,
-                normalizado.titulo,
-                normalizado.descricao,
-                normalizado.cor,
-                normalizado.imagem,
-                normalizado.thumbnail,
-                normalizado.rodape,
-                normalizado.rodapeIcone,
-                normalizado.timestamp,
-                canalId,
-                mensagemId,
-                id,
-                guildId
-            ]
-        );
+    await mysqlPool.query(
+        `
+        UPDATE embeds_personalizados
+        SET
+            nome = ?,
+            autor_nome = ?,
+            autor_icone = ?,
+            titulo = ?,
+            descricao = ?,
+            cor = ?,
+            imagem = ?,
+            thumbnail = ?,
+            rodape = ?,
+            rodape_icone = ?,
+            timestamp = ?,
+            canal_id = ?,
+            mensagem_id = ?,
+            atualizado_em = ?
+        WHERE
+            id = ?
+            AND guild_id = ?
+        `,
+        [
+            normalizado.nome,
+            normalizado.autorNome,
+            normalizado.autorIcone,
+            normalizado.titulo,
+            normalizado.descricao,
+            normalizado.cor,
+            normalizado.imagem,
+            normalizado.thumbnail,
+            normalizado.rodape,
+            normalizado.rodapeIcone,
+            normalizado.timestamp ? 1 : 0,
+            canalId,
+            mensagemId,
+            agoraMs(),
+            id,
+            guildId
+        ]
+    );
 
-    return (
-        resultado.rows[0] ||
-        null
+    return getEmbedPorId(
+        id,
+        guildId
     );
 }
+
+// =====================================================
+// 📋 EMBEDS DO SERVIDOR
+// =====================================================
 
 async function getEmbedsDoServidor(
     guildId
@@ -1571,6 +1819,10 @@ async function getEmbedsDoServidor(
 
     return resultado.rows;
 }
+
+// =====================================================
+// 🔎 EMBED POR ID
+// =====================================================
 
 async function getEmbedPorId(
     id,
@@ -1615,6 +1867,10 @@ async function getEmbedPorId(
     );
 }
 
+// =====================================================
+// 💾 SALVAR MENSAGEM DO EMBED
+// =====================================================
+
 async function salvarMensagemEmbed(
     id,
     segundoParametro,
@@ -1648,61 +1904,57 @@ async function salvarMensagemEmbed(
             terceiroParametro;
     }
 
-    let resultado;
-
     if (guildId) {
 
-        resultado =
-            await pool.query(
-                `
-                UPDATE embeds_personalizados
-                SET
-                    canal_id = $1,
-                    mensagem_id = $2,
-                    atualizado_em = (
-                        EXTRACT(EPOCH FROM NOW()) * 1000
-                    )
-                WHERE
-                    id = $3
-                    AND guild_id = $4
-                RETURNING *
-                `,
-                [
-                    canalId,
-                    mensagemId,
-                    id,
-                    guildId
-                ]
-            );
+        await mysqlPool.query(
+            `
+            UPDATE embeds_personalizados
+            SET
+                canal_id = ?,
+                mensagem_id = ?,
+                atualizado_em = ?
+            WHERE
+                id = ?
+                AND guild_id = ?
+            `,
+            [
+                canalId,
+                mensagemId,
+                agoraMs(),
+                id,
+                guildId
+            ]
+        );
 
     } else {
 
-        resultado =
-            await pool.query(
-                `
-                UPDATE embeds_personalizados
-                SET
-                    canal_id = $1,
-                    mensagem_id = $2,
-                    atualizado_em = (
-                        EXTRACT(EPOCH FROM NOW()) * 1000
-                    )
-                WHERE id = $3
-                RETURNING *
-                `,
-                [
-                    canalId,
-                    mensagemId,
-                    id
-                ]
-            );
+        await mysqlPool.query(
+            `
+            UPDATE embeds_personalizados
+            SET
+                canal_id = ?,
+                mensagem_id = ?,
+                atualizado_em = ?
+            WHERE id = ?
+            `,
+            [
+                canalId,
+                mensagemId,
+                agoraMs(),
+                id
+            ]
+        );
     }
 
-    return (
-        resultado.rows[0] ||
-        null
+    return getEmbedPorId(
+        id,
+        guildId
     );
 }
+
+// =====================================================
+// 📺 ATUALIZAR CANAL DO EMBED
+// =====================================================
 
 async function atualizarCanalEmbed(
     id,
@@ -1710,62 +1962,68 @@ async function atualizarCanalEmbed(
     canalId
 ) {
 
-    const resultado =
-        await pool.query(
-            `
-            UPDATE embeds_personalizados
-            SET
-                canal_id = $1,
-                atualizado_em = (
-                    EXTRACT(EPOCH FROM NOW()) * 1000
-                )
-            WHERE
-                id = $2
-                AND guild_id = $3
-            RETURNING *
-            `,
-            [
-                canalId,
-                id,
-                guildId
-            ]
-        );
+    await mysqlPool.query(
+        `
+        UPDATE embeds_personalizados
+        SET
+            canal_id = ?,
+            atualizado_em = ?
+        WHERE
+            id = ?
+            AND guild_id = ?
+        `,
+        [
+            canalId,
+            agoraMs(),
+            id,
+            guildId
+        ]
+    );
 
-    return (
-        resultado.rows[0] ||
-        null
+    return getEmbedPorId(
+        id,
+        guildId
     );
 }
+
+// =====================================================
+// 🗑️ EXCLUIR EMBED
+// =====================================================
 
 async function excluirEmbedBanco(
     id,
     guildId
 ) {
 
-    const resultado =
-        await pool.query(
-            `
-            DELETE FROM embeds_personalizados
-            WHERE
-                id = $1
-                AND guild_id = $2
-            RETURNING *
-            `,
-            [
-                id,
-                guildId
-            ]
+    const embed =
+        await getEmbedPorId(
+            id,
+            guildId
         );
 
-    return (
-        resultado.rows[0] ||
-        null
+    if (!embed) {
+        return null;
+    }
+
+    await mysqlPool.query(
+        `
+        DELETE FROM embeds_personalizados
+        WHERE
+            id = ?
+            AND guild_id = ?
+        `,
+        [
+            id,
+            guildId
+        ]
     );
+
+    return embed;
 }
 
-// ================================
+// =====================================================
 // 📦 EXPORTAÇÕES
-// ================================
+// =====================================================
 
 module.exports = {
     pool,
