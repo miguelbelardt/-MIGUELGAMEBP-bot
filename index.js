@@ -930,7 +930,7 @@ client.on(
 );
 
 // =====================================================
-// 🎙️ LOGS DE VOZ
+// 🎙️ LOGS DE VOZ SEPARADOS
 // =====================================================
 
 client.on(
@@ -1012,7 +1012,7 @@ client.on(
 
                 await client.registrarLog(
                     guild,
-                    "voz",
+                    "voz_entrada",
                     embed
                 );
 
@@ -1064,7 +1064,7 @@ client.on(
 
                 await client.registrarLog(
                     guild,
-                    "voz",
+                    "voz_saida",
                     embed
                 );
 
@@ -1130,7 +1130,7 @@ client.on(
 
                 await client.registrarLog(
                     guild,
-                    "voz",
+                    "voz_mudanca",
                     embed
                 );
 
