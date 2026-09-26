@@ -40,7 +40,6 @@ async function prepararBanco() {
             BOOLEAN NOT NULL DEFAULT FALSE
         `);
 
-        // Guarda o momento REAL em que o sorteio foi encerrado.
         await pool.query(`
             ALTER TABLE sorteios
             ADD COLUMN IF NOT EXISTS encerrado_em BIGINT
@@ -734,9 +733,8 @@ async function criarSorteio(
                 mostrar_participantes
             )
             VALUES (
-                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
+                ?,?,?,?,?,?,?,?,?,?,?
             )
-            RETURNING *
             `,
             [
                 config.guildId,
@@ -755,7 +753,29 @@ async function criarSorteio(
             ]
         );
 
-    return resultado.rows[0];
+    const id =
+        resultado.insertId;
+
+    if (!id) {
+        throw new Error(
+            "Não foi possível obter o ID do sorteio criado."
+        );
+    }
+
+    const busca =
+        await pool.query(
+            `
+            SELECT *
+            FROM sorteios
+            WHERE id = ?
+            `,
+            [id]
+        );
+
+    return (
+        busca.rows[0] ||
+        null
+    );
 }
 
 async function buscarSorteio(
@@ -766,7 +786,7 @@ async function buscarSorteio(
             `
             SELECT *
             FROM sorteios
-            WHERE id = $1
+            WHERE id = ?
             `,
             [id]
         );
@@ -785,7 +805,7 @@ async function buscarParticipantes(
             `
             SELECT user_id
             FROM sorteio_participantes
-            WHERE sorteio_id = $1
+            WHERE sorteio_id = ?
             ORDER BY user_id
             `,
             [id]
@@ -867,7 +887,9 @@ async function atualizarMensagemSorteio(
             vencedores:
                 sorteio.vencedores,
             mostrarParticipantes:
-                sorteio.mostrar_participantes,
+                Boolean(
+                    sorteio.mostrar_participantes
+                ),
             data:
                 data.data,
             horario:
@@ -878,15 +900,21 @@ async function atualizarMensagemSorteio(
             embeds: [
                 criarEmbedPreview(
                     config,
-                    sorteio.encerrado
+                    Boolean(
+                        sorteio.encerrado
+                    )
                 )
             ],
             components:
                 criarBotoesSorteio(
                     id,
                     participantes.length,
-                    sorteio.mostrar_participantes,
-                    sorteio.encerrado
+                    Boolean(
+                        sorteio.mostrar_participantes
+                    ),
+                    Boolean(
+                        sorteio.encerrado
+                    )
                 )
         });
 
@@ -1039,11 +1067,9 @@ async function participarSorteio(
         const resultado =
             await pool.query(
                 `
-                INSERT INTO sorteio_participantes
+                INSERT IGNORE INTO sorteio_participantes
                 (sorteio_id, user_id)
-                VALUES ($1, $2)
-                ON CONFLICT DO NOTHING
-                RETURNING user_id
+                VALUES (?, ?)
                 `,
                 [
                     id,
@@ -1052,7 +1078,7 @@ async function participarSorteio(
             );
 
         if (
-            !resultado.rows.length
+            !resultado.affectedRows
         ) {
             return {
                 sucesso: false,
@@ -1135,9 +1161,8 @@ async function sairDoSorteio(
             await pool.query(
                 `
                 DELETE FROM sorteio_participantes
-                WHERE sorteio_id = $1
-                AND user_id = $2
-                RETURNING user_id
+                WHERE sorteio_id = ?
+                  AND user_id = ?
                 `,
                 [
                     id,
@@ -1145,7 +1170,9 @@ async function sairDoSorteio(
                 ]
             );
 
-        if (!resultado.rows.length) {
+        if (
+            !resultado.affectedRows
+        ) {
             return interaction.reply({
                 content:
                     "⚠️ Você não está participando desse sorteio.",
@@ -1249,14 +1276,26 @@ async function finalizarSorteio(
             `
             UPDATE sorteios
             SET encerrado = TRUE,
-                vencedores_ids = $1
-            WHERE id = $2
+                vencedores_ids = ?,
+                encerrado_em = ?
+            WHERE id = ?
             `,
             [
-                vencedores,
+                JSON.stringify(
+                    vencedores
+                ),
+                Date.now(),
                 sorteio.id
             ]
         );
+
+        // Atualiza o objeto local para que
+        // a mensagem seja renderizada como encerrada.
+        sorteio.encerrado = true;
+        sorteio.vencedores_ids =
+            JSON.stringify(vencedores);
+        sorteio.encerrado_em =
+            Date.now();
 
         await atualizarMensagemSorteio(
             client,
@@ -1276,9 +1315,13 @@ async function finalizarSorteio(
             return;
         }
 
+        const timestampEncerramento =
+            sorteio.encerrado_em ||
+            Date.now();
+
         const dataEncerramento =
             formatarData(
-                sorteio.encerra_em
+                timestampEncerramento
             );
 
         const dataHoraEncerramento =
@@ -1362,7 +1405,7 @@ async function verificarSorteios(
                 SELECT *
                 FROM sorteios
                 WHERE encerrado = FALSE
-                AND encerra_em <= $1
+                  AND encerra_em <= ?
                 `,
                 [Date.now()]
             );
@@ -2239,15 +2282,15 @@ module.exports = {
                     await pool.query(
                         `
                         UPDATE sorteios
-                        SET titulo = $1,
-                            descricao = $2,
-                            cor = $3,
-                            imagem = $4,
-                            thumbnail = $5,
-                            encerra_em = $6,
-                            vencedores = $7,
-                            mostrar_participantes = $8
-                        WHERE id = $9
+                        SET titulo = ?,
+                            descricao = ?,
+                            cor = ?,
+                            imagem = ?,
+                            thumbnail = ?,
+                            encerra_em = ?,
+                            vencedores = ?,
+                            mostrar_participantes = ?
+                        WHERE id = ?
                         `,
                         [
                             config.titulo,
@@ -2327,8 +2370,8 @@ module.exports = {
                 await pool.query(
                     `
                     UPDATE sorteios
-                    SET mensagem_id = $1
-                    WHERE id = $2
+                    SET mensagem_id = ?
+                    WHERE id = ?
                     `,
                     [
                         mensagem.id,
