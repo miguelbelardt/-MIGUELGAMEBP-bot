@@ -1056,7 +1056,10 @@ async function verificarNotificacoesDaily(
                             `${textoDaSequencia}\n\n` +
 
                             `💰 Entre em um servidor e resgate sua recompensa usando:\n` +
-                            `\`/daily\``
+                            `</daily:1506070614048378953>\n\n` +
+
+                            `🏆 Quer ver sua posição no ranking de moedas?\n` +
+                            `</moedas-ranking:1550572888527085622>`
                         )
                         .setFooter({
                             text:
