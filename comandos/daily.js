@@ -33,62 +33,50 @@ const COR_NOTIFICACAO = 0x5865F2;
 const JANELA_NOTIFICACAO =
     30 * 60 * 1000;
 
-// Se a DM falhar, tenta novamente depois de 5 minutos.
 const TEMPO_RETRY_NOTIFICACAO =
     5 * 60 * 1000;
 
-// Horários mantidos em memória apenas como cache.
-// O horário verdadeiro fica salvo no PostgreSQL.
 const notificacoesAgendadas = new Map();
 
 // =====================================================
-// 💰 SORTEIO DA RECOMPENSA
+// 🔥 SEQUÊNCIA DO DAILY
 // =====================================================
 
-function sortearRecompensa() {
-    const sorteio = Math.random() * 100;
+// Evita executar o ALTER TABLE várias vezes.
+let sequenciaBancoPronta = false;
+let sequenciaBancoPromise = null;
 
-    if (sorteio < 45) {
-        return Math.floor(Math.random() * 401) + 100;
+async function garantirColunaSequencia() {
+    if (sequenciaBancoPronta) {
+        return;
     }
 
-    if (sorteio < 75) {
-        return Math.floor(Math.random() * 1500) + 501;
+    if (sequenciaBancoPromise) {
+        return sequenciaBancoPromise;
     }
 
-    if (sorteio < 90) {
-        return Math.floor(Math.random() * 3000) + 2001;
-    }
+    sequenciaBancoPromise = (async () => {
+        await pool.query(`
+            ALTER TABLE usuarios
+            ADD COLUMN IF NOT EXISTS daily_sequencia BIGINT NOT NULL DEFAULT 0
+        `);
 
-    if (sorteio < 97) {
-        return Math.floor(Math.random() * 5000) + 5001;
-    }
+        sequenciaBancoPronta = true;
 
-    if (sorteio < 99.5) {
-        return Math.floor(Math.random() * 10000) + 10001;
-    }
+        console.log(
+            "🔥 Coluna daily_sequencia verificada com sucesso."
+        );
+    })();
 
-    return Math.floor(Math.random() * 5000) + 20001;
+    try {
+        await sequenciaBancoPromise;
+    } finally {
+        sequenciaBancoPromise = null;
+    }
 }
 
 // =====================================================
-// ⏰ FORMATAR HORÁRIO
-// =====================================================
-
-function formatarHorario(timestamp) {
-    return new Date(timestamp).toLocaleString("pt-BR", {
-        timeZone: TIMEZONE,
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-    });
-}
-
-// =====================================================
-// 📅 OBTER DATA ATUAL EM BRASÍLIA
+// 📅 DATA BRASÍLIA
 // =====================================================
 
 function obterDataBrasilia() {
@@ -123,6 +111,275 @@ function obterDataBrasilia() {
 }
 
 // =====================================================
+// 📅 DATA BRASÍLIA DE UM TIMESTAMP
+// =====================================================
+
+function obterDataBrasiliaDoTimestamp(timestamp) {
+    if (!timestamp) {
+        return null;
+    }
+
+    const numero =
+        Number(timestamp);
+
+    if (
+        !Number.isFinite(numero) ||
+        numero <= 0
+    ) {
+        return null;
+    }
+
+    const partes =
+        new Intl.DateTimeFormat("en-US", {
+            timeZone: TIMEZONE,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }).formatToParts(
+            new Date(numero)
+        );
+
+    const ano =
+        partes.find(
+            parte => parte.type === "year"
+        )?.value;
+
+    const mes =
+        partes.find(
+            parte => parte.type === "month"
+        )?.value;
+
+    const dia =
+        partes.find(
+            parte => parte.type === "day"
+        )?.value;
+
+    if (!ano || !mes || !dia) {
+        return null;
+    }
+
+    return `${ano}-${mes}-${dia}`;
+}
+
+// =====================================================
+// 📅 DATA DE HOJE
+// =====================================================
+
+function obterChaveDataHoje() {
+    const {
+        ano,
+        mes,
+        dia
+    } = obterDataBrasilia();
+
+    return (
+        `${String(ano).padStart(4, "0")}-` +
+        `${String(mes).padStart(2, "0")}-` +
+        `${String(dia).padStart(2, "0")}`
+    );
+}
+
+// =====================================================
+// 📅 DATA DE ONTEM
+// =====================================================
+
+function obterChaveDataOntem() {
+    const {
+        ano,
+        mes,
+        dia
+    } = obterDataBrasilia();
+
+    const ontem =
+        new Date(
+            Date.UTC(
+                ano,
+                mes - 1,
+                dia - 1
+            )
+        );
+
+    return (
+        `${String(
+            ontem.getUTCFullYear()
+        ).padStart(4, "0")}-` +
+
+        `${String(
+            ontem.getUTCMonth() + 1
+        ).padStart(2, "0")}-` +
+
+        `${String(
+            ontem.getUTCDate()
+        ).padStart(2, "0")}`
+    );
+}
+
+// =====================================================
+// 🔥 CALCULAR PRÓXIMA SEQUÊNCIA
+// =====================================================
+
+function calcularProximaSequencia(
+    ultimoDaily,
+    sequenciaAtual
+) {
+    const hoje =
+        obterChaveDataHoje();
+
+    const ontem =
+        obterChaveDataOntem();
+
+    const ultimaData =
+        obterDataBrasiliaDoTimestamp(
+            ultimoDaily
+        );
+
+    const sequencia =
+        Math.max(
+            0,
+            Number(sequenciaAtual) || 0
+        );
+
+    // Nunca pegou Daily antes.
+    if (!ultimaData) {
+        return 1;
+    }
+
+    // Pegou ontem: continua a sequência.
+    if (ultimaData === ontem) {
+        return sequencia + 1;
+    }
+
+    // Pegou hoje: já foi tratado antes,
+    // mas mantemos a proteção.
+    if (ultimaData === hoje) {
+        return sequencia;
+    }
+
+    // Pulou um ou mais dias.
+    return 1;
+}
+
+// =====================================================
+// 🔥 ATUALIZAR SEQUÊNCIA QUANDO PERDEU DIAS
+// =====================================================
+
+async function atualizarSequenciaSePerdeuDia(
+    userId,
+    ultimoDaily,
+    sequenciaAtual
+) {
+    const hoje =
+        obterChaveDataHoje();
+
+    const ontem =
+        obterChaveDataOntem();
+
+    const ultimaData =
+        obterDataBrasiliaDoTimestamp(
+            ultimoDaily
+        );
+
+    const sequencia =
+        Math.max(
+            0,
+            Number(sequenciaAtual) || 0
+        );
+
+    // Se não existe Daily anterior,
+    // não há sequência para resetar.
+    if (!ultimaData) {
+        return 0;
+    }
+
+    // Ainda está dentro da sequência.
+    if (
+        ultimaData === hoje ||
+        ultimaData === ontem
+    ) {
+        return sequencia;
+    }
+
+    // Passou pelo menos um dia sem pegar.
+    if (sequencia !== 0) {
+        await pool.query(`
+            UPDATE usuarios
+            SET daily_sequencia = 0
+            WHERE id = $1
+        `, [
+            userId
+        ]);
+
+        console.log(
+            `🔄 Sequência de Daily do usuário ${userId} resetada para 0.`
+        );
+    }
+
+    return 0;
+}
+
+// =====================================================
+// 💰 SORTEAR RECOMPENSA
+// =====================================================
+
+function sortearRecompensa() {
+    const sorteio =
+        Math.random() * 100;
+
+    if (sorteio < 45) {
+        return Math.floor(
+            Math.random() * 401
+        ) + 100;
+    }
+
+    if (sorteio < 75) {
+        return Math.floor(
+            Math.random() * 1500
+        ) + 501;
+    }
+
+    if (sorteio < 90) {
+        return Math.floor(
+            Math.random() * 3000
+        ) + 2001;
+    }
+
+    if (sorteio < 97) {
+        return Math.floor(
+            Math.random() * 5000
+        ) + 5001;
+    }
+
+    if (sorteio < 99.5) {
+        return Math.floor(
+            Math.random() * 10000
+        ) + 10001;
+    }
+
+    return Math.floor(
+        Math.random() * 5000
+    ) + 20001;
+}
+
+// =====================================================
+// ⏰ FORMATAR HORÁRIO
+// =====================================================
+
+function formatarHorario(timestamp) {
+    return new Date(timestamp).toLocaleString(
+        "pt-BR",
+        {
+            timeZone: TIMEZONE,
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit"
+        }
+    );
+}
+
+// =====================================================
 // 🌙 INÍCIO DO DIA EM BRASÍLIA
 // =====================================================
 
@@ -133,11 +390,14 @@ function calcularInicioDoDiaBrasilia() {
         dia
     } = obterDataBrasilia();
 
-    return Date.UTC(
-        ano,
-        mes - 1,
-        dia
-    ) + OFFSET_BRASILIA;
+    return (
+        Date.UTC(
+            ano,
+            mes - 1,
+            dia
+        ) +
+        OFFSET_BRASILIA
+    );
 }
 
 // =====================================================
@@ -151,13 +411,14 @@ function calcularProximaMeiaNoite() {
         dia
     } = obterDataBrasilia();
 
-    const proximoDia = new Date(
-        Date.UTC(
-            ano,
-            mes - 1,
-            dia + 1
-        )
-    );
+    const proximoDia =
+        new Date(
+            Date.UTC(
+                ano,
+                mes - 1,
+                dia + 1
+            )
+        );
 
     const proximoAno =
         proximoDia.getUTCFullYear();
@@ -168,11 +429,14 @@ function calcularProximaMeiaNoite() {
     const proximoDiaNumero =
         proximoDia.getUTCDate();
 
-    return Date.UTC(
-        proximoAno,
-        proximoMes,
-        proximoDiaNumero
-    ) + OFFSET_BRASILIA;
+    return (
+        Date.UTC(
+            proximoAno,
+            proximoMes,
+            proximoDiaNumero
+        ) +
+        OFFSET_BRASILIA
+    );
 }
 
 // =====================================================
@@ -210,7 +474,6 @@ function sortearHorarioNotificacaoHoje() {
     const agora =
         Date.now();
 
-    // Ainda estamos dentro da janela dos 30 minutos.
     if (agora < fimDaJanela) {
 
         const inicioSorteio =
@@ -236,9 +499,6 @@ function sortearHorarioNotificacaoHoje() {
         );
     }
 
-    // A janela já passou.
-    // Retornar agora faz o sistema enviar
-    // a notificação assim que possível.
     return agora;
 }
 
@@ -253,7 +513,8 @@ function calcularTempoRestante() {
     const restante =
         Math.max(
             0,
-            proximoDaily - Date.now()
+            proximoDaily -
+            Date.now()
         );
 
     return {
@@ -267,37 +528,42 @@ function calcularTempoRestante() {
 // =====================================================
 
 function formatarTempo(restante) {
-    const horas = Math.max(
-        0,
-        Math.floor(
-            restante /
-            (1000 * 60 * 60)
-        )
-    );
-
-    const minutos = Math.max(
-        0,
-        Math.floor(
-            (
-                restante %
+    const horas =
+        Math.max(
+            0,
+            Math.floor(
+                restante /
                 (1000 * 60 * 60)
-            ) /
-            (1000 * 60)
-        )
-    );
+            )
+        );
 
-    const segundos = Math.max(
-        0,
-        Math.floor(
-            (
-                restante %
+    const minutos =
+        Math.max(
+            0,
+            Math.floor(
+                (
+                    restante %
+                    (1000 * 60 * 60)
+                ) /
                 (1000 * 60)
-            ) /
-            1000
-        )
-    );
+            )
+        );
 
-    return `${horas}h ${minutos}min ${segundos}s`;
+    const segundos =
+        Math.max(
+            0,
+            Math.floor(
+                (
+                    restante %
+                    (1000 * 60)
+                ) /
+                1000
+            )
+        );
+
+    return (
+        `${horas}h ${minutos}min ${segundos}s`
+    );
 }
 
 // =====================================================
@@ -313,7 +579,9 @@ function pegouDailyHoje(timestamp) {
         Number(timestamp);
 
     if (
-        !Number.isFinite(ultimoDaily) ||
+        !Number.isFinite(
+            ultimoDaily
+        ) ||
         ultimoDaily <= 0
     ) {
         return false;
@@ -322,11 +590,14 @@ function pegouDailyHoje(timestamp) {
     const inicioDoDia =
         calcularInicioDoDiaBrasilia();
 
-    return ultimoDaily >= inicioDoDia;
+    return (
+        ultimoDaily >=
+        inicioDoDia
+    );
 }
 
 // =====================================================
-// 🔔 BOTÃO DE NOTIFICAÇÃO
+// 🔘 BOTÃO DE NOTIFICAÇÃO
 // =====================================================
 
 function criarBotaoNotificacao(
@@ -348,24 +619,78 @@ function criarBotaoNotificacao(
                         ? ButtonStyle.Success
                         : ButtonStyle.Primary
                 )
-                .setDisabled(ativa)
+                .setDisabled(
+                    ativa
+                )
         );
 }
 
 // =====================================================
-// 🔒 RESGATAR DAILY
+// 🔥 TEXTO DA SEQUÊNCIA
+// =====================================================
+
+function textoSequencia(
+    sequencia
+) {
+    const numero =
+        Math.max(
+            0,
+            Number(sequencia) || 0
+        );
+
+    if (numero <= 0) {
+        return (
+            "🔥 Você ainda não possui uma sequência de Daily."
+        );
+    }
+
+    return (
+        `🔥 Sua sequência atual é de **${numero} dias**!`
+    );
+}
+
+// =====================================================
+// 🔥 TEXTO DA PRÓXIMA SEQUÊNCIA
+// =====================================================
+
+function textoProximaSequencia(
+    sequencia
+) {
+    const numero =
+        Math.max(
+            0,
+            Number(sequencia) || 0
+        );
+
+    if (numero <= 0) {
+        return (
+            "🔥 Você ainda não possui uma sequência de Daily. Pegue o Daily para começar uma!"
+        );
+    }
+
+    return (
+        `🔥 Se você pegar o Daily hoje, sua sequência será de **${numero} dias**!`
+    );
+}
+
+// =====================================================
+// 🔒 RESGATAR DAILY ATOMICAMENTE
 // =====================================================
 
 async function resgatarDailyAtomico(
     userId,
     usuario
 ) {
+    await garantirColunaSequencia();
+
     const client =
         await pool.connect();
 
     try {
 
-        await client.query("BEGIN");
+        await client.query(
+            "BEGIN"
+        );
 
         await client.query(`
             INSERT INTO usuarios (
@@ -373,14 +698,16 @@ async function resgatarDailyAtomico(
                 saldo,
                 ultimo_daily,
                 notificacao_daily,
-                notificacao_daily_em
+                notificacao_daily_em,
+                daily_sequencia
             )
             VALUES (
                 $1,
                 0,
                 NULL,
                 FALSE,
-                NULL
+                NULL,
+                0
             )
             ON CONFLICT (id)
             DO NOTHING
@@ -392,7 +719,8 @@ async function resgatarDailyAtomico(
             await client.query(`
                 SELECT
                     saldo,
-                    ultimo_daily
+                    ultimo_daily,
+                    daily_sequencia
                 FROM usuarios
                 WHERE id = $1
                 FOR UPDATE
@@ -419,9 +747,25 @@ async function resgatarDailyAtomico(
                 ultimoDaily:
                     Number(
                         dados.ultimo_daily
-                    )
+                    ),
+
+                sequencia:
+                    Number(
+                        dados.daily_sequencia
+                    ) || 0
             };
         }
+
+        const sequenciaAtual =
+            Number(
+                dados.daily_sequencia
+            ) || 0;
+
+        const novaSequencia =
+            calcularProximaSequencia(
+                dados.ultimo_daily,
+                sequenciaAtual
+            );
 
         const recompensa =
             sortearRecompensa();
@@ -440,14 +784,17 @@ async function resgatarDailyAtomico(
 
                 ultimo_daily = $2,
 
+                daily_sequencia = $3,
+
                 notificacao_daily = FALSE,
 
                 notificacao_daily_em = NULL
 
-            WHERE id = $3
+            WHERE id = $4
         `, [
             recompensa,
             agora,
+            novaSequencia,
             userId
         ]);
 
@@ -455,7 +802,6 @@ async function resgatarDailyAtomico(
             "COMMIT"
         );
 
-        // Remove qualquer horário antigo do cache.
         notificacoesAgendadas.delete(
             userId
         );
@@ -489,13 +835,18 @@ async function resgatarDailyAtomico(
                 )
                 .setDescription(
                     `Parabéns, ${usuario}!\n\n` +
+
                     `🎲 Você ganhou **${recompensa} moedas**!\n` +
+
                     `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
+
+                    `🔥 Sua sequência atual é de **${novaSequencia} dias**!\n\n` +
+
                     `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
                 )
                 .setFooter({
                     text:
-                        "Volte amanhã para tentar a sorte novamente!"
+                        "Volte amanhã para continuar sua sequência!"
                 });
 
         return {
@@ -506,7 +857,10 @@ async function resgatarDailyAtomico(
             row:
                 criarBotaoNotificacao(
                     false
-                )
+                ),
+
+            sequencia:
+                novaSequencia
         };
 
     } catch (erro) {
@@ -532,12 +886,15 @@ async function verificarNotificacoesDaily(
 ) {
     try {
 
+        await garantirColunaSequencia();
+
         const resultado =
             await pool.query(`
                 SELECT
                     id,
                     ultimo_daily,
-                    notificacao_daily_em
+                    notificacao_daily_em,
+                    daily_sequencia
                 FROM usuarios
                 WHERE
                     notificacao_daily = TRUE
@@ -557,6 +914,22 @@ async function verificarNotificacoesDaily(
                     usuario.ultimo_daily
                 );
 
+            let sequencia =
+                Number(
+                    usuario.daily_sequencia
+                ) || 0;
+
+            // =========================================
+            // 🔄 RESETAR SEQUÊNCIA SE PERDEU DIA
+            // =========================================
+
+            sequencia =
+                await atualizarSequenciaSePerdeuDia(
+                    userId,
+                    ultimoDaily,
+                    sequencia
+                );
+
             // =========================================
             // 📅 AINDA PEGOU O DAILY DE HOJE
             // =========================================
@@ -568,6 +941,16 @@ async function verificarNotificacoesDaily(
             ) {
                 continue;
             }
+
+            // =========================================
+            // 🔥 CALCULAR PRÓXIMA SEQUÊNCIA
+            // =========================================
+
+            const proximaSequencia =
+                calcularProximaSequencia(
+                    ultimoDaily,
+                    sequencia
+                );
 
             const agora =
                 Date.now();
@@ -606,9 +989,6 @@ async function verificarNotificacoesDaily(
 
                 } else {
 
-                    // O bot voltou depois dos 30 minutos.
-                    // A notificação foi perdida durante o restart,
-                    // então enviamos agora.
                     horarioNotificacao =
                         agora;
                 }
@@ -624,7 +1004,6 @@ async function verificarNotificacoesDaily(
                 );
             }
 
-            // Mantém o horário no cache.
             notificacoesAgendadas.set(
                 userId,
                 horarioNotificacao
@@ -652,6 +1031,15 @@ async function verificarNotificacoesDaily(
                         userId
                     );
 
+                const textoDaSequencia =
+                    proximaSequencia > 0
+                        ? textoProximaSequencia(
+                            proximaSequencia
+                        )
+                        : textoSequencia(
+                            0
+                        );
+
                 const embedNotificacao =
                     new EmbedBuilder()
                         .setColor(
@@ -662,7 +1050,11 @@ async function verificarNotificacoesDaily(
                         )
                         .setDescription(
                             `Olá, ${discordUser}!\n\n` +
+
                             `🌙 Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
+
+                            `${textoDaSequencia}\n\n` +
+
                             `💰 Entre em um servidor e resgate sua recompensa usando:\n` +
                             `\`/daily\``
                         )
@@ -680,10 +1072,6 @@ async function verificarNotificacoesDaily(
                 console.log(
                     `🔔 Notificação do Daily enviada para ${discordUser.tag}`
                 );
-
-                // =====================================
-                // ✅ DM ENVIADA
-                // =====================================
 
                 await salvarNotificacaoDaily(
                     userId,
@@ -703,10 +1091,6 @@ async function verificarNotificacoesDaily(
                 console.log(
                     `⚠️ Motivo: ${erro?.message || erro}`
                 );
-
-                // =====================================
-                // 🔄 TENTAR NOVAMENTE DEPOIS
-                // =====================================
 
                 const novoHorario =
                     Date.now() +
@@ -759,6 +1143,16 @@ function iniciarSistemaNotificacoes(
     console.log(
         "🔔 Sistema de notificações do Daily iniciado."
     );
+
+    garantirColunaSequencia()
+        .catch(
+            erro => {
+                console.error(
+                    "❌ Erro ao preparar sequência do Daily:",
+                    erro
+                );
+            }
+        );
 
     verificarNotificacoesDaily(
         client
@@ -850,8 +1244,14 @@ module.exports = {
                         )
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
+
                             `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
-                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+
+                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.\n\n` +
+
+                            `${textoSequencia(
+                                resultado.sequencia
+                            )}`
                         );
 
                 return interaction.reply({
@@ -962,8 +1362,14 @@ module.exports = {
                         )
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
+
                             `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
-                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.`
+
+                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.\n\n` +
+
+                            `${textoSequencia(
+                                resultado.sequencia
+                            )}`
                         );
 
                 return message.reply({
@@ -1086,10 +1492,6 @@ module.exports = {
             });
         }
 
-        // =============================================
-        // 🔔 SORTEAR E SALVAR HORÁRIO
-        // =============================================
-
         const horarioNotificacao =
             sortearHorarioNotificacao();
 
@@ -1104,10 +1506,6 @@ module.exports = {
             horarioNotificacao
         );
 
-        // =============================================
-        // 🔘 DESATIVAR BOTÃO
-        // =============================================
-
         await interaction.update({
             components: [
                 criarBotaoNotificacao(
@@ -1115,10 +1513,6 @@ module.exports = {
                 )
             ]
         });
-
-        // =============================================
-        // ✅ CONFIRMAÇÃO
-        // =============================================
 
         await interaction.followUp({
             content:
