@@ -71,6 +71,7 @@ module.exports = {
             .join("\n");
 
         const embed = new EmbedBuilder()
+            .setColor(0x5865F2)
             .setTitle("📋 COMANDOS DISPONÍVEIS")
             .setDescription(
                 lista || "❌ Nenhum comando encontrado."
@@ -89,6 +90,7 @@ module.exports = {
 
 function criarEmbedAjuda() {
     return new EmbedBuilder()
+        .setColor(0x5865F2)
         .setTitle("📚 CENTRAL DE AJUDA")
         .setDescription(
             `Olá! 👋\n` +
