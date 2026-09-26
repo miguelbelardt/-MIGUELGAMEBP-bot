@@ -32,24 +32,29 @@ module.exports = {
         const digitado =
             interaction.options
                 .getString("comando")
-                ?.toLowerCase() || "";
+                ?.toLowerCase()
+                .replace(/^\/+/, "") || "";
 
-        const comandos =
-            await interaction.client.application.commands.fetch();
+        // Pega somente os comandos carregados atualmente pelo bot
+        const comandosCarregados =
+            [...interaction.client.commands.values()]
+                .filter(comando =>
+                    comando.data?.name
+                );
 
         const resultados =
-            comandos
+            comandosCarregados
                 .filter(comando =>
-                    comando.name
+                    comando.data.name
                         .toLowerCase()
                         .includes(digitado)
                 )
-                .first(25);
+                .slice(0, 25);
 
         await interaction.respond(
             resultados.map(comando => ({
-                name: `/${comando.name}`,
-                value: comando.name
+                name: `/${comando.data.name}`,
+                value: comando.data.name
             }))
         );
     },
@@ -67,33 +72,47 @@ module.exports = {
         }
 
         const nome =
-            interaction.options.getString(
-                "comando"
-            );
+            interaction.options
+                .getString("comando")
+                ?.toLowerCase()
+                .replace(/^\/+/, "");
 
-        const comandos =
+        // Confere se o comando existe nos arquivos carregados pelo bot
+        const comandoCarregado =
+            interaction.client.commands.get(nome);
+
+        if (!comandoCarregado) {
+            return interaction.reply({
+                content:
+                    `❌ O comando \`/${nome}\` não está carregado pelo bot.`,
+                ephemeral: true
+            });
+        }
+
+        // Busca os comandos registrados no Discord
+        const comandosRegistrados =
             await interaction.client.application.commands.fetch();
 
-        const comando =
-            comandos.find(
+        const comandoRegistrado =
+            comandosRegistrados.find(
                 comando =>
                     comando.name === nome
             );
 
-        if (!comando) {
+        if (!comandoRegistrado) {
             return interaction.reply({
                 content:
-                    `❌ Não encontrei o comando \`/${nome}\`.`,
+                    `❌ O comando \`/${nome}\` está carregado no bot, mas ainda não está registrado no Discord.`,
                 ephemeral: true
             });
         }
 
         await interaction.reply({
             content:
-                `🆔 **ID do comando \`/${comando.name}\`:**\n` +
-                `\`${comando.id}\`\n\n` +
+                `🆔 **ID do comando \`/${comandoRegistrado.name}\`:**\n` +
+                `\`${comandoRegistrado.id}\`\n\n` +
                 `📋 **Atalho:**\n` +
-                `\`</${comando.name}:${comando.id}>\``,
+                `\`</${comandoRegistrado.name}:${comandoRegistrado.id}>\``,
             ephemeral: true
         });
     }
