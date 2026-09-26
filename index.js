@@ -322,15 +322,31 @@ client.once(
         // 🟡 STATUS DE INICIALIZAÇÃO
         // =================================================
 
-        await client.user.setPresence({
-            status: "idle",
-            activities: [
-                {
-                    name: "🔄 Iniciando o bot...",
-                    type: 0
-                }
-            ]
-        });
+        const atualizarStatusInicializacao = async () => {
+
+            try {
+
+                await client.user.setPresence({
+                    status: "idle",
+                    activities: [
+                        {
+                            name: "🔄 Iniciando o bot...",
+                            type: 0
+                        }
+                    ]
+                });
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro ao atualizar status de inicialização:",
+                    erro
+                );
+            }
+        };
+
+        // Coloca Ausente imediatamente
+        await atualizarStatusInicializacao();
 
         console.log(
             "🟡 Status: Ausente — Iniciando o bot..."
@@ -385,42 +401,28 @@ client.once(
         }
 
         // =================================================
-        // 🔄 15 SEGUNDOS DE STATUS AUSENTE
+        // ⏳ 15 SEGUNDOS AUSENTE
         // =================================================
 
         console.log(
             "⏳ Bot ficará Ausente durante 15 segundos..."
         );
 
-        for (let segundo = 1; segundo <= 15; segundo++) {
+        for (
+            let segundo = 1;
+            segundo <= 15;
+            segundo++
+        ) {
 
             await new Promise(resolve =>
                 setTimeout(resolve, 1000)
             );
 
-            try {
+            await atualizarStatusInicializacao();
 
-                await client.user.setPresence({
-                    status: "idle",
-                    activities: [
-                        {
-                            name: "🔄 Iniciando o bot...",
-                            type: 0
-                        }
-                    ]
-                });
-
-                console.log(
-                    `🟡 Status: Ausente — Atualização ${segundo}/15`
-                );
-
-            } catch (erro) {
-
-                console.error(
-                    "❌ Erro ao atualizar status de inicialização:",
-                    erro
-                );
-            }
+            console.log(
+                `🟡 Status: Ausente — ${segundo}/15`
+            );
         }
 
         // =================================================
@@ -433,46 +435,38 @@ client.once(
 
             try {
 
+                let texto;
+
                 if (mostrandoServidores) {
 
                     const servidores =
                         client.guilds.cache.size;
 
-                    await client.user.setPresence({
-                        status: "online",
-                        activities: [
-                            {
-                                name:
-                                    `🌐 Estou em ${servidores} servidores`,
-                                type: 0
-                            }
-                        ]
-                    });
-
-                    console.log(
-                        `🟢 Status: Online — Estou em ${servidores} servidores`
-                    );
+                    texto =
+                        `🌐 Estou em ${servidores} servidores`;
 
                 } else {
 
                     const comandos =
                         client.commands.size;
 
-                    await client.user.setPresence({
-                        status: "online",
-                        activities: [
-                            {
-                                name:
-                                    `📋 Tenho ${comandos} comandos disponíveis!`,
-                                type: 0
-                            }
-                        ]
-                    });
-
-                    console.log(
-                        `🟢 Status: Online — Tenho ${comandos} comandos disponíveis!`
-                    );
+                    texto =
+                        `📋 Tenho ${comandos} comandos disponíveis!`;
                 }
+
+                await client.user.setPresence({
+                    status: "online",
+                    activities: [
+                        {
+                            name: texto,
+                            type: 0
+                        }
+                    ]
+                });
+
+                console.log(
+                    `${texto}`
+                );
 
                 mostrandoServidores =
                     !mostrandoServidores;
