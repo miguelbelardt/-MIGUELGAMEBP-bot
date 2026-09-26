@@ -20,6 +20,7 @@ async function inicializarBanco() {
             saldo BIGINT NOT NULL DEFAULT 0,
             xp BIGINT NOT NULL DEFAULT 0,
             ultimo_daily BIGINT,
+            daily_sequencia BIGINT NOT NULL DEFAULT 0,
             notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE,
             notificacao_daily_em BIGINT
         )
@@ -28,6 +29,11 @@ async function inicializarBanco() {
     await pool.query(`
         ALTER TABLE usuarios
         ADD COLUMN IF NOT EXISTS ultimo_daily BIGINT
+    `);
+
+    await pool.query(`
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS daily_sequencia BIGINT NOT NULL DEFAULT 0
     `);
 
     await pool.query(`
@@ -55,6 +61,12 @@ async function inicializarBanco() {
         UPDATE usuarios
         SET xp = 0
         WHERE xp IS NULL
+    `);
+
+    await pool.query(`
+        UPDATE usuarios
+        SET daily_sequencia = 0
+        WHERE daily_sequencia IS NULL
     `);
 
     await pool.query(`
@@ -267,8 +279,6 @@ async function inicializarBanco() {
         )
     `);
 
-    // Corrige bancos antigos caso alguma coluna ainda não exista.
-
     await pool.query(`
         ALTER TABLE embeds_personalizados
         ADD COLUMN IF NOT EXISTS nome VARCHAR(100)
@@ -376,10 +386,19 @@ async function criarUsuario(userId) {
             saldo,
             xp,
             ultimo_daily,
+            daily_sequencia,
             notificacao_daily,
             notificacao_daily_em
         )
-        VALUES ($1, 0, 0, NULL, FALSE, NULL)
+        VALUES (
+            $1,
+            0,
+            0,
+            NULL,
+            0,
+            FALSE,
+            NULL
+        )
         ON CONFLICT (id) DO NOTHING
         `,
         [userId]
@@ -389,7 +408,8 @@ async function criarUsuario(userId) {
         `
         UPDATE usuarios
         SET saldo = 0
-        WHERE id = $1 AND saldo IS NULL
+        WHERE id = $1
+        AND saldo IS NULL
         `,
         [userId]
     );
@@ -398,7 +418,18 @@ async function criarUsuario(userId) {
         `
         UPDATE usuarios
         SET xp = 0
-        WHERE id = $1 AND xp IS NULL
+        WHERE id = $1
+        AND xp IS NULL
+        `,
+        [userId]
+    );
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET daily_sequencia = 0
+        WHERE id = $1
+        AND daily_sequencia IS NULL
         `,
         [userId]
     );
@@ -407,7 +438,8 @@ async function criarUsuario(userId) {
         `
         UPDATE usuarios
         SET notificacao_daily = FALSE
-        WHERE id = $1 AND notificacao_daily IS NULL
+        WHERE id = $1
+        AND notificacao_daily IS NULL
         `,
         [userId]
     );
@@ -439,10 +471,15 @@ async function getSaldo(userId) {
         [userId]
     );
 
-    return Number(resultado.rows[0].saldo);
+    return Number(
+        resultado.rows[0].saldo
+    );
 }
 
-async function alterarSaldo(userId, quantidade) {
+async function alterarSaldo(
+    userId,
+    quantidade
+) {
     await criarUsuario(userId);
 
     await pool.query(
@@ -451,7 +488,10 @@ async function alterarSaldo(userId, quantidade) {
         SET saldo = COALESCE(saldo, 0) + $1
         WHERE id = $2
         `,
-        [quantidade, userId]
+        [
+            quantidade,
+            userId
+        ]
     );
 }
 
@@ -471,10 +511,15 @@ async function getXP(userId) {
         [userId]
     );
 
-    return Number(resultado.rows[0].xp);
+    return Number(
+        resultado.rows[0].xp
+    );
 }
 
-async function adicionarXP(userId, quantidade) {
+async function adicionarXP(
+    userId,
+    quantidade
+) {
     await criarUsuario(userId);
 
     await pool.query(
@@ -483,14 +528,22 @@ async function adicionarXP(userId, quantidade) {
         SET xp = COALESCE(xp, 0) + $1
         WHERE id = $2
         `,
-        [quantidade, userId]
+        [
+            quantidade,
+            userId
+        ]
     );
 }
 
-async function removerXP(userId, quantidade) {
+async function removerXP(
+    userId,
+    quantidade
+) {
     await criarUsuario(userId);
 
-    quantidade = Number(quantidade);
+    quantidade = Number(
+        quantidade
+    );
 
     if (
         !Number.isInteger(quantidade) ||
@@ -510,14 +563,22 @@ async function removerXP(userId, quantidade) {
         )
         WHERE id = $2
         `,
-        [quantidade, userId]
+        [
+            quantidade,
+            userId
+        ]
     );
 }
 
-async function setarXP(userId, quantidade) {
+async function setarXP(
+    userId,
+    quantidade
+) {
     await criarUsuario(userId);
 
-    quantidade = Number(quantidade);
+    quantidade = Number(
+        quantidade
+    );
 
     if (
         !Number.isInteger(quantidade) ||
@@ -534,50 +595,69 @@ async function setarXP(userId, quantidade) {
         SET xp = $1
         WHERE id = $2
         `,
-        [quantidade, userId]
+        [
+            quantidade,
+            userId
+        ]
     );
 }
 
-async function getRankingXP(limite = 10) {
-    const resultado = await pool.query(
-        `
-        SELECT id, xp
-        FROM usuarios
-        ORDER BY xp DESC, id ASC
-        LIMIT $1
-        `,
-        [limite]
-    );
+async function getRankingXP(
+    limite = 10
+) {
+    const resultado =
+        await pool.query(
+            `
+            SELECT id, xp
+            FROM usuarios
+            ORDER BY xp DESC, id ASC
+            LIMIT $1
+            `,
+            [limite]
+        );
 
-    return resultado.rows.map((usuario, index) => ({
-        id: usuario.id,
-        xp: Number(usuario.xp),
-        posicao: index + 1
-    }));
+    return resultado.rows.map(
+        (usuario, index) => ({
+            id: usuario.id,
+            xp: Number(
+                usuario.xp
+            ),
+            posicao:
+                index + 1
+        })
+    );
 }
 
 // ================================
 // 🎁 SISTEMA DE DAILY
 // ================================
 
-async function getUltimoDaily(userId) {
+async function getUltimoDaily(
+    userId
+) {
     await criarUsuario(userId);
 
-    const resultado = await pool.query(
-        `
-        SELECT ultimo_daily
-        FROM usuarios
-        WHERE id = $1
-        `,
-        [userId]
-    );
+    const resultado =
+        await pool.query(
+            `
+            SELECT ultimo_daily
+            FROM usuarios
+            WHERE id = $1
+            `,
+            [userId]
+        );
 
     return resultado.rows[0]?.ultimo_daily
-        ? Number(resultado.rows[0].ultimo_daily)
+        ? Number(
+            resultado.rows[0].ultimo_daily
+        )
         : null;
 }
 
-async function salvarUltimoDaily(userId, timestamp) {
+async function salvarUltimoDaily(
+    userId,
+    timestamp
+) {
     await criarUsuario(userId);
 
     await pool.query(
@@ -586,23 +666,79 @@ async function salvarUltimoDaily(userId, timestamp) {
         SET ultimo_daily = $1
         WHERE id = $2
         `,
-        [timestamp, userId]
+        [
+            timestamp,
+            userId
+        ]
     );
 }
 
-async function getNotificacaoDaily(userId) {
+// 🔥 NOVO: pegar sequência atual
+async function getSequenciaDaily(
+    userId
+) {
     await criarUsuario(userId);
 
-    const resultado = await pool.query(
-        `
-        SELECT notificacao_daily
-        FROM usuarios
-        WHERE id = $1
-        `,
-        [userId]
+    const resultado =
+        await pool.query(
+            `
+            SELECT daily_sequencia
+            FROM usuarios
+            WHERE id = $1
+            `,
+            [userId]
+        );
+
+    return resultado.rows[0]?.daily_sequencia
+        ? Number(
+            resultado.rows[0].daily_sequencia
+        )
+        : 0;
+}
+
+// 🔥 NOVO: salvar sequência
+async function salvarSequenciaDaily(
+    userId,
+    sequencia
+) {
+    await criarUsuario(userId);
+
+    sequencia = Math.max(
+        0,
+        Number(sequencia) || 0
     );
 
-    return resultado.rows[0]?.notificacao_daily === true;
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET daily_sequencia = $1
+        WHERE id = $2
+        `,
+        [
+            sequencia,
+            userId
+        ]
+    );
+}
+
+async function getNotificacaoDaily(
+    userId
+) {
+    await criarUsuario(userId);
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT notificacao_daily
+            FROM usuarios
+            WHERE id = $1
+            `,
+            [userId]
+        );
+
+    return (
+        resultado.rows[0]?.notificacao_daily === true
+    );
 }
 
 async function salvarNotificacaoDaily(
@@ -631,28 +767,43 @@ async function salvarNotificacaoDaily(
 }
 
 async function getUsuariosComNotificacaoDaily() {
-    const resultado = await pool.query(
-        `
-        SELECT
-            id,
-            ultimo_daily,
-            notificacao_daily_em
-        FROM usuarios
-        WHERE
-            notificacao_daily = TRUE
-            AND ultimo_daily IS NOT NULL
-        `
-    );
+    const resultado =
+        await pool.query(
+            `
+            SELECT
+                id,
+                ultimo_daily,
+                daily_sequencia,
+                notificacao_daily_em
+            FROM usuarios
+            WHERE
+                notificacao_daily = TRUE
+                AND ultimo_daily IS NOT NULL
+            `
+        );
 
-    return resultado.rows.map(usuario => ({
-        id: usuario.id,
-        ultimo_daily:
-            Number(usuario.ultimo_daily),
-        notificacao_daily_em:
-            usuario.notificacao_daily_em
-                ? Number(usuario.notificacao_daily_em)
-                : null
-    }));
+    return resultado.rows.map(
+        usuario => ({
+            id: usuario.id,
+
+            ultimo_daily:
+                Number(
+                    usuario.ultimo_daily
+                ),
+
+            daily_sequencia:
+                Number(
+                    usuario.daily_sequencia
+                ) || 0,
+
+            notificacao_daily_em:
+                usuario.notificacao_daily_em
+                    ? Number(
+                        usuario.notificacao_daily_em
+                    )
+                    : null
+        })
+    );
 }
 
 // ================================
@@ -668,120 +819,178 @@ async function getRankingMoedasPaginado(
 ) {
     await criarUsuario(userId);
 
-    pagina = Math.max(1, Number(pagina) || 1);
-    limite = Math.max(1, Number(limite) || 10);
+    pagina = Math.max(
+        1,
+        Number(pagina) || 1
+    );
 
-    const offset = (pagina - 1) * limite;
+    limite = Math.max(
+        1,
+        Number(limite) || 10
+    );
+
+    const offset =
+        (pagina - 1) * limite;
 
     let rankingResult;
     let totalResult;
 
-    if (tipo === "global") {
+    if (
+        tipo === "global"
+    ) {
 
-        rankingResult = await pool.query(
-            `
-            SELECT
-                id,
-                COALESCE(saldo, 0) AS saldo
-            FROM usuarios
-            ORDER BY saldo DESC, id ASC
-            LIMIT $1
-            OFFSET $2
-            `,
-            [limite, offset]
-        );
-
-        totalResult = await pool.query(
-            `
-            SELECT COUNT(*) AS total
-            FROM usuarios
-            `
-        );
-
-    } else {
-
-        if (
-            !Array.isArray(usuariosServidor) ||
-            usuariosServidor.length === 0
-        ) {
-            return {
-                ranking: [],
-                usuario: {
-                    id: userId,
-                    saldo: 0,
-                    posicao: null
-                },
-                pagina: 1,
-                totalPaginas: 1,
-                totalUsuarios: 0
-            };
-        }
-
-        rankingResult = await pool.query(
-            `
-            SELECT
-                membros.id,
-                COALESCE(u.saldo, 0) AS saldo
-            FROM unnest($1::varchar[]) AS membros(id)
-            LEFT JOIN usuarios u
-                ON u.id = membros.id
-            ORDER BY
-                COALESCE(u.saldo, 0) DESC,
-                membros.id ASC
-            LIMIT $2
-            OFFSET $3
-            `,
-            [
-                usuariosServidor,
-                limite,
-                offset
-            ]
-        );
-
-        totalResult = await pool.query(
-            `
-            SELECT COUNT(*) AS total
-            FROM unnest($1::varchar[]) AS membros(id)
-            `,
-            [usuariosServidor]
-        );
-    }
-
-    const ranking = rankingResult.rows.map(
-        (usuario, index) => ({
-            id: usuario.id,
-            saldo: Number(usuario.saldo),
-            posicao: offset + index + 1
-        })
-    );
-
-    const totalUsuarios =
-        Number(totalResult.rows[0].total);
-
-    const totalPaginas =
-        Math.max(
-            1,
-            Math.ceil(totalUsuarios / limite)
-        );
-
-    let saldoUsuario = 0;
-    let posicaoUsuario = null;
-
-    if (tipo === "global") {
-
-        const usuarioAtual =
+        rankingResult =
             await pool.query(
                 `
                 SELECT
                     id,
                     COALESCE(saldo, 0) AS saldo
                 FROM usuarios
+                ORDER BY saldo DESC, id ASC
+                LIMIT $1
+                OFFSET $2
+                `,
+                [
+                    limite,
+                    offset
+                ]
+            );
+
+        totalResult =
+            await pool.query(
+                `
+                SELECT COUNT(*) AS total
+                FROM usuarios
+                `
+            );
+
+    } else {
+
+        if (
+            !Array.isArray(
+                usuariosServidor
+            ) ||
+            usuariosServidor.length === 0
+        ) {
+            return {
+                ranking: [],
+
+                usuario: {
+                    id: userId,
+                    saldo: 0,
+                    posicao: null
+                },
+
+                pagina: 1,
+                totalPaginas: 1,
+                totalUsuarios: 0
+            };
+        }
+
+        rankingResult =
+            await pool.query(
+                `
+                SELECT
+                    membros.id,
+                    COALESCE(
+                        u.saldo,
+                        0
+                    ) AS saldo
+                FROM unnest(
+                    $1::varchar[]
+                ) AS membros(id)
+
+                LEFT JOIN usuarios u
+                    ON u.id = membros.id
+
+                ORDER BY
+                    COALESCE(
+                        u.saldo,
+                        0
+                    ) DESC,
+
+                    membros.id ASC
+
+                LIMIT $2
+                OFFSET $3
+                `,
+                [
+                    usuariosServidor,
+                    limite,
+                    offset
+                ]
+            );
+
+        totalResult =
+            await pool.query(
+                `
+                SELECT COUNT(*) AS total
+                FROM unnest(
+                    $1::varchar[]
+                ) AS membros(id)
+                `,
+                [
+                    usuariosServidor
+                ]
+            );
+    }
+
+    const ranking =
+        rankingResult.rows.map(
+            (usuario, index) => ({
+                id: usuario.id,
+
+                saldo:
+                    Number(
+                        usuario.saldo
+                    ),
+
+                posicao:
+                    offset +
+                    index +
+                    1
+            })
+        );
+
+    const totalUsuarios =
+        Number(
+            totalResult.rows[0].total
+        );
+
+    const totalPaginas =
+        Math.max(
+            1,
+            Math.ceil(
+                totalUsuarios /
+                limite
+            )
+        );
+
+    let saldoUsuario = 0;
+    let posicaoUsuario = null;
+
+    if (
+        tipo === "global"
+    ) {
+
+        const usuarioAtual =
+            await pool.query(
+                `
+                SELECT
+                    id,
+                    COALESCE(
+                        saldo,
+                        0
+                    ) AS saldo
+                FROM usuarios
                 WHERE id = $1
                 `,
                 [userId]
             );
 
-        if (usuarioAtual.rows.length > 0) {
+        if (
+            usuarioAtual.rows.length > 0
+        ) {
 
             saldoUsuario =
                 Number(
@@ -791,13 +1000,15 @@ async function getRankingMoedasPaginado(
             const posicao =
                 await pool.query(
                     `
-                    SELECT COUNT(*) + 1 AS posicao
+                    SELECT
+                        COUNT(*) + 1 AS posicao
                     FROM usuarios
-                    WHERE saldo > $1
-                    OR (
-                        saldo = $1
-                        AND id < $2
-                    )
+                    WHERE
+                        saldo > $1
+                        OR (
+                            saldo = $1
+                            AND id < $2
+                        )
                     `,
                     [
                         saldoUsuario,
@@ -814,15 +1025,22 @@ async function getRankingMoedasPaginado(
     } else {
 
         if (
-            Array.isArray(usuariosServidor) &&
-            usuariosServidor.includes(userId)
+            Array.isArray(
+                usuariosServidor
+            ) &&
+            usuariosServidor.includes(
+                userId
+            )
         ) {
 
             const usuarioAtual =
                 await pool.query(
                     `
                     SELECT
-                        COALESCE(saldo, 0) AS saldo
+                        COALESCE(
+                            saldo,
+                            0
+                        ) AS saldo
                     FROM usuarios
                     WHERE id = $1
                     `,
@@ -831,20 +1049,35 @@ async function getRankingMoedasPaginado(
 
             saldoUsuario =
                 usuarioAtual.rows.length > 0
-                    ? Number(usuarioAtual.rows[0].saldo)
+                    ? Number(
+                        usuarioAtual.rows[0].saldo
+                    )
                     : 0;
 
             const posicao =
                 await pool.query(
                     `
-                    SELECT COUNT(*) + 1 AS posicao
-                    FROM unnest($1::varchar[]) AS membros(id)
+                    SELECT
+                        COUNT(*) + 1 AS posicao
+                    FROM unnest(
+                        $1::varchar[]
+                    ) AS membros(id)
+
                     LEFT JOIN usuarios u
                         ON u.id = membros.id
+
                     WHERE
-                        COALESCE(u.saldo, 0) > $2
+                        COALESCE(
+                            u.saldo,
+                            0
+                        ) > $2
+
                         OR (
-                            COALESCE(u.saldo, 0) = $2
+                            COALESCE(
+                                u.saldo,
+                                0
+                            ) = $2
+
                             AND membros.id < $3
                         )
                     `,
@@ -895,8 +1128,11 @@ async function getRankingMoedas(
         );
 
     return {
-        ranking: resultado.ranking,
-        usuario: resultado.usuario
+        ranking:
+            resultado.ranking,
+
+        usuario:
+            resultado.usuario
     };
 }
 
@@ -904,7 +1140,9 @@ async function getRankingMoedas(
 // 👑 SISTEMA DE ADM DO BOT
 // ================================
 
-async function adicionarAdm(userId) {
+async function adicionarAdm(
+    userId
+) {
     await pool.query(
         `
         INSERT INTO adms (id)
@@ -915,7 +1153,9 @@ async function adicionarAdm(userId) {
     );
 }
 
-async function removerAdm(userId) {
+async function removerAdm(
+    userId
+) {
     await pool.query(
         `
         DELETE FROM adms
@@ -925,24 +1165,31 @@ async function removerAdm(userId) {
     );
 }
 
-async function isAdm(userId) {
-    const resultado = await pool.query(
-        `
-        SELECT id
-        FROM adms
-        WHERE id = $1
-        `,
-        [userId]
-    );
+async function isAdm(
+    userId
+) {
+    const resultado =
+        await pool.query(
+            `
+            SELECT id
+            FROM adms
+            WHERE id = $1
+            `,
+            [userId]
+        );
 
-    return resultado.rows.length > 0;
+    return (
+        resultado.rows.length > 0
+    );
 }
 
 // ================================
 // 🎨 SISTEMA DE EMBEDS
 // ================================
 
-function normalizarConfigEmbed(config = {}) {
+function normalizarConfigEmbed(
+    config = {}
+) {
     return {
         nome:
             config.nome ||
@@ -1008,13 +1255,6 @@ function normalizarConfigEmbed(config = {}) {
     };
 }
 
-// Criar um novo embed.
-//
-// Compatível com:
-// criarEmbedBanco(guildId, userId, config)
-// e também:
-// criarEmbedBanco(guildId, nome, config, userId)
-
 async function criarEmbedBanco(
     guildId,
     segundoParametro,
@@ -1028,8 +1268,6 @@ async function criarEmbedBanco(
     if (
         quartoParametro !== null
     ) {
-        // Formato antigo:
-        // guildId, nome, config, criadorId
 
         nome =
             segundoParametro ||
@@ -1041,9 +1279,8 @@ async function criarEmbedBanco(
 
         criadorId =
             quartoParametro;
+
     } else {
-        // Formato novo:
-        // guildId, criadorId, config
 
         criadorId =
             segundoParametro;
@@ -1111,18 +1348,6 @@ async function criarEmbedBanco(
     return resultado.rows[0];
 }
 
-// Atualiza o conteúdo/configuração de um embed.
-//
-// Novo formato:
-// atualizarEmbedBanco(id, guildId, {
-//     config,
-//     canalId,
-//     mensagemId
-// })
-//
-// Também aceita o formato antigo:
-// atualizarEmbedBanco(id, guildId, config)
-
 async function atualizarEmbedBanco(
     id,
     guildId,
@@ -1136,6 +1361,7 @@ async function atualizarEmbedBanco(
         dados &&
         dados.config
     ) {
+
         config =
             dados.config;
 
@@ -1148,7 +1374,9 @@ async function atualizarEmbedBanco(
             dados.mensagemId ??
             dados.config.mensagemId ??
             null;
+
     } else {
+
         config =
             dados ||
             {};
@@ -1232,11 +1460,6 @@ async function getEmbedsDoServidor(
     return resultado.rows;
 }
 
-// Compatível com:
-// getEmbedPorId(id)
-// e:
-// getEmbedPorId(id, guildId)
-
 async function getEmbedPorId(
     id,
     guildId = null
@@ -1279,14 +1502,6 @@ async function getEmbedPorId(
     );
 }
 
-// Salva a mensagem publicada.
-//
-// Novo formato:
-// salvarMensagemEmbed(id, canalId, mensagemId)
-//
-// Formato antigo:
-// salvarMensagemEmbed(id, guildId, canalId, mensagemId)
-
 async function salvarMensagemEmbed(
     id,
     segundoParametro,
@@ -1300,6 +1515,7 @@ async function salvarMensagemEmbed(
     if (
         quartoParametro !== null
     ) {
+
         guildId =
             segundoParametro;
 
@@ -1308,7 +1524,9 @@ async function salvarMensagemEmbed(
 
         mensagemId =
             quartoParametro;
+
     } else {
+
         canalId =
             segundoParametro;
 
@@ -1366,7 +1584,10 @@ async function salvarMensagemEmbed(
             );
     }
 
-    return resultado.rows[0] || null;
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 async function atualizarCanalEmbed(
@@ -1395,7 +1616,10 @@ async function atualizarCanalEmbed(
             ]
         );
 
-    return resultado.rows[0] || null;
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 async function excluirEmbedBanco(
@@ -1417,7 +1641,10 @@ async function excluirEmbedBanco(
             ]
         );
 
-    return resultado.rows[0] || null;
+    return (
+        resultado.rows[0] ||
+        null
+    );
 }
 
 // ================================
@@ -1443,6 +1670,8 @@ module.exports = {
     // 🎁 Daily
     getUltimoDaily,
     salvarUltimoDaily,
+    getSequenciaDaily,
+    salvarSequenciaDaily,
     getNotificacaoDaily,
     salvarNotificacaoDaily,
     getUsuariosComNotificacaoDaily,
