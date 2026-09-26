@@ -274,7 +274,8 @@ function criarPainelPrincipal() {
 // =====================================================
 
 async function criarPainelConfiguracao(
-    guildId
+    guildId,
+    pagina = 0
 ) {
     const embeds =
         await getEmbedsDoServidor(
@@ -297,9 +298,19 @@ async function criarPainelConfiguracao(
             "Use **➕ Criar** para criar um novo embed."
         );
 
-        const voltar =
+        const linha =
             new ActionRowBuilder()
                 .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "embed_criar"
+                        )
+                        .setLabel("Criar novo")
+                        .setEmoji("➕")
+                        .setStyle(
+                            ButtonStyle.Success
+                        ),
+
                     new ButtonBuilder()
                         .setCustomId(
                             "embed_voltar"
@@ -313,26 +324,53 @@ async function criarPainelConfiguracao(
 
         return {
             embeds: [painel],
-            components: [voltar]
+            components: [linha]
         };
     }
 
+    // =================================================
+    // 📄 PAGINAÇÃO
+    // =================================================
+
+    const porPagina = 4;
+
+    const totalPaginas =
+        Math.ceil(
+            embeds.length / porPagina
+        );
+
+    if (pagina < 0) {
+        pagina = 0;
+    }
+
+    if (pagina >= totalPaginas) {
+        pagina =
+            totalPaginas - 1;
+    }
+
+    const inicio =
+        pagina * porPagina;
+
+    const fim =
+        inicio + porPagina;
+
+    const embedsExibidos =
+        embeds.slice(
+            inicio,
+            fim
+        );
+
     painel.setDescription(
-        "Selecione um embed abaixo para configurar ou excluir.\n\n" +
-        `📦 **${embeds.length}** embed(s) encontrado(s).`
+        "Selecione um embed abaixo para configurar.\n\n" +
+        `📦 **${embeds.length}** embed(s) encontrado(s).\n` +
+        `📄 Página **${pagina + 1}/${totalPaginas}**`
     );
 
     const componentes = [];
 
     // =================================================
-    // ⚠️ DISCORD PERMITE NO MÁXIMO 5 ACTION ROWS
-    //
-    // 4 linhas para embeds
-    // 1 linha para Criar/Voltar
+    // ⚙️ BOTÕES DOS EMBEDS
     // =================================================
-
-    const embedsExibidos =
-        embeds.slice(0, 4);
 
     for (
         let i = 0;
@@ -342,10 +380,9 @@ async function criarPainelConfiguracao(
         const dados =
             embedsExibidos[i];
 
-        // Número visual sequencial.
-        // NÃO usa o ID real do banco.
+        // Número visual sequencial global.
         const numero =
-            `#${i + 1}`;
+            `#${inicio + i + 1}`;
 
         const nome =
             dados.titulo &&
@@ -368,22 +405,10 @@ async function criarPainelConfiguracao(
                     ButtonStyle.Primary
                 );
 
-        const excluir =
-            new ButtonBuilder()
-                .setCustomId(
-                    `embed_delete_${dados.id}`
-                )
-                .setLabel("Excluir")
-                .setEmoji("🗑️")
-                .setStyle(
-                    ButtonStyle.Danger
-                );
-
         const linha =
             new ActionRowBuilder()
                 .addComponents(
-                    configurar,
-                    excluir
+                    configurar
                 );
 
         componentes.push(
@@ -403,42 +428,65 @@ async function criarPainelConfiguracao(
         });
     }
 
-    if (embeds.length > 4) {
-        painel.addFields({
-            name: "ℹ️ Mais embeds",
-            value:
-                `Existem mais ${embeds.length - 4} embed(s) salvo(s).`,
-            inline: false
-        });
+    // =================================================
+    // ◀️ / ▶️ PAGINAÇÃO
+    // =================================================
+
+    const linhaNavegacao =
+        new ActionRowBuilder();
+
+    if (pagina > 0) {
+        linhaNavegacao.addComponents(
+            new ButtonBuilder()
+                .setCustomId(
+                    `embed_pagina_${pagina - 1}`
+                )
+                .setLabel("Anterior")
+                .setEmoji("⬅️")
+                .setStyle(
+                    ButtonStyle.Secondary
+                )
+        );
     }
 
-    // =================================================
-    // ➕ CRIAR / VOLTAR
-    // =================================================
+    if (pagina < totalPaginas - 1) {
+        linhaNavegacao.addComponents(
+            new ButtonBuilder()
+                .setCustomId(
+                    `embed_pagina_${pagina + 1}`
+                )
+                .setLabel("Próxima")
+                .setEmoji("➡️")
+                .setStyle(
+                    ButtonStyle.Secondary
+                )
+        );
+    }
+
+    linhaNavegacao.addComponents(
+        new ButtonBuilder()
+            .setCustomId(
+                "embed_criar"
+            )
+            .setLabel("Criar novo")
+            .setEmoji("➕")
+            .setStyle(
+                ButtonStyle.Success
+            ),
+
+        new ButtonBuilder()
+            .setCustomId(
+                "embed_voltar"
+            )
+            .setLabel("Voltar")
+            .setEmoji("↩️")
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+    );
 
     componentes.push(
-        new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        "embed_criar"
-                    )
-                    .setLabel("Criar novo")
-                    .setEmoji("➕")
-                    .setStyle(
-                        ButtonStyle.Success
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "embed_voltar"
-                    )
-                    .setLabel("Voltar")
-                    .setEmoji("↩️")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    )
-            )
+        linhaNavegacao
     );
 
     return {
@@ -610,13 +658,41 @@ function criarPainel(config) {
                     )
             );
 
+    const componentes = [
+        linha1,
+        linha2,
+        linha3
+    ];
+
+    // =================================================
+    // 🗑️ EXCLUIR EMBED
+    // =================================================
+
+    if (config.editandoEmbedId) {
+        const linhaExcluir =
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "embed_delete_current"
+                        )
+                        .setLabel(
+                            "Excluir Embed"
+                        )
+                        .setEmoji("🗑️")
+                        .setStyle(
+                            ButtonStyle.Danger
+                        )
+                );
+
+        componentes.push(
+            linhaExcluir
+        );
+    }
+
     return {
         embeds: [embed],
-        components: [
-            linha1,
-            linha2,
-            linha3
-        ]
+        components: componentes
     };
 }
 
@@ -756,7 +832,8 @@ module.exports = {
             try {
                 const painel =
                     await criarPainelConfiguracao(
-                        guildId
+                        guildId,
+                        0
                     );
 
                 return interaction.update({
@@ -786,6 +863,65 @@ module.exports = {
             }
 
             return;
+        }
+
+        // =================================================
+        // 📄 PAGINAÇÃO
+        // =================================================
+
+        if (
+            interaction.customId.startsWith(
+                "embed_pagina_"
+            )
+        ) {
+            try {
+                const pagina =
+                    parseInt(
+                        interaction.customId.replace(
+                            "embed_pagina_",
+                            ""
+                        ),
+                        10
+                    );
+
+                if (
+                    Number.isNaN(
+                        pagina
+                    )
+                ) {
+                    return interaction.reply({
+                        content:
+                            "❌ Página inválida.",
+                        ephemeral: true
+                    });
+                }
+
+                const painel =
+                    await criarPainelConfiguracao(
+                        guildId,
+                        pagina
+                    );
+
+                return interaction.update({
+                    content: "",
+                    embeds:
+                        painel.embeds,
+                    components:
+                        painel.components
+                });
+
+            } catch (erro) {
+                console.error(
+                    "❌ Erro ao trocar página dos embeds:",
+                    erro
+                );
+
+                return interaction.reply({
+                    content:
+                        "❌ Não foi possível carregar essa página.",
+                    ephemeral: true
+                });
+            }
         }
 
         // =================================================
@@ -837,10 +973,6 @@ module.exports = {
                         ephemeral: true
                     });
                 }
-
-                // =========================================
-                // 🔄 CONVERTE BANCO → CONFIG
-                // =========================================
 
                 const config =
                     criarConfigAPartirDoBanco(
@@ -962,20 +1094,38 @@ module.exports = {
         }
 
         // =================================================
-        // 🗑️ EXCLUIR EMBED
+        // 🗑️ EXCLUIR EMBED ATUAL
         // =================================================
 
         if (
-            interaction.customId.startsWith(
-                "embed_delete_"
-            )
+            interaction.customId ===
+            "embed_delete_current"
         ) {
             try {
-                const embedId =
-                    interaction.customId.replace(
-                        "embed_delete_",
-                        ""
+                const chave =
+                    chaveConfiguracao(
+                        userId,
+                        guildId
                     );
+
+                const config =
+                    configuracoes.get(
+                        chave
+                    );
+
+                if (
+                    !config ||
+                    !config.editandoEmbedId
+                ) {
+                    return interaction.reply({
+                        content:
+                            "❌ Nenhum embed está sendo configurado.",
+                        ephemeral: true
+                    });
+                }
+
+                const embedId =
+                    config.editandoEmbedId;
 
                 const dados =
                     await getEmbedPorId(
@@ -984,9 +1134,13 @@ module.exports = {
                     );
 
                 if (!dados) {
+                    configuracoes.delete(
+                        chave
+                    );
+
                     return interaction.reply({
                         content:
-                            "❌ Não encontrei esse embed.",
+                            "❌ Não encontrei esse embed no banco de dados.",
                         ephemeral: true
                     });
                 }
@@ -1040,9 +1194,14 @@ module.exports = {
                     guildId
                 );
 
+                configuracoes.delete(
+                    chave
+                );
+
                 const painel =
                     await criarPainelConfiguracao(
-                        guildId
+                        guildId,
+                        0
                     );
 
                 return interaction.update({
@@ -1388,6 +1547,17 @@ module.exports = {
                     );
 
             modal.addComponents(
+                new ActionRowBuilder()
+                    .addComponents(
+                        new ActionRowBuilder()
+                            .addComponents(
+                                icone
+                            )
+                    )
+            );
+
+            // Corrige a estrutura das linhas do modal
+            modal.setComponents(
                 new ActionRowBuilder()
                     .addComponents(
                         nome
