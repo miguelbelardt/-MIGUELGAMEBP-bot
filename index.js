@@ -195,15 +195,6 @@ async function registrarComandos() {
             const dados =
                 comando.data.toJSON();
 
-            /*
-             * Só adiciona os valores padrão
-             * quando o comando não definiu
-             * seus próprios contexts.
-             *
-             * Assim comandos como /sorteio
-             * podem continuar limitados a servidores.
-             */
-
             if (
                 !dados.integration_types
             ) {
@@ -410,7 +401,7 @@ client.once(
         // =================================================
 
         console.log(
-            "🔄 Faltam 8 segundos! Reforçando status Ausente a cada 1 segundo..."
+            "🔄 Faltam 8 segundos! Mantendo status Ausente..."
         );
 
         const intervaloInicializacao =
@@ -428,14 +419,10 @@ client.once(
                         ]
                     });
 
-                    console.log(
-                        "🟡 Status reforçado: Ausente — Iniciando o bot..."
-                    );
-
                 } catch (erro) {
 
                     console.error(
-                        "❌ Erro ao atualizar status de inicialização:",
+                        "❌ Erro ao reforçar status de inicialização:",
                         erro
                     );
                 }
@@ -459,64 +446,77 @@ client.once(
         );
 
         // =================================================
-        // 🟢 VOLTAR PARA ONLINE
-        // =================================================
-
-        await client.user.setPresence({
-            status: "online",
-            activities: []
-        });
-
-        console.log(
-            "🟢 Status: Bot online!"
-        );
-
-        // =================================================
         // 🔄 STATUS NORMAL DO BOT
         // =================================================
 
         let mostrandoServidores = true;
 
-        const atualizarStatus = () => {
+        const atualizarStatus = async () => {
 
-            if (mostrandoServidores) {
+            try {
 
-                const servidores =
-                    client.guilds.cache.size;
+                if (mostrandoServidores) {
 
-                client.user.setActivity(
-                    `🌐 Estou em ${servidores} servidores`,
-                    {
-                        type: 0
-                    }
-                );
+                    const servidores =
+                        client.guilds.cache.size;
 
-                console.log(
-                    `🌐 Status: Estou em ${servidores} servidores`
-                );
+                    await client.user.setPresence({
+                        status: "online",
+                        activities: [
+                            {
+                                name:
+                                    `🌐 Estou em ${servidores} servidores`,
+                                type: 0
+                            }
+                        ]
+                    });
 
-            } else {
+                    console.log(
+                        `🟢 Status: Online — Estou em ${servidores} servidores`
+                    );
 
-                const comandos =
-                    client.commands.size;
+                } else {
 
-                client.user.setActivity(
-                    `📋 Tenho ${comandos} comandos disponíveis!`,
-                    {
-                        type: 0
-                    }
-                );
+                    const comandos =
+                        client.commands.size;
 
-                console.log(
-                    `📋 Status: Tenho ${comandos} comandos disponíveis!`
+                    await client.user.setPresence({
+                        status: "online",
+                        activities: [
+                            {
+                                name:
+                                    `📋 Tenho ${comandos} comandos disponíveis!`,
+                                type: 0
+                            }
+                        ]
+                    });
+
+                    console.log(
+                        `🟢 Status: Online — Tenho ${comandos} comandos disponíveis!`
+                    );
+                }
+
+                mostrandoServidores =
+                    !mostrandoServidores;
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro ao atualizar status normal:",
+                    erro
                 );
             }
-
-            mostrandoServidores =
-                !mostrandoServidores;
         };
 
-        atualizarStatus();
+        // =================================================
+        // 🟢 PRIMEIRO STATUS NORMAL
+        // =================================================
+
+        await atualizarStatus();
+
+        // =================================================
+        // 🔄 ALTERNAR A CADA 5 SEGUNDOS
+        // =================================================
 
         setInterval(
             atualizarStatus,
