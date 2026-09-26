@@ -720,8 +720,8 @@ async function logsBuscarConfig(
                 `
                 SELECT canal_id
                 FROM logs_config
-                WHERE guild_id = $1
-                  AND tipo = $2
+                WHERE guild_id = ?
+                  AND tipo = ?
                 `,
                 [
                     guildId,
