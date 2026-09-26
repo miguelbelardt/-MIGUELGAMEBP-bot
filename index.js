@@ -385,68 +385,46 @@ client.once(
         }
 
         // =================================================
-        // ⏳ PRIMEIROS 7 SEGUNDOS
+        // 🔄 15 SEGUNDOS DE STATUS AUSENTE
         // =================================================
 
         console.log(
-            "⏳ Bot ficará Ausente por 7 segundos..."
+            "⏳ Bot ficará Ausente durante 15 segundos..."
         );
 
-        await new Promise(resolve =>
-            setTimeout(resolve, 7000)
-        );
+        for (let segundo = 1; segundo <= 15; segundo++) {
+
+            await new Promise(resolve =>
+                setTimeout(resolve, 1000)
+            );
+
+            try {
+
+                await client.user.setPresence({
+                    status: "idle",
+                    activities: [
+                        {
+                            name: "🔄 Iniciando o bot...",
+                            type: 0
+                        }
+                    ]
+                });
+
+                console.log(
+                    `🟡 Status: Ausente — Atualização ${segundo}/15`
+                );
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro ao atualizar status de inicialização:",
+                    erro
+                );
+            }
+        }
 
         // =================================================
-        // 🔄 ÚLTIMOS 8 SEGUNDOS
-        // =================================================
-
-        console.log(
-            "🔄 Faltam 8 segundos! Mantendo status Ausente..."
-        );
-
-        const intervaloInicializacao =
-            setInterval(async () => {
-
-                try {
-
-                    await client.user.setPresence({
-                        status: "idle",
-                        activities: [
-                            {
-                                name: "🔄 Iniciando o bot...",
-                                type: 0
-                            }
-                        ]
-                    });
-
-                } catch (erro) {
-
-                    console.error(
-                        "❌ Erro ao reforçar status de inicialização:",
-                        erro
-                    );
-                }
-
-            }, 1000);
-
-        // =================================================
-        // ⏳ AGUARDAR OS 8 SEGUNDOS RESTANTES
-        // =================================================
-
-        await new Promise(resolve =>
-            setTimeout(resolve, 8000)
-        );
-
-        // =================================================
-        // 🛑 PARAR ATUALIZAÇÃO DE INICIALIZAÇÃO
-        // =================================================
-
-        clearInterval(
-            intervaloInicializacao
-        );
-
-        // =================================================
-        // 🔄 STATUS NORMAL DO BOT
+        // 🟢 STATUS NORMAL DO BOT
         // =================================================
 
         let mostrandoServidores = true;
@@ -1041,7 +1019,7 @@ client.on(
 
         // =================================================
         // 🔘 BOTÕES
-        // =====================================================
+        // =================================================
 
         if (
             interaction.isButton()
