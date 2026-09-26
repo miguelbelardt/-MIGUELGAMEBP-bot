@@ -3,6 +3,7 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
+    ChannelSelectMenuBuilder,
     ButtonBuilder,
     ButtonStyle,
     ModalBuilder,
@@ -53,9 +54,12 @@ async function inicializarTickets() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS ticket_config (
             guild_id VARCHAR(30) PRIMARY KEY,
+
             modelo_id BIGINT,
 
             canal_painel_id VARCHAR(30),
+            categoria_id VARCHAR(30),
+            mensagem_painel_id VARCHAR(30),
 
             configurado BOOLEAN NOT NULL DEFAULT FALSE,
 
@@ -63,6 +67,20 @@ async function inicializarTickets() {
             REFERENCES ticket_modelos(id)
             ON DELETE SET NULL
         )
+    `);
+
+    // ================================
+    // 🔧 GARANTIR COLUNAS NOVAS
+    // ================================
+
+    await pool.query(`
+        ALTER TABLE ticket_config
+        ADD COLUMN IF NOT EXISTS categoria_id VARCHAR(30)
+    `);
+
+    await pool.query(`
+        ALTER TABLE ticket_config
+        ADD COLUMN IF NOT EXISTS mensagem_painel_id VARCHAR(30)
     `);
 }
 
@@ -528,6 +546,99 @@ function criarModalTicket() {
 }
 
 // ================================
+// ✏️ MODAL EDITAR INFORMAÇÕES
+// ================================
+
+function criarModalEditarInformacoes(
+    modelo
+) {
+
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `ticket_modal_info_${modelo.id}`
+            )
+            .setTitle(
+                "✏️ Editar ticket"
+            );
+
+    const nome =
+        new TextInputBuilder()
+            .setCustomId("nome")
+            .setLabel("Nome do modelo")
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(true)
+            .setValue(
+                modelo.nome || ""
+            )
+            .setMaxLength(100);
+
+    const titulo =
+        new TextInputBuilder()
+            .setCustomId("titulo")
+            .setLabel("Título do embed")
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setValue(
+                modelo.titulo || ""
+            )
+            .setMaxLength(256);
+
+    const descricao =
+        new TextInputBuilder()
+            .setCustomId("descricao")
+            .setLabel("Descrição")
+            .setStyle(
+                TextInputStyle.Paragraph
+            )
+            .setRequired(false)
+            .setValue(
+                modelo.descricao || ""
+            )
+            .setMaxLength(4000);
+
+    const autor =
+        new TextInputBuilder()
+            .setCustomId("autor")
+            .setLabel("Autor do embed")
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setValue(
+                modelo.autor_nome || ""
+            )
+            .setMaxLength(256);
+
+    const cor =
+        new TextInputBuilder()
+            .setCustomId("cor")
+            .setLabel("Cor hexadecimal")
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setValue(
+                modelo.cor || "#5865F2"
+            )
+            .setMaxLength(20);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(nome),
+        new ActionRowBuilder().addComponents(titulo),
+        new ActionRowBuilder().addComponents(descricao),
+        new ActionRowBuilder().addComponents(autor),
+        new ActionRowBuilder().addComponents(cor)
+    );
+
+    return modal;
+}
+
+// ================================
 // 🎨 MODAL DE PERSONALIZAÇÃO
 // ================================
 
@@ -648,7 +759,8 @@ function criarModalPersonalizacao(
 // ================================
 
 function criarPainelModelo(
-    modelo
+    modelo,
+    config = null
 ) {
 
     const embed =
@@ -658,20 +770,35 @@ function criarPainelModelo(
                 "🎫 Prévia do Ticket"
             );
 
+    if (config) {
+
+        embed.addFields(
+            {
+                name: "📢 Canal do painel",
+                value: config.canal_painel_id
+                    ? `<#${config.canal_painel_id}>`
+                    : "❌ Não definido",
+                inline: true
+            },
+            {
+                name: "📁 Categoria",
+                value: config.categoria_id
+                    ? `<#${config.categoria_id}>`
+                    : "❌ Não definida",
+                inline: true
+            }
+        );
+    }
+
     const botoes =
         new ActionRowBuilder()
             .addComponents(
 
-                criarBotaoTicket(
-                    modelo,
-                    true
-                ),
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `ticket_personalizar_${modelo.id}`
+                        `ticket_info_${modelo.id}`
                     )
-                    .setLabel("Editar")
+                    .setLabel("Editar informações")
                     .setEmoji("✏️")
                     .setStyle(
                         ButtonStyle.Primary
@@ -679,11 +806,44 @@ function criarPainelModelo(
 
                 new ButtonBuilder()
                     .setCustomId(
+                        `ticket_personalizar_${modelo.id}`
+                    )
+                    .setLabel("Personalizar")
+                    .setEmoji("🎨")
+                    .setStyle(
+                        ButtonStyle.Primary
+                    )
+            );
+
+    const botoes2 =
+        new ActionRowBuilder()
+            .addComponents(
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `ticket_canal_${modelo.id}`
+                    )
+                    .setLabel("Escolher canal")
+                    .setEmoji("📢")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `ticket_categoria_${modelo.id}`
+                    )
+                    .setLabel("Escolher categoria")
+                    .setEmoji("📁")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
                         `ticket_confirmar_${modelo.id}`
                     )
-                    .setLabel(
-                        "Confirmar configuração"
-                    )
+                    .setLabel("Salvar")
                     .setEmoji("✅")
                     .setStyle(
                         ButtonStyle.Success
@@ -693,42 +853,201 @@ function criarPainelModelo(
     return {
         embeds: [embed],
         components: [
-            botoes
+            botoes,
+            botoes2
         ],
         ephemeral: true
     };
 }
 
 // ================================
-// 📂 ENCONTRAR / CRIAR CATEGORIA
+// 📢 MENU DE CANAL
 // ================================
 
-async function obterCategoriaTickets(
-    guild
+function criarMenuCanal(
+    modeloId
 ) {
 
-    let categoria =
-        guild.channels.cache.find(
-            canal =>
-                canal.type === ChannelType.GuildCategory &&
-                canal.name === "🎫 TICKETS"
-        );
+    const menu =
+        new ChannelSelectMenuBuilder()
+            .setCustomId(
+                `ticket_escolher_canal_${modeloId}`
+            )
+            .setPlaceholder(
+                "📢 Escolha o canal do painel"
+            )
+            .setChannelTypes(
+                ChannelType.GuildText,
+                ChannelType.GuildAnnouncement
+            )
+            .setMinValues(1)
+            .setMaxValues(1);
 
-    if (categoria) {
-        return categoria;
+    return {
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle("📢 Canal do painel")
+                .setDescription(
+                    "Escolha o canal onde o painel de tickets será enviado."
+                )
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(menu)
+        ],
+        ephemeral: true
+    };
+}
+
+// ================================
+// 📁 MENU DE CATEGORIA
+// ================================
+
+function criarMenuCategoria(
+    modeloId
+) {
+
+    const menu =
+        new ChannelSelectMenuBuilder()
+            .setCustomId(
+                `ticket_escolher_categoria_${modeloId}`
+            )
+            .setPlaceholder(
+                "📁 Escolha a categoria dos tickets"
+            )
+            .setChannelTypes(
+                ChannelType.GuildCategory
+            )
+            .setMinValues(1)
+            .setMaxValues(1);
+
+    return {
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle("📁 Categoria dos tickets")
+                .setDescription(
+                    "Escolha a categoria onde os tickets serão criados."
+                )
+        ],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(menu)
+        ],
+        ephemeral: true
+    };
+}
+
+// ================================
+// 🎫 ATUALIZAR PAINEL EXISTENTE
+// ================================
+
+async function atualizarPainelPublicado(
+    guild,
+    modelo,
+    config
+) {
+
+    if (
+        !config ||
+        !config.canal_painel_id
+    ) {
+        return null;
     }
 
-    categoria =
-        await guild.channels.create({
-            name: "🎫 TICKETS",
-            type: ChannelType.GuildCategory
-        });
+    try {
 
-    console.log(
-        `🎫 Categoria de tickets criada em ${guild.name}.`
-    );
+        const canal =
+            await guild.channels.fetch(
+                config.canal_painel_id
+            );
 
-    return categoria;
+        if (
+            !canal ||
+            !canal.isTextBased()
+        ) {
+            return null;
+        }
+
+        // Se já temos uma mensagem salva,
+        // tenta editar ela.
+        if (config.mensagem_painel_id) {
+
+            try {
+
+                const mensagem =
+                    await canal.messages.fetch(
+                        config.mensagem_painel_id
+                    );
+
+                const embed =
+                    criarEmbedTicket(modelo)
+                        .setTitle(
+                            modelo.titulo ||
+                            "🎫 Abra um Ticket"
+                        );
+
+                await mensagem.edit({
+                    embeds: [embed],
+                    components: [
+                        new ActionRowBuilder()
+                            .addComponents(
+                                criarBotaoTicket(modelo)
+                            )
+                    ]
+                });
+
+                return mensagem;
+
+            } catch {
+                // Mensagem antiga não existe mais.
+            }
+        }
+
+        // Se não existe mensagem salva,
+        // cria uma nova.
+        const embed =
+            criarEmbedTicket(modelo)
+                .setTitle(
+                    modelo.titulo ||
+                    "🎫 Abra um Ticket"
+                );
+
+        const mensagem =
+            await canal.send({
+                embeds: [embed],
+                components: [
+                    new ActionRowBuilder()
+                        .addComponents(
+                            criarBotaoTicket(modelo)
+                        )
+                ]
+            });
+
+        await pool.query(
+            `
+            UPDATE ticket_config
+            SET mensagem_painel_id = $1
+            WHERE guild_id = $2
+            `,
+            [
+                mensagem.id,
+                guild.id
+            ]
+        );
+
+        return mensagem;
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao atualizar painel de ticket:",
+            erro
+        );
+
+        return null;
+    }
 }
 
 // ================================
@@ -737,13 +1056,14 @@ async function obterCategoriaTickets(
 
 function encontrarTicketDoUsuario(
     guild,
-    userId
+    userId,
+    categoriaId
 ) {
 
     return guild.channels.cache.find(
         canal =>
-            canal.parent &&
-            canal.parent.name === "🎫 TICKETS" &&
+            canal.type === ChannelType.GuildText &&
+            canal.parentId === categoriaId &&
             canal.topic === `ticket:${userId}`
     );
 }
@@ -757,10 +1077,60 @@ async function abrirTicket(
     modelo
 ) {
 
+    const configResult =
+        await pool.query(
+            `
+            SELECT *
+            FROM ticket_config
+            WHERE guild_id = $1
+            `,
+            [
+                interaction.guildId
+            ]
+        );
+
+    const config =
+        configResult.rows[0];
+
+    if (
+        !config ||
+        !config.configurado ||
+        !config.categoria_id
+    ) {
+
+        await interaction.reply({
+            content:
+                "❌ O sistema de tickets ainda não foi configurado corretamente. Um administrador precisa escolher a categoria dos tickets.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
+    const categoria =
+        await interaction.guild.channels.fetch(
+            config.categoria_id
+        );
+
+    if (
+        !categoria ||
+        categoria.type !== ChannelType.GuildCategory
+    ) {
+
+        await interaction.reply({
+            content:
+                "❌ A categoria configurada não existe mais. Configure o ticket novamente.",
+            ephemeral: true
+        });
+
+        return true;
+    }
+
     const ticketExistente =
         encontrarTicketDoUsuario(
             interaction.guild,
-            interaction.user.id
+            interaction.user.id,
+            categoria.id
         );
 
     if (ticketExistente) {
@@ -773,11 +1143,6 @@ async function abrirTicket(
 
         return true;
     }
-
-    const categoria =
-        await obterCategoriaTickets(
-            interaction.guild
-        );
 
     const nomeUsuario =
         interaction.user.username
@@ -1161,7 +1526,59 @@ module.exports = {
         }
 
         // ================================
-        // ✏️ PERSONALIZAR
+        // ✏️ EDITAR INFORMAÇÕES
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_info_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_info_",
+                    ""
+                );
+
+            const resultado =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        id,
+                        interaction.guildId
+                    ]
+                );
+
+            if (
+                !resultado.rows.length
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Esse modelo de ticket não existe.",
+                    ephemeral: true
+                });
+
+                return true;
+            }
+
+            await interaction.showModal(
+                criarModalEditarInformacoes(
+                    resultado.rows[0]
+                )
+            );
+
+            return true;
+        }
+
+        // ================================
+        // 🎨 PERSONALIZAR
         // ================================
 
         if (
@@ -1213,7 +1630,53 @@ module.exports = {
         }
 
         // ================================
-        // ✅ CONFIRMAR
+        // 📢 ESCOLHER CANAL
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_canal_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_canal_",
+                    ""
+                );
+
+            await interaction.update(
+                criarMenuCanal(id)
+            );
+
+            return true;
+        }
+
+        // ================================
+        // 📁 ESCOLHER CATEGORIA
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_categoria_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_categoria_",
+                    ""
+                );
+
+            await interaction.update(
+                criarMenuCategoria(id)
+            );
+
+            return true;
+        }
+
+        // ================================
+        // ✅ CONFIRMAR / SALVAR
         // ================================
 
         if (
@@ -1228,7 +1691,7 @@ module.exports = {
                     ""
                 );
 
-            const resultado =
+            const modeloResult =
                 await pool.query(
                     `
                     SELECT *
@@ -1243,7 +1706,7 @@ module.exports = {
                 );
 
             if (
-                !resultado.rows.length
+                !modeloResult.rows.length
             ) {
 
                 await interaction.reply({
@@ -1256,7 +1719,75 @@ module.exports = {
             }
 
             const modelo =
-                resultado.rows[0];
+                modeloResult.rows[0];
+
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            const config =
+                configResult.rows[0];
+
+            if (
+                !config ||
+                !config.canal_painel_id ||
+                !config.categoria_id
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Antes de salvar, escolha o **canal do painel** e a **categoria dos tickets**.",
+                    ephemeral: true
+                });
+
+                return true;
+            }
+
+            const canalPainel =
+                await interaction.guild.channels.fetch(
+                    config.canal_painel_id
+                );
+
+            const categoria =
+                await interaction.guild.channels.fetch(
+                    config.categoria_id
+                );
+
+            if (
+                !canalPainel ||
+                !canalPainel.isTextBased()
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ O canal escolhido para o painel não existe mais.",
+                    ephemeral: true
+                });
+
+                return true;
+            }
+
+            if (
+                !categoria ||
+                categoria.type !== ChannelType.GuildCategory
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ A categoria escolhida não existe mais.",
+                    ephemeral: true
+                });
+
+                return true;
+            }
 
             await pool.query(
                 `
@@ -1264,12 +1795,14 @@ module.exports = {
                     guild_id,
                     modelo_id,
                     canal_painel_id,
+                    categoria_id,
                     configurado
                 )
                 VALUES (
                     $1,
                     $2,
                     $3,
+                    $4,
                     TRUE
                 )
 
@@ -1277,53 +1810,59 @@ module.exports = {
                 DO UPDATE SET
                     modelo_id = EXCLUDED.modelo_id,
                     canal_painel_id = EXCLUDED.canal_painel_id,
+                    categoria_id = EXCLUDED.categoria_id,
                     configurado = TRUE
                 `,
                 [
                     interaction.guildId,
                     id,
-                    interaction.channelId
+                    config.canal_painel_id,
+                    config.categoria_id
                 ]
             );
 
-            // ================================
-            // 🎫 ENVIAR PAINEL NO CANAL
-            // ================================
-
-            const embed =
-                criarEmbedTicket(modelo)
-                    .setTitle(
-                        modelo.titulo ||
-                        "🎫 Abra um Ticket"
-                    );
-
-            const botao =
-                criarBotaoTicket(
-                    modelo
+            const novaConfigResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
                 );
 
+            const novaConfig =
+                novaConfigResult.rows[0];
+
             const painel =
-                await interaction.channel.send({
-                    embeds: [
-                        embed
-                    ],
-                    components: [
-                        new ActionRowBuilder()
-                            .addComponents(
-                                botao
-                            )
-                    ]
+                await atualizarPainelPublicado(
+                    interaction.guild,
+                    modelo,
+                    novaConfig
+                );
+
+            if (!painel) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Não consegui enviar/atualizar o painel. Verifique se o bot tem permissão para enviar mensagens no canal escolhido.",
+                    ephemeral: true
                 });
+
+                return true;
+            }
 
             await interaction.update({
                 content:
-                    `✅ O ticket **${modelo.nome}** foi configurado com sucesso!\n\n🎫 O painel foi enviado neste canal.`,
+                    `✅ Configuração salva!\n\n📢 Canal: ${canalPainel}\n📁 Categoria: ${categoria}\n🎫 Modelo: **${modelo.nome}**`,
                 embeds: [],
                 components: []
             });
 
             console.log(
-                `🎫 Painel de ticket criado: ${painel.id} | Servidor: ${interaction.guild.name}`
+                `🎫 Ticket configurado: ${modelo.nome} | Servidor: ${interaction.guild.name}`
             );
 
             return true;
@@ -1379,10 +1918,6 @@ module.exports = {
             const valor =
                 interaction.values[0];
 
-            // ================================
-            // ➕ CRIAR
-            // ================================
-
             if (valor === "criar") {
 
                 await interaction.showModal(
@@ -1391,10 +1926,6 @@ module.exports = {
 
                 return true;
             }
-
-            // ================================
-            // ⚙️ CONFIGURAR
-            // ================================
 
             if (
                 valor === "configurar"
@@ -1441,10 +1972,6 @@ module.exports = {
                 );
             }
 
-            // ================================
-            // 🎫 MODELO
-            // ================================
-
             if (
                 valor.startsWith(
                     "modelo_"
@@ -1484,9 +2011,22 @@ module.exports = {
                     return true;
                 }
 
+                const configResult =
+                    await pool.query(
+                        `
+                        SELECT *
+                        FROM ticket_config
+                        WHERE guild_id = $1
+                        `,
+                        [
+                            interaction.guildId
+                        ]
+                    );
+
                 return interaction.update(
                     criarPainelModelo(
-                        resultado.rows[0]
+                        resultado.rows[0],
+                        configResult.rows[0] || null
                     )
                 );
             }
@@ -1531,9 +2071,174 @@ module.exports = {
                 return true;
             }
 
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
             return interaction.update(
                 criarPainelModelo(
-                    resultado.rows[0]
+                    resultado.rows[0],
+                    configResult.rows[0] || null
+                )
+            );
+        }
+
+        // ================================
+        // 📢 ESCOLHER CANAL
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_escolher_canal_"
+            )
+        ) {
+
+            const modeloId =
+                interaction.customId.replace(
+                    "ticket_escolher_canal_",
+                    ""
+                );
+
+            const canalId =
+                interaction.values[0];
+
+            await pool.query(
+                `
+                INSERT INTO ticket_config (
+                    guild_id,
+                    canal_painel_id,
+                    configurado
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    FALSE
+                )
+
+                ON CONFLICT (guild_id)
+                DO UPDATE SET
+                    canal_painel_id = EXCLUDED.canal_painel_id
+                `,
+                [
+                    interaction.guildId,
+                    canalId
+                ]
+            );
+
+            const modeloResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        modeloId,
+                        interaction.guildId
+                    ]
+                );
+
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            return interaction.update(
+                criarPainelModelo(
+                    modeloResult.rows[0],
+                    configResult.rows[0]
+                )
+            );
+        }
+
+        // ================================
+        // 📁 ESCOLHER CATEGORIA
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_escolher_categoria_"
+            )
+        ) {
+
+            const modeloId =
+                interaction.customId.replace(
+                    "ticket_escolher_categoria_",
+                    ""
+                );
+
+            const categoriaId =
+                interaction.values[0];
+
+            await pool.query(
+                `
+                INSERT INTO ticket_config (
+                    guild_id,
+                    categoria_id,
+                    configurado
+                )
+                VALUES (
+                    $1,
+                    $2,
+                    FALSE
+                )
+
+                ON CONFLICT (guild_id)
+                DO UPDATE SET
+                    categoria_id = EXCLUDED.categoria_id
+                `,
+                [
+                    interaction.guildId,
+                    categoriaId
+                ]
+            );
+
+            const modeloResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        modeloId,
+                        interaction.guildId
+                    ]
+                );
+
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            return interaction.update(
+                criarPainelModelo(
+                    modeloResult.rows[0],
+                    configResult.rows[0]
                 )
             );
         }
@@ -1673,6 +2378,132 @@ module.exports = {
         }
 
         // ================================
+        // ✏️ EDITAR INFORMAÇÕES
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_modal_info_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_modal_info_",
+                    ""
+                );
+
+            let cor =
+                interaction.fields
+                    .getTextInputValue(
+                        "cor"
+                    )
+                    .trim();
+
+            if (
+                cor &&
+                !/^#[0-9A-Fa-f]{6}$/.test(
+                    cor
+                )
+            ) {
+
+                cor = "#5865F2";
+            }
+
+            if (!cor) {
+                cor = "#5865F2";
+            }
+
+            await pool.query(
+                `
+                UPDATE ticket_modelos
+                SET
+                    nome = $1,
+                    titulo = $2,
+                    descricao = $3,
+                    autor_nome = $4,
+                    cor = $5
+                WHERE id = $6
+                AND guild_id = $7
+                `,
+                [
+                    interaction.fields
+                        .getTextInputValue(
+                            "nome"
+                        )
+                        .trim(),
+
+                    interaction.fields
+                        .getTextInputValue(
+                            "titulo"
+                        )
+                        .trim() ||
+                        null,
+
+                    interaction.fields
+                        .getTextInputValue(
+                            "descricao"
+                        )
+                        .trim() ||
+                        null,
+
+                    interaction.fields
+                        .getTextInputValue(
+                            "autor"
+                        )
+                        .trim() ||
+                        null,
+
+                    cor,
+
+                    id,
+                    interaction.guildId
+                ]
+            );
+
+            const resultado =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        id,
+                        interaction.guildId
+                    ]
+                );
+
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            await atualizarPainelPublicado(
+                interaction.guild,
+                resultado.rows[0],
+                configResult.rows[0]
+            );
+
+            await interaction.reply(
+                criarPainelModelo(
+                    resultado.rows[0],
+                    configResult.rows[0] || null
+                )
+            );
+
+            return true;
+        }
+
+        // ================================
         // ✏️ EDITAR PERSONALIZAÇÃO
         // ================================
 
@@ -1755,9 +2586,28 @@ module.exports = {
                     ]
                 );
 
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            await atualizarPainelPublicado(
+                interaction.guild,
+                resultado.rows[0],
+                configResult.rows[0]
+            );
+
             await interaction.reply(
                 criarPainelModelo(
-                    resultado.rows[0]
+                    resultado.rows[0],
+                    configResult.rows[0] || null
                 )
             );
 
