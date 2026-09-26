@@ -10,7 +10,8 @@ const {
     ChannelSelectMenuBuilder,
     ChannelType,
     StringSelectMenuBuilder,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    InteractionContextType
 } = require("discord.js");
 
 const { pool } = require("../database/database");
@@ -441,8 +442,6 @@ function criarBotoesPreview(
             )
     ];
 
-    // Mostra o botão mesmo antes do sorteio ser enviado.
-    // Na prévia, o clique apenas informa que ainda não existem participantes.
     if (config.mostrarParticipantes) {
         botoes.push(
             new ButtonBuilder()
@@ -502,7 +501,6 @@ function converterData(
         return null;
     }
 
-    // Aceita HH:MM e HH.MM
     const horarioNormalizado =
         String(horario)
             .trim()
@@ -532,7 +530,6 @@ function converterData(
         return null;
     }
 
-    // Verifica corretamente quantos dias existem no mês.
     const diasNoMes =
         new Date(
             Date.UTC(
@@ -546,12 +543,6 @@ function converterData(
         return null;
     }
 
-    /*
-     * O horário informado é do Brasil / America/Sao_Paulo.
-     *
-     * Não usamos getHours(), getDate(), etc. do servidor
-     * para validar, porque a FadeHost pode estar usando UTC.
-     */
     const iso =
         `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}` +
         `T${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}:00-03:00`;
@@ -563,7 +554,6 @@ function converterData(
         return null;
     }
 
-    // Confirma usando o fuso correto do Brasil.
     const verificado =
         formatarData(timestamp);
 
@@ -1484,6 +1474,9 @@ module.exports = {
             )
             .setDefaultMemberPermissions(
                 PermissionFlagsBits.Administrator
+            )
+            .setContexts(
+                InteractionContextType.Guild
             ),
 
     // ================================
@@ -1493,6 +1486,18 @@ module.exports = {
     async execute(
         interaction
     ) {
+
+        // ================================
+        // 🏠 SOMENTE SERVIDORES
+        // ================================
+
+        if (!interaction.inGuild()) {
+            return interaction.reply({
+                content:
+                    "❌ Este comando só pode ser usado em servidores.",
+                ephemeral: true
+            });
+        }
 
         if (
             !interaction.memberPermissions.has(
@@ -1590,7 +1595,6 @@ module.exports = {
                     ""
                 );
 
-            // A prévia ainda não possui um sorteio no banco.
             if (id === "preview") {
                 return interaction.reply({
                     content:
@@ -2521,7 +2525,6 @@ module.exports = {
                 });
             }
 
-            // Aceita 18:50 ou 18.50
             horario =
                 horario.replace(
                     ".",
@@ -2755,10 +2758,6 @@ module.exports = {
                 interaction.user.id,
                 interaction.client
             );
-
-        // ================================
-        // 🔄 JÁ ESTÁ PARTICIPANDO
-        // ================================
 
         if (
             resultado.jaParticipa
