@@ -10,30 +10,28 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+const {
+    criarEmbedBanco,
+    atualizarEmbedBanco,
+    getEmbedsDoServidor,
+    getEmbedPorId,
+    salvarMensagemEmbed,
+    atualizarCanalEmbed,
+    excluirEmbedBanco
+} = require("../database/database");
+
 // =====================================================
-// 💾 EMBEDS EM MEMÓRIA
+// 💾 CONFIGURAÇÕES TEMPORÁRIAS
 // =====================================================
 
-// Configurações temporárias dos painéis
 const configuracoes = new Map();
-
-// Embeds publicados
-// guildId -> Map(messageId -> dados)
-const embedsPublicados = new Map();
 
 // =====================================================
 // 🛠️ FUNÇÕES AUXILIARES
 // =====================================================
 
-function getGuildEmbeds(guildId) {
-    if (!embedsPublicados.has(guildId)) {
-        embedsPublicados.set(
-            guildId,
-            new Map()
-        );
-    }
-
-    return embedsPublicados.get(guildId);
+function chaveConfiguracao(userId, guildId) {
+    return `${guildId}:${userId}`;
 }
 
 function criarConfiguracao() {
@@ -51,16 +49,9 @@ function criarConfiguracao() {
         footer: "",
         footerIcone: "",
 
-        canalId: ""
+        canalId: "",
+        editandoEmbedId: null
     };
-}
-
-function chaveConfiguracao(userId, guildId) {
-    return `${guildId}:${userId}`;
-}
-
-function chaveEmbed(guildId, messageId) {
-    return `${guildId}:${messageId}`;
 }
 
 function validarURL(url) {
@@ -73,11 +64,10 @@ function validarURL(url) {
 }
 
 // =====================================================
-// 🛠️ CRIAR EMBED
+// 🎨 CRIAR EMBED
 // =====================================================
 
 function criarEmbed(config, usuario) {
-
     if (
         !config.titulo &&
         !config.descricao &&
@@ -86,11 +76,9 @@ function criarEmbed(config, usuario) {
         !config.autor &&
         !config.footer
     ) {
-
         return {
             sucesso: false,
-            erro:
-                "❌ Configure pelo menos um campo antes de continuar."
+            erro: "❌ Configure pelo menos um campo antes de continuar."
         };
     }
 
@@ -134,7 +122,6 @@ function criarEmbed(config, usuario) {
     // =================================================
 
     if (config.autor) {
-
         const autor = {
             name: config.autor
         };
@@ -151,7 +138,6 @@ function criarEmbed(config, usuario) {
     // =================================================
 
     if (config.footer) {
-
         const footer = {
             text: config.footer
         };
@@ -161,11 +147,7 @@ function criarEmbed(config, usuario) {
         }
 
         embed.setFooter(footer);
-
     } else if (usuario) {
-
-        // Se não configurou rodapé,
-        // mantém o comportamento antigo.
         embed.setFooter({
             text: `Enviado por ${usuario.username}`
         });
@@ -189,22 +171,16 @@ function criarEmbed(config, usuario) {
 // 🔘 BOTÕES DO EMBED PUBLICADO
 // =====================================================
 
-function criarBotoesEmbed(guildId, messageId) {
-
+function criarBotoesEmbed(embedId) {
     return [
         new ActionRowBuilder().addComponents(
-
             new ButtonBuilder()
-                .setCustomId(
-                    `embed_config_${guildId}_${messageId}`
-                )
+                .setCustomId(`embed_config_${embedId}`)
                 .setLabel("⚙️ Configurar")
                 .setStyle(ButtonStyle.Secondary),
 
             new ButtonBuilder()
-                .setCustomId(
-                    `embed_edit_${guildId}_${messageId}`
-                )
+                .setCustomId(`embed_edit_${embedId}`)
                 .setLabel("✏️ Editar")
                 .setStyle(ButtonStyle.Primary)
         )
@@ -216,7 +192,6 @@ function criarBotoesEmbed(guildId, messageId) {
 // =====================================================
 
 function criarPainel(config) {
-
     const embed = new EmbedBuilder()
         .setTitle("🎨 CONFIGURADOR DE EMBED")
         .setDescription(
@@ -231,12 +206,9 @@ function criarPainel(config) {
     // 📍 CANAL
     // =================================================
 
-    let canalTexto = "📍 Canal: canal atual";
-
-    if (config.canalId) {
-        canalTexto =
-            `📍 Canal configurado: <#${config.canalId}>`;
-    }
+    const canalTexto = config.canalId
+        ? `📍 Canal configurado: <#${config.canalId}>`
+        : "📍 Canal: canal atual";
 
     embed.addFields({
         name: "📤 Destino",
@@ -248,7 +220,6 @@ function criarPainel(config) {
     // =================================================
 
     const linha1 = new ActionRowBuilder().addComponents(
-
         new ButtonBuilder()
             .setCustomId("embed_titulo")
             .setLabel("📝 Título")
@@ -270,7 +241,6 @@ function criarPainel(config) {
     // =================================================
 
     const linha2 = new ActionRowBuilder().addComponents(
-
         new ButtonBuilder()
             .setCustomId("embed_imagem")
             .setLabel("🖼️ Imagem")
@@ -297,7 +267,6 @@ function criarPainel(config) {
     // =================================================
 
     const linha3 = new ActionRowBuilder().addComponents(
-
         new ButtonBuilder()
             .setCustomId("embed_footer")
             .setLabel("📝 Rodapé")
@@ -315,7 +284,11 @@ function criarPainel(config) {
 
         new ButtonBuilder()
             .setCustomId("embed_send")
-            .setLabel("📤 Enviar")
+            .setLabel(
+                config.editandoEmbedId
+                    ? "💾 Atualizar"
+                    : "📤 Enviar"
+            )
             .setStyle(ButtonStyle.Success)
     );
 
@@ -330,14 +303,27 @@ function criarPainel(config) {
 }
 
 // =====================================================
+// 🔐 VERIFICAR ADMIN
+// =====================================================
+
+function isAdmin(interaction) {
+    return (
+        interaction.member &&
+        interaction.member.permissions &&
+        interaction.member.permissions.has(
+            PermissionFlagsBits.Administrator
+        )
+    );
+}
+
+// =====================================================
 // 📦 EXPORTAÇÃO
 // =====================================================
 
 module.exports = {
-
     data: new SlashCommandBuilder()
         .setName("embed")
-        .setDescription("Abre o painel para criar um embed.")
+        .setDescription("Abre o painel para criar e gerenciar embeds.")
         .setDefaultMemberPermissions(
             PermissionFlagsBits.Administrator
         ),
@@ -347,26 +333,7 @@ module.exports = {
     // =================================================
 
     async execute(interaction) {
-
-        // =================================================
-        // 🔐 ADMIN
-        // =================================================
-
-        if (
-            !interaction.member.permissions.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
-
-            return interaction.reply({
-                content:
-                    "❌ Você precisa ter a permissão de **Administrador do Discord** para usar este comando.",
-                ephemeral: true
-            });
-        }
-
         if (!interaction.guild) {
-
             return interaction.reply({
                 content:
                     "❌ Este comando só pode ser usado dentro de um servidor.",
@@ -374,25 +341,30 @@ module.exports = {
             });
         }
 
+        if (!isAdmin(interaction)) {
+            return interaction.reply({
+                content:
+                    "❌ Você precisa da permissão de **Administrador do Discord** para usar este comando.",
+                ephemeral: true
+            });
+        }
+
         const userId = interaction.user.id;
         const guildId = interaction.guild.id;
 
-        const chave =
-            chaveConfiguracao(
-                userId,
-                guildId
-            );
+        const chave = chaveConfiguracao(
+            userId,
+            guildId
+        );
 
-        const config =
-            criarConfiguracao();
+        const config = criarConfiguracao();
 
         configuracoes.set(
             chave,
             config
         );
 
-        const painel =
-            criarPainel(config);
+        const painel = criarPainel(config);
 
         await interaction.reply({
             embeds: painel.embeds,
@@ -406,30 +378,18 @@ module.exports = {
     // =================================================
 
     async handleButton(interaction) {
-
-        // =================================================
-        // 🔐 GARANTIR ADMIN
-        // =================================================
-
-        if (
-            !interaction.member ||
-            !interaction.member.permissions.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
-
+        if (!interaction.guild) {
             return interaction.reply({
                 content:
-                    "❌ Você precisa ter a permissão de **Administrador do Discord** para configurar ou editar embeds.",
+                    "❌ Este sistema só funciona dentro de servidores.",
                 ephemeral: true
             });
         }
 
-        if (!interaction.guild) {
-
+        if (!isAdmin(interaction)) {
             return interaction.reply({
                 content:
-                    "❌ Este sistema só funciona dentro de servidores.",
+                    "❌ Somente administradores podem configurar ou editar embeds.",
                 ephemeral: true
             });
         }
@@ -438,7 +398,7 @@ module.exports = {
         const guildId = interaction.guild.id;
 
         // =================================================
-        // ✏️ EDITAR EMBED PUBLICADO
+        // ✏️ EDITAR EMBED EXISTENTE
         // =================================================
 
         if (
@@ -446,34 +406,36 @@ module.exports = {
                 "embed_edit_"
             )
         ) {
-
-            const partes =
-                interaction.customId.split("_");
-
-            const messageId =
-                partes[partes.length - 1];
-
-            const embedsServidor =
-                getGuildEmbeds(guildId);
+            const embedId =
+                interaction.customId.replace(
+                    "embed_edit_",
+                    ""
+                );
 
             const dados =
-                embedsServidor.get(messageId);
+                await getEmbedPorId(
+                    embedId
+                );
 
-            if (!dados) {
-
+            if (
+                !dados ||
+                dados.guild_id !== guildId
+            ) {
                 return interaction.reply({
                     content:
-                        "❌ Não encontrei os dados desse embed. Ele pode ter sido criado antes desta versão do sistema ou os dados foram perdidos após o bot reiniciar.",
+                        "❌ Não encontrei esse embed neste servidor.",
                     ephemeral: true
                 });
             }
 
-            const config =
-                JSON.parse(
-                    JSON.stringify(
-                        dados.config
-                    )
-                );
+            const config = JSON.parse(
+                JSON.stringify(
+                    dados.config
+                )
+            );
+
+            config.editandoEmbedId =
+                dados.id;
 
             const chave =
                 chaveConfiguracao(
@@ -483,11 +445,7 @@ module.exports = {
 
             configuracoes.set(
                 chave,
-                {
-                    ...config,
-                    editandoMessageId:
-                        messageId
-                }
+                config
             );
 
             const painel =
@@ -495,7 +453,7 @@ module.exports = {
 
             return interaction.reply({
                 content:
-                    "✏️ **Modo de edição ativado.**\nAs alterações serão aplicadas na mesma mensagem do embed.",
+                    "✏️ **Modo de edição ativado.**\nAs alterações serão aplicadas na mesma mensagem.",
                 embeds:
                     painel.embeds,
                 components:
@@ -505,7 +463,7 @@ module.exports = {
         }
 
         // =================================================
-        // ⚙️ CONFIGURAR EMBED PUBLICADO
+        // ⚙️ CONFIGURAR EMBED
         // =================================================
 
         if (
@@ -513,40 +471,125 @@ module.exports = {
                 "embed_config_"
             )
         ) {
-
-            const partes =
-                interaction.customId.split("_");
-
-            const messageId =
-                partes[partes.length - 1];
-
-            const embedsServidor =
-                getGuildEmbeds(guildId);
+            const embedId =
+                interaction.customId.replace(
+                    "embed_config_",
+                    ""
+                );
 
             const dados =
-                embedsServidor.get(messageId);
+                await getEmbedPorId(
+                    embedId
+                );
 
-            if (!dados) {
-
+            if (
+                !dados ||
+                dados.guild_id !== guildId
+            ) {
                 return interaction.reply({
                     content:
-                        "❌ Não encontrei os dados desse embed.",
+                        "❌ Não encontrei esse embed neste servidor.",
                     ephemeral: true
                 });
             }
 
             return interaction.reply({
                 content:
-                    "⚙️ **Embed configurado!**\n\n" +
-                    `📍 Canal: <#${dados.channelId}>\n` +
-                    `👤 Criado por: <@${dados.ownerId}>\n\n` +
-                    "Use **✏️ Editar** para alterar o conteúdo.",
+                    "⚙️ **Configuração do embed**\n\n" +
+                    `📍 Canal: <#${dados.canal_id}>\n` +
+                    `👤 Criado por: <@${dados.usuario_id}>\n\n` +
+                    "Use **✏️ Editar** para alterar o conteúdo do embed.",
                 ephemeral: true
             });
         }
 
         // =================================================
-        // CONFIGURAÇÃO TEMPORÁRIA
+        // 🗑️ EXCLUIR EMBED
+        // =================================================
+
+        if (
+            interaction.customId.startsWith(
+                "embed_delete_"
+            )
+        ) {
+            const embedId =
+                interaction.customId.replace(
+                    "embed_delete_",
+                    ""
+                );
+
+            const dados =
+                await getEmbedPorId(
+                    embedId
+                );
+
+            if (
+                !dados ||
+                dados.guild_id !== guildId
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Não encontrei esse embed.",
+                    ephemeral: true
+                });
+            }
+
+            try {
+                if (
+                    dados.canal_id &&
+                    dados.mensagem_id
+                ) {
+                    const canal =
+                        await interaction.guild.channels
+                            .fetch(
+                                dados.canal_id
+                            )
+                            .catch(() => null);
+
+                    if (
+                        canal &&
+                        canal.isTextBased()
+                    ) {
+                        const mensagem =
+                            await canal.messages
+                                .fetch(
+                                    dados.mensagem_id
+                                )
+                                .catch(() => null);
+
+                        if (mensagem) {
+                            await mensagem.delete()
+                                .catch(() => {});
+                        }
+                    }
+                }
+
+                await excluirEmbedBanco(
+                    embedId,
+                    guildId
+                );
+
+                return interaction.reply({
+                    content:
+                        "🗑️ Embed excluído com sucesso.",
+                    ephemeral: true
+                });
+            } catch (erro) {
+                console.error(
+                    "❌ Erro ao excluir embed:",
+                    erro
+                );
+
+                return interaction.reply({
+                    content:
+                        "❌ Não foi possível excluir o embed.",
+                    ephemeral: true
+                });
+            }
+        }
+
+        // =================================================
+        // 🔧 CONFIGURAÇÃO TEMPORÁRIA
         // =================================================
 
         const chave =
@@ -559,10 +602,9 @@ module.exports = {
             configuracoes.get(chave);
 
         if (!config) {
-
             return interaction.reply({
                 content:
-                    "❌ Sua configuração de embed expirou. Use `/embed` novamente.",
+                    "❌ Sua configuração expirou. Use `/embed` novamente.",
                 ephemeral: true
             });
         }
@@ -575,7 +617,6 @@ module.exports = {
             interaction.customId ===
             "embed_titulo"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -588,9 +629,7 @@ module.exports = {
             const input =
                 new TextInputBuilder()
                     .setCustomId("titulo")
-                    .setLabel(
-                        "Título do embed"
-                    )
+                    .setLabel("Título do embed")
                     .setStyle(
                         TextInputStyle.Short
                     )
@@ -618,7 +657,6 @@ module.exports = {
             interaction.customId ===
             "embed_descricao"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -661,7 +699,6 @@ module.exports = {
             interaction.customId ===
             "embed_imagem"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -706,7 +743,6 @@ module.exports = {
             interaction.customId ===
             "embed_thumbnail"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -751,7 +787,6 @@ module.exports = {
             interaction.customId ===
             "embed_cor"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -796,7 +831,6 @@ module.exports = {
             interaction.customId ===
             "embed_autor"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -861,7 +895,6 @@ module.exports = {
             interaction.customId ===
             "embed_footer"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -926,7 +959,6 @@ module.exports = {
             interaction.customId ===
             "embed_canal"
         ) {
-
             const modal =
                 new ModalBuilder()
                     .setCustomId(
@@ -938,9 +970,7 @@ module.exports = {
 
             const input =
                 new TextInputBuilder()
-                    .setCustomId(
-                        "canal"
-                    )
+                    .setCustomId("canal")
                     .setLabel(
                         "ID do canal"
                     )
@@ -973,7 +1003,6 @@ module.exports = {
             interaction.customId ===
             "embed_timestamp"
         ) {
-
             config.timestamp =
                 !config.timestamp;
 
@@ -994,7 +1023,6 @@ module.exports = {
             interaction.customId ===
             "embed_preview"
         ) {
-
             const resultado =
                 criarEmbed(
                     config,
@@ -1002,7 +1030,6 @@ module.exports = {
                 );
 
             if (!resultado.sucesso) {
-
                 return interaction.reply({
                     content:
                         resultado.erro,
@@ -1028,7 +1055,6 @@ module.exports = {
             interaction.customId ===
             "embed_send"
         ) {
-
             const resultado =
                 criarEmbed(
                     config,
@@ -1036,7 +1062,6 @@ module.exports = {
                 );
 
             if (!resultado.sucesso) {
-
                 return interaction.reply({
                     content:
                         resultado.erro,
@@ -1044,27 +1069,22 @@ module.exports = {
                 });
             }
 
-            // =================================================
-            // 📍 DETERMINAR CANAL
-            // =================================================
-
             let canal;
 
             if (config.canalId) {
-
                 canal =
                     await interaction.guild.channels
                         .fetch(config.canalId)
                         .catch(() => null);
-
             } else {
-
                 canal =
                     interaction.channel;
             }
 
-            if (!canal || !canal.isTextBased()) {
-
+            if (
+                !canal ||
+                !canal.isTextBased()
+            ) {
                 return interaction.reply({
                     content:
                         "❌ O canal configurado não existe ou não é um canal de texto válido.",
@@ -1073,21 +1093,19 @@ module.exports = {
             }
 
             // =================================================
-            // ✏️ EDITAR EMBED EXISTENTE
+            // ✏️ ATUALIZAR EXISTENTE
             // =================================================
 
-            if (config.editandoMessageId) {
-
-                const embedsServidor =
-                    getGuildEmbeds(guildId);
-
+            if (config.editandoEmbedId) {
                 const dados =
-                    embedsServidor.get(
-                        config.editandoMessageId
+                    await getEmbedPorId(
+                        config.editandoEmbedId
                     );
 
-                if (!dados) {
-
+                if (
+                    !dados ||
+                    dados.guild_id !== guildId
+                ) {
                     return interaction.reply({
                         content:
                             "❌ Não encontrei o embed que você estava editando.",
@@ -1096,50 +1114,138 @@ module.exports = {
                 }
 
                 try {
+                    let mensagem = null;
 
-                    const mensagem =
-                        await canal.messages.fetch(
-                            config.editandoMessageId
+                    if (
+                        dados.canal_id &&
+                        dados.mensagem_id
+                    ) {
+                        const canalAntigo =
+                            await interaction.guild.channels
+                                .fetch(
+                                    dados.canal_id
+                                )
+                                .catch(() => null);
+
+                        if (
+                            canalAntigo &&
+                            canalAntigo.isTextBased()
+                        ) {
+                            mensagem =
+                                await canalAntigo.messages
+                                    .fetch(
+                                        dados.mensagem_id
+                                    )
+                                    .catch(() => null);
+                        }
+                    }
+
+                    // -----------------------------------------
+                    // Se encontrou a mensagem, edita a mesma.
+                    // -----------------------------------------
+
+                    if (mensagem) {
+                        await mensagem.edit({
+                            embeds: [
+                                resultado.embed
+                            ],
+                            components:
+                                criarBotoesEmbed(
+                                    dados.id
+                                )
+                        });
+
+                        await atualizarEmbedBanco(
+                            dados.id,
+                            guildId,
+                            {
+                                config: {
+                                    ...config,
+                                    editandoEmbedId:
+                                        null
+                                },
+                                canalId:
+                                    mensagem.channel.id,
+                                mensagemId:
+                                    mensagem.id
+                            }
                         );
 
-                    await mensagem.edit({
+                        delete config.editandoEmbedId;
+
+                        configuracoes.delete(
+                            chave
+                        );
+
+                        return interaction.update({
+                            content:
+                                "✅ Embed atualizado com sucesso na mesma mensagem!",
+                            embeds: [],
+                            components: []
+                        });
+                    }
+
+                    // -----------------------------------------
+                    // Se a mensagem antiga não existe mais,
+                    // envia uma nova.
+                    // -----------------------------------------
+
+                    const novaMensagem =
+                        await canal.send({
+                            embeds: [
+                                resultado.embed
+                            ],
+                            components: []
+                        });
+
+                    await novaMensagem.edit({
                         embeds: [
                             resultado.embed
                         ],
                         components:
                             criarBotoesEmbed(
-                                guildId,
-                                mensagem.id
+                                dados.id
                             )
                     });
 
-                    dados.config =
+                    await atualizarEmbedBanco(
+                        dados.id,
+                        guildId,
                         {
-                            ...config
-                        };
+                            config: {
+                                ...config,
+                                editandoEmbedId:
+                                    null
+                            },
+                            canalId:
+                                novaMensagem.channel.id,
+                            mensagemId:
+                                novaMensagem.id
+                        }
+                    );
 
-                    delete dados.config.editandoMessageId;
+                    delete config.editandoEmbedId;
 
-                    dados.channelId =
-                        canal.id;
+                    configuracoes.delete(
+                        chave
+                    );
 
                     return interaction.update({
                         content:
-                            "✅ Embed atualizado com sucesso!",
+                            "⚠️ A mensagem antiga não foi encontrada. Um novo embed foi enviado.",
                         embeds: [],
                         components: []
                     });
 
                 } catch (erro) {
-
                     console.error(
-                        "❌ Erro ao editar embed:",
+                        "❌ Erro ao atualizar embed:",
                         erro
                     );
 
                     return interaction.reply({
                         content:
-                            "❌ Não foi possível atualizar o embed. Verifique se o bot consegue acessar o canal e a mensagem.",
+                            "❌ Não foi possível atualizar o embed.",
                         ephemeral: true
                     });
                 }
@@ -1150,45 +1256,34 @@ module.exports = {
             // =================================================
 
             try {
+                const dadosBanco =
+                    await criarEmbedBanco(
+                        guildId,
+                        interaction.user.id,
+                        config
+                    );
 
                 const mensagem =
                     await canal.send({
                         embeds: [
                             resultado.embed
-                        ]
+                        ],
+                        components: []
                     });
 
-                const embedsServidor =
-                    getGuildEmbeds(guildId);
-
-                embedsServidor.set(
-                    mensagem.id,
-                    {
-                        messageId:
-                            mensagem.id,
-
-                        channelId:
-                            canal.id,
-
-                        ownerId:
-                            interaction.user.id,
-
-                        config:
-                            {
-                                ...config
-                            }
-                    }
+                await salvarMensagemEmbed(
+                    dadosBanco.id,
+                    canal.id,
+                    mensagem.id
                 );
 
-                // Adiciona os botões depois que temos o ID
                 await mensagem.edit({
                     embeds: [
                         resultado.embed
                     ],
                     components:
                         criarBotoesEmbed(
-                            guildId,
-                            mensagem.id
+                            dadosBanco.id
                         )
                 });
 
@@ -1204,7 +1299,6 @@ module.exports = {
                 });
 
             } catch (erro) {
-
                 console.error(
                     "❌ Erro ao enviar embed:",
                     erro
@@ -1212,38 +1306,30 @@ module.exports = {
 
                 return interaction.reply({
                     content:
-                        "❌ Não foi possível enviar o embed nesse canal. Verifique as permissões do bot.",
+                        "❌ Não foi possível enviar o embed nesse canal. Verifique as permissões do bot e a conexão com o banco.",
                     ephemeral: true
                 });
             }
         }
     },
 
-    // =================================================
+    // =====================================================
     // 📝 MODAIS
-    // =================================================
+    // =====================================================
 
     async handleModal(interaction) {
-
-        if (
-            !interaction.member ||
-            !interaction.member.permissions.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
-
+        if (!interaction.guild) {
             return interaction.reply({
                 content:
-                    "❌ Você precisa ter a permissão de **Administrador do Discord** para alterar embeds.",
+                    "❌ Este sistema só funciona dentro de servidores.",
                 ephemeral: true
             });
         }
 
-        if (!interaction.guild) {
-
+        if (!isAdmin(interaction)) {
             return interaction.reply({
                 content:
-                    "❌ Este sistema só funciona dentro de servidores.",
+                    "❌ Somente administradores podem alterar embeds.",
                 ephemeral: true
             });
         }
@@ -1264,7 +1350,6 @@ module.exports = {
             configuracoes.get(chave);
 
         if (!config) {
-
             return interaction.reply({
                 content:
                     "❌ Sua configuração de embed expirou. Use `/embed` novamente.",
@@ -1280,7 +1365,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_titulo"
         ) {
-
             config.titulo =
                 interaction.fields
                     .getTextInputValue(
@@ -1303,7 +1387,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_descricao"
         ) {
-
             config.descricao =
                 interaction.fields
                     .getTextInputValue(
@@ -1326,7 +1409,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_imagem"
         ) {
-
             const imagem =
                 interaction.fields
                     .getTextInputValue(
@@ -1338,7 +1420,6 @@ module.exports = {
                 imagem &&
                 !validarURL(imagem)
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ URL da imagem inválida.",
@@ -1364,7 +1445,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_thumbnail"
         ) {
-
             const thumbnail =
                 interaction.fields
                     .getTextInputValue(
@@ -1376,7 +1456,6 @@ module.exports = {
                 thumbnail &&
                 !validarURL(thumbnail)
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ URL da thumbnail inválida.",
@@ -1402,7 +1481,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_cor"
         ) {
-
             const cor =
                 interaction.fields
                     .getTextInputValue(
@@ -1412,9 +1490,10 @@ module.exports = {
 
             if (
                 cor &&
-                !/^#[0-9A-Fa-f]{6}$/.test(cor)
+                !/^#[0-9A-Fa-f]{6}$/.test(
+                    cor
+                )
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ Cor inválida! Use o formato `#5865F2`.",
@@ -1441,7 +1520,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_autor"
         ) {
-
             const autor =
                 interaction.fields
                     .getTextInputValue(
@@ -1460,7 +1538,6 @@ module.exports = {
                 autorIcone &&
                 !validarURL(autorIcone)
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ URL do ícone do autor inválida.",
@@ -1489,7 +1566,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_footer"
         ) {
-
             const footer =
                 interaction.fields
                     .getTextInputValue(
@@ -1508,7 +1584,6 @@ module.exports = {
                 footerIcone &&
                 !validarURL(footerIcone)
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ URL do ícone do rodapé inválida.",
@@ -1537,7 +1612,6 @@ module.exports = {
             interaction.customId ===
             "embed_modal_canal"
         ) {
-
             const canalId =
                 interaction.fields
                     .getTextInputValue(
@@ -1546,9 +1620,16 @@ module.exports = {
                     .trim();
 
             if (!canalId) {
+                config.canalId = "";
 
-                config.canalId =
-                    "";
+                // Se já existe no banco, remove o canal
+                if (config.editandoEmbedId) {
+                    await atualizarCanalEmbed(
+                        config.editandoEmbedId,
+                        guildId,
+                        null
+                    ).catch(() => {});
+                }
 
                 return interaction.reply({
                     content:
@@ -1566,7 +1647,6 @@ module.exports = {
                 !canal ||
                 !canal.isTextBased()
             ) {
-
                 return interaction.reply({
                     content:
                         "❌ Canal inválido. Coloque o ID de um canal de texto deste servidor.",
@@ -1576,6 +1656,16 @@ module.exports = {
 
             config.canalId =
                 canal.id;
+
+            // Se estiver editando um embed já salvo,
+            // salva também o novo canal no banco.
+            if (config.editandoEmbedId) {
+                await atualizarCanalEmbed(
+                    config.editandoEmbedId,
+                    guildId,
+                    canal.id
+                ).catch(() => {});
+            }
 
             return interaction.reply({
                 content:
