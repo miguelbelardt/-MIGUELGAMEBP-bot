@@ -58,7 +58,8 @@ async function garantirColunaSequencia() {
     sequenciaBancoPromise = (async () => {
         await pool.query(`
             ALTER TABLE usuarios
-            ADD COLUMN IF NOT EXISTS daily_sequencia BIGINT NOT NULL DEFAULT 0
+            ADD COLUMN IF NOT EXISTS
+            daily_sequencia BIGINT NOT NULL DEFAULT 0
         `);
 
         sequenciaBancoPronta = true;
@@ -304,7 +305,7 @@ async function atualizarSequenciaSePerdeuDia(
         await pool.query(`
             UPDATE usuarios
             SET daily_sequencia = 0
-            WHERE id = $1
+            WHERE id = ?
         `, [
             userId
         ]);
@@ -674,7 +675,7 @@ function textoProximaSequencia(
 }
 
 // =====================================================
-// 🔒 RESGATAR DAILY ATOMICAMENTE
+// 🔒 RESGATAR DAILY
 // =====================================================
 
 async function resgatarDailyAtomico(
@@ -683,17 +684,14 @@ async function resgatarDailyAtomico(
 ) {
     await garantirColunaSequencia();
 
-    const client =
-        await pool.connect();
-
     try {
 
-        await client.query(
-            "BEGIN"
-        );
+        // =============================================
+        // 👤 GARANTIR USUÁRIO
+        // =============================================
 
-        await client.query(`
-            INSERT INTO usuarios (
+        await pool.query(`
+            INSERT IGNORE INTO usuarios (
                 id,
                 saldo,
                 ultimo_daily,
@@ -702,28 +700,29 @@ async function resgatarDailyAtomico(
                 daily_sequencia
             )
             VALUES (
-                $1,
+                ?,
                 0,
                 NULL,
                 FALSE,
                 NULL,
                 0
             )
-            ON CONFLICT (id)
-            DO NOTHING
         `, [
             userId
         ]);
 
+        // =============================================
+        // 📊 BUSCAR DADOS ATUAIS
+        // =============================================
+
         const resultado =
-            await client.query(`
+            await pool.query(`
                 SELECT
                     saldo,
                     ultimo_daily,
                     daily_sequencia
                 FROM usuarios
-                WHERE id = $1
-                FOR UPDATE
+                WHERE id = ?
             `, [
                 userId
             ]);
@@ -731,16 +730,21 @@ async function resgatarDailyAtomico(
         const dados =
             resultado.rows[0];
 
+        if (!dados) {
+            throw new Error(
+                "Usuário não encontrado após criação."
+            );
+        }
+
+        // =============================================
+        // 📅 JÁ PEGOU HOJE?
+        // =============================================
+
         if (
             pegouDailyHoje(
                 dados.ultimo_daily
             )
         ) {
-
-            await client.query(
-                "COMMIT"
-            );
-
             return {
                 sucesso: false,
 
@@ -756,6 +760,10 @@ async function resgatarDailyAtomico(
             };
         }
 
+        // =============================================
+        // 🔥 CALCULAR SEQUÊNCIA
+        // =============================================
+
         const sequenciaAtual =
             Number(
                 dados.daily_sequencia
@@ -767,50 +775,103 @@ async function resgatarDailyAtomico(
                 sequenciaAtual
             );
 
+        // =============================================
+        // 💰 SORTEAR RECOMPENSA
+        // =============================================
+
         const recompensa =
             sortearRecompensa();
 
         const agora =
             Date.now();
 
-        await client.query(`
-            UPDATE usuarios
-            SET
-                saldo =
-                    COALESCE(
-                        saldo,
-                        0
-                    ) + $1,
+        // =============================================
+        // 💾 ATUALIZAR USUÁRIO
+        // =============================================
 
-                ultimo_daily = $2,
+        const atualizacao =
+            await pool.query(`
+                UPDATE usuarios
+                SET
+                    saldo =
+                        COALESCE(
+                            saldo,
+                            0
+                        ) + ?,
 
-                daily_sequencia = $3,
+                    ultimo_daily = ?,
 
-                notificacao_daily = FALSE,
+                    daily_sequencia = ?,
 
-                notificacao_daily_em = NULL
+                    notificacao_daily = FALSE,
 
-            WHERE id = $4
-        `, [
-            recompensa,
-            agora,
-            novaSequencia,
-            userId
-        ]);
+                    notificacao_daily_em = NULL
 
-        await client.query(
-            "COMMIT"
-        );
+                WHERE
+                    id = ?
+
+                    AND (
+                        ultimo_daily IS NULL
+                        OR ultimo_daily < ?
+                    )
+            `, [
+                recompensa,
+                agora,
+                novaSequencia,
+                userId,
+                calcularInicioDoDiaBrasilia()
+            ]);
+
+        // =============================================
+        // ⚠️ PROTEÇÃO CONTRA DUPLO RESGATE
+        // =============================================
+
+        if (
+            atualizacao.rowCount === 0
+        ) {
+
+            const dadosAtualizados =
+                await pool.query(`
+                    SELECT
+                        ultimo_daily,
+                        daily_sequencia
+                    FROM usuarios
+                    WHERE id = ?
+                `, [
+                    userId
+                ]);
+
+            const dadosFinais =
+                dadosAtualizados.rows[0];
+
+            return {
+                sucesso: false,
+
+                ultimoDaily:
+                    Number(
+                        dadosFinais?.ultimo_daily
+                    ) || 0,
+
+                sequencia:
+                    Number(
+                        dadosFinais?.daily_sequencia
+                    ) || 0
+            };
+        }
 
         notificacoesAgendadas.delete(
             userId
         );
 
+        // =============================================
+        // 💳 BUSCAR NOVO SALDO
+        // =============================================
+
         const saldoAtual =
             await pool.query(`
                 SELECT saldo
                 FROM usuarios
-                WHERE id = $1
+                WHERE id = ?
             `, [
                 userId
             ]);
@@ -820,10 +881,18 @@ async function resgatarDailyAtomico(
                 saldoAtual.rows[0].saldo
             );
 
+        // =============================================
+        // 🕐 PRÓXIMO DAILY
+        // =============================================
+
         const {
             proximoDaily
         } =
             calcularTempoRestante();
+
+        // =============================================
+        // 🎁 EMBED
+        // =============================================
 
         const embed =
             new EmbedBuilder()
@@ -864,16 +933,7 @@ async function resgatarDailyAtomico(
         };
 
     } catch (erro) {
-
-        await client.query(
-            "ROLLBACK"
-        );
-
         throw erro;
-
-    } finally {
-
-        client.release();
     }
 }
 
