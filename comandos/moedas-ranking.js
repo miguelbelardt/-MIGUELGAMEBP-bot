@@ -75,6 +75,7 @@ function criarEmbed(resultado, tipo) {
             : "🌎 RANKING GLOBAL";
 
     return new EmbedBuilder()
+        .setColor(0xFEE75C)
         .setTitle(`🏆 ${nomeTipo}`)
         .setDescription(texto)
         .setFooter({
