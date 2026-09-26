@@ -67,6 +67,31 @@ async function inicializarTickets() {
 }
 
 // ================================
+// 🔗 VALIDAR URL
+// ================================
+
+function urlValida(url) {
+
+    if (!url || typeof url !== "string") {
+        return false;
+    }
+
+    try {
+
+        const resultado = new URL(url);
+
+        return (
+            resultado.protocol === "http:" ||
+            resultado.protocol === "https:"
+        );
+
+    } catch {
+
+        return false;
+    }
+}
+
+// ================================
 // 🎨 EMBED DO TICKET
 // ================================
 
@@ -74,9 +99,15 @@ function criarEmbedTicket(modelo) {
 
     const embed = new EmbedBuilder();
 
-    if (modelo.cor) {
+    if (
+        modelo.cor &&
+        /^#[0-9A-Fa-f]{6}$/.test(modelo.cor)
+    ) {
+
         embed.setColor(modelo.cor);
+
     } else {
+
         embed.setColor(0x5865F2);
     }
 
@@ -90,34 +121,58 @@ function criarEmbedTicket(modelo) {
 
     if (modelo.autor_nome) {
 
-        embed.setAuthor({
-            name: modelo.autor_nome,
-            ...(modelo.autor_icone
-                ? {
-                    iconURL: modelo.autor_icone
-                }
-                : {})
-        });
+        const autor = {
+            name: modelo.autor_nome
+        };
+
+        if (
+            modelo.autor_icone &&
+            urlValida(modelo.autor_icone)
+        ) {
+
+            autor.iconURL =
+                modelo.autor_icone;
+        }
+
+        embed.setAuthor(autor);
     }
 
-    if (modelo.imagem) {
-        embed.setImage(modelo.imagem);
+    if (
+        modelo.imagem &&
+        urlValida(modelo.imagem)
+    ) {
+
+        embed.setImage(
+            modelo.imagem
+        );
     }
 
-    if (modelo.thumbnail) {
-        embed.setThumbnail(modelo.thumbnail);
+    if (
+        modelo.thumbnail &&
+        urlValida(modelo.thumbnail)
+    ) {
+
+        embed.setThumbnail(
+            modelo.thumbnail
+        );
     }
 
     if (modelo.rodape) {
 
-        embed.setFooter({
-            text: modelo.rodape,
-            ...(modelo.rodape_icone
-                ? {
-                    iconURL: modelo.rodape_icone
-                }
-                : {})
-        });
+        const rodape = {
+            text: modelo.rodape
+        };
+
+        if (
+            modelo.rodape_icone &&
+            urlValida(modelo.rodape_icone)
+        ) {
+
+            rodape.iconURL =
+                modelo.rodape_icone;
+        }
+
+        embed.setFooter(rodape);
     }
 
     return embed;
@@ -158,7 +213,6 @@ function criarBotaoTicket(
         .setStyle(estilo)
         .setDisabled(disabled);
 
-    // Botões Link não usam customId
     if (estilo !== ButtonStyle.Link) {
 
         botao.setCustomId(
@@ -223,10 +277,6 @@ function criarPainel(
 
     const componentes = [];
 
-    // ================================
-    // 🎫 MENU PRINCIPAL
-    // ================================
-
     const opcoes = [
         {
             label: "Criar ticket",
@@ -245,10 +295,6 @@ function criarPainel(
             emoji: "⚙️"
         }
     ];
-
-    // ================================
-    // 🎫 MODELOS EXISTENTES
-    // ================================
 
     if (modelos.length > 0) {
 
@@ -289,10 +335,6 @@ function criarPainel(
         new ActionRowBuilder()
             .addComponents(menu)
     );
-
-    // ================================
-    // 🔄 ATUALIZAR
-    // ================================
 
     componentes.push(
         new ActionRowBuilder()
@@ -930,6 +972,15 @@ module.exports = {
         interaction
     ) {
 
+        if (!interaction.guild) {
+
+            return interaction.reply({
+                content:
+                    "❌ O comando `/ticket` só pode ser usado dentro de um servidor.",
+                ephemeral: true
+            });
+        }
+
         try {
 
             await inicializarTickets();
@@ -988,6 +1039,23 @@ module.exports = {
     async handleButton(
         interaction
     ) {
+
+        if (!interaction.guild) {
+
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ O sistema de tickets só pode ser usado dentro de um servidor.",
+                    ephemeral: true
+                });
+            }
+
+            return true;
+        }
 
         if (
             !interaction.customId
@@ -1272,6 +1340,23 @@ module.exports = {
         interaction
     ) {
 
+        if (!interaction.guild) {
+
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ O sistema de tickets só pode ser usado dentro de um servidor.",
+                    ephemeral: true
+                });
+            }
+
+            return true;
+        }
+
         if (
             !interaction.customId.startsWith(
                 "ticket_"
@@ -1463,6 +1548,23 @@ module.exports = {
     async handleModal(
         interaction
     ) {
+
+        if (!interaction.guild) {
+
+            if (
+                !interaction.replied &&
+                !interaction.deferred
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ O sistema de tickets só pode ser usado dentro de um servidor.",
+                    ephemeral: true
+                });
+            }
+
+            return true;
+        }
 
         if (
             !interaction.customId.startsWith(
