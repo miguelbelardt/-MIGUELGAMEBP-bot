@@ -83,7 +83,6 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
         });
 
         collector.on("collect", async buttonInteraction => {
-
             if (buttonInteraction.user.id !== destinatario.id) {
                 return buttonInteraction.reply({
                     content: "❌ Apenas o destinatário pode aceitar este pagamento.",
@@ -93,33 +92,35 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
 
             collector.stop("accepted");
 
-            const client = await pool.connect();
+            let connection;
 
             try {
-                await client.query("BEGIN");
+                connection = await pool.getConnection();
 
-                await client.query(
+                await connection.beginTransaction();
+
+                // Garante que o destinatário exista
+                await connection.query(
                     `
-                    INSERT INTO usuarios (id, saldo)
-                    VALUES ($1, 0)
-                    ON CONFLICT (id) DO NOTHING
+                    INSERT IGNORE INTO usuarios (id, saldo)
+                    VALUES (?, 0)
                     `,
                     [destinatario.id]
                 );
 
-                const resultado = await client.query(
+                // Retira as moedas do remetente somente se houver saldo suficiente
+                const [resultado] = await connection.query(
                     `
                     UPDATE usuarios
-                    SET saldo = COALESCE(saldo, 0) - $1
-                    WHERE id = $2
-                    AND COALESCE(saldo, 0) >= $1
-                    RETURNING saldo
+                    SET saldo = COALESCE(saldo, 0) - ?
+                    WHERE id = ?
+                    AND COALESCE(saldo, 0) >= ?
                     `,
-                    [quantidade, remetenteId]
+                    [quantidade, remetenteId, quantidade]
                 );
 
-                if (resultado.rowCount === 0) {
-                    await client.query("ROLLBACK");
+                if (resultado.affectedRows === 0) {
+                    await connection.rollback();
 
                     return buttonInteraction.update({
                         content:
@@ -129,25 +130,36 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
                     });
                 }
 
-                await client.query(
+                // Adiciona as moedas ao destinatário
+                await connection.query(
                     `
                     UPDATE usuarios
-                    SET saldo = COALESCE(saldo, 0) + $1
-                    WHERE id = $2
+                    SET saldo = COALESCE(saldo, 0) + ?
+                    WHERE id = ?
                     `,
                     [quantidade, destinatario.id]
                 );
 
-                await client.query("COMMIT");
+                // Busca o novo saldo do remetente
+                const [saldoAtualizado] = await connection.query(
+                    `
+                    SELECT COALESCE(saldo, 0) AS saldo
+                    FROM usuarios
+                    WHERE id = ?
+                    `,
+                    [remetenteId]
+                );
 
-                const novoSaldo = Number(resultado.rows[0].saldo);
+                await connection.commit();
+
+                const novoSaldo = Number(saldoAtualizado[0]?.saldo ?? 0);
 
                 const sucesso = new EmbedBuilder()
                     .setTitle("✅ PAGAMENTO ACEITO")
                     .setDescription(
-                        `${destinatario} aceitou o pagamento de ${responder.user}!\n\n` +
+                        `${destinatario} aceitou o pagamento de ${buttonInteraction.message.interaction?.user ?? "um usuário"}!\n\n` +
                         `💰 Valor recebido: **${quantidade} moedas**\n` +
-                        `💳 Novo saldo de ${responder.user}: **${novoSaldo} moedas**`
+                        `💳 Novo saldo do remetente: **${novoSaldo} moedas**`
                     )
                     .setColor("Green");
 
@@ -157,7 +169,13 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
                 });
 
             } catch (erro) {
-                await client.query("ROLLBACK");
+                if (connection) {
+                    try {
+                        await connection.rollback();
+                    } catch (rollbackErro) {
+                        console.error("❌ Erro ao fazer ROLLBACK do PAY:", rollbackErro);
+                    }
+                }
 
                 console.error("❌ Erro ao aceitar PAY:", erro);
 
@@ -168,7 +186,9 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
                 });
 
             } finally {
-                client.release();
+                if (connection) {
+                    connection.release();
+                }
             }
         });
 
