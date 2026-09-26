@@ -77,9 +77,28 @@ const TIPOS_LOG = {
         descricao: "Registra quando mensagens são apagadas usando o comando clear."
     },
 
+    // =====================================================
+    // 🎙️ VOZ
+    // =====================================================
+
     voz: {
         nome: "🎙️ Voz",
-        descricao: "Entrada, saída e mudança de canal de voz."
+        descricao: "Configure separadamente os eventos de voz."
+    },
+
+    voz_entrada: {
+        nome: "🟢 Entrada na call",
+        descricao: "Registra quando um membro entra em um canal de voz."
+    },
+
+    voz_saida: {
+        nome: "🔴 Saída da call",
+        descricao: "Registra quando um membro sai de um canal de voz."
+    },
+
+    voz_mudanca: {
+        nome: "🔄 Mudança de canal",
+        descricao: "Registra quando um membro muda de um canal de voz para outro."
     }
 };
 
@@ -109,10 +128,17 @@ const SUBTIPOS_MODERACAO = [
     "moderacao_clear"
 ];
 
+const SUBTIPOS_VOZ = [
+    "voz_entrada",
+    "voz_saida",
+    "voz_mudanca"
+];
+
 const SUBTIPOS = [
     ...SUBTIPOS_MENSAGENS,
     ...SUBTIPOS_MEMBROS,
-    ...SUBTIPOS_MODERACAO
+    ...SUBTIPOS_MODERACAO,
+    ...SUBTIPOS_VOZ
 ];
 
 function criarEmbedConfig() {
@@ -199,7 +225,8 @@ function ehSubtipo(tipo) {
     return (
         SUBTIPOS_MENSAGENS.includes(tipo) ||
         SUBTIPOS_MEMBROS.includes(tipo) ||
-        SUBTIPOS_MODERACAO.includes(tipo)
+        SUBTIPOS_MODERACAO.includes(tipo) ||
+        SUBTIPOS_VOZ.includes(tipo)
     );
 }
 
@@ -226,6 +253,10 @@ function criarBotoesConfig(tipo) {
         criarBotaoVoltar(voltarId)
     );
 }
+
+// =====================================================
+// 💬 MENSAGENS
+// =====================================================
 
 async function mostrarMensagens(interaction) {
     const editadas = await buscarConfig(
@@ -286,6 +317,10 @@ async function mostrarMensagens(interaction) {
         ]
     });
 }
+
+// =====================================================
+// 👤 MEMBROS
+// =====================================================
 
 async function mostrarMembros(interaction) {
     const nickname = await buscarConfig(
@@ -391,6 +426,10 @@ async function mostrarMembros(interaction) {
     });
 }
 
+// =====================================================
+// 🔨 MODERAÇÃO
+// =====================================================
+
 async function mostrarModeracao(interaction) {
     const ban = await buscarConfig(
         interaction.guild.id,
@@ -495,6 +534,97 @@ async function mostrarModeracao(interaction) {
     });
 }
 
+// =====================================================
+// 🎙️ VOZ
+// =====================================================
+
+async function mostrarVoz(interaction) {
+    const entrada = await buscarConfig(
+        interaction.guild.id,
+        "voz_entrada"
+    );
+
+    const saida = await buscarConfig(
+        interaction.guild.id,
+        "voz_saida"
+    );
+
+    const mudanca = await buscarConfig(
+        interaction.guild.id,
+        "voz_mudanca"
+    );
+
+    const embed = new EmbedBuilder()
+        .setTitle("🎙️ Voz")
+        .setDescription(
+            "Configure separadamente os logs dos eventos de voz.\n\n" +
+
+            `🟢 **Entrada na call:** ${
+                entrada
+                    ? `Ativado → <#${entrada.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🔴 **Saída da call:** ${
+                saida
+                    ? `Ativado → <#${saida.canal_id}>`
+                    : "🔴 Desativado"
+            }\n\n` +
+
+            `🔄 **Mudança de canal:** ${
+                mudanca
+                    ? `Ativado → <#${mudanca.canal_id}>`
+                    : "🔴 Desativado"
+            }`
+        )
+        .setColor(0x5865F2);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("logs_voz_entrada")
+                    .setLabel("Entrada")
+                    .setEmoji("🟢")
+                    .setStyle(
+                        entrada
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_voz_saida")
+                    .setLabel("Saída")
+                    .setEmoji("🔴")
+                    .setStyle(
+                        saida
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId("logs_voz_mudanca")
+                    .setLabel("Mudança")
+                    .setEmoji("🔄")
+                    .setStyle(
+                        mudanca
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    )
+            ),
+
+            new ActionRowBuilder().addComponents(
+                criarBotaoVoltar("logs_voltar")
+            )
+        ]
+    });
+}
+
+// =====================================================
+// ⚙️ CONFIGURAÇÃO DE SUBTIPO
+// =====================================================
+
 async function mostrarConfiguracaoSubtipo(
     interaction,
     tipo
@@ -551,6 +681,10 @@ async function mostrarConfiguracaoSubtipo(
     });
 }
 
+// =====================================================
+// 📋 MOSTRAR TIPO
+// =====================================================
+
 async function mostrarTipo(interaction, tipo) {
     if (tipo === "mensagens") {
         return mostrarMensagens(interaction);
@@ -562,6 +696,10 @@ async function mostrarTipo(interaction, tipo) {
 
     if (tipo === "moderacao") {
         return mostrarModeracao(interaction);
+    }
+
+    if (tipo === "voz") {
+        return mostrarVoz(interaction);
     }
 
     const dados = TIPOS_LOG[tipo];
@@ -610,6 +748,10 @@ async function mostrarTipo(interaction, tipo) {
     });
 }
 
+// =====================================================
+// 📋 PAINEL
+// =====================================================
+
 async function mostrarPainel(interaction) {
     await interaction.update({
         embeds: [criarEmbedConfig()],
@@ -620,6 +762,10 @@ async function mostrarPainel(interaction) {
         ]
     });
 }
+
+// =====================================================
+// 📊 STATUS
+// =====================================================
 
 async function mostrarStatus(interaction) {
     const resultado = await pool.query(
@@ -666,6 +812,15 @@ async function mostrarStatus(interaction) {
 
     const clear =
         buscarCanal("moderacao_clear");
+
+    const vozEntrada =
+        buscarCanal("voz_entrada");
+
+    const vozSaida =
+        buscarCanal("voz_saida");
+
+    const vozMudanca =
+        buscarCanal("voz_mudanca");
 
     let descricao =
         `💬 **Mensagens**\n` +
@@ -722,26 +877,24 @@ async function mostrarStatus(interaction) {
             clear
                 ? `<#${clear.canal_id}>`
                 : "❌ Desativado"
-        }\n\n`;
+        }\n\n` +
 
-    for (
-        const [tipo, dados]
-        of Object.entries(TIPOS_PRINCIPAIS)
-    ) {
-        if (
-            tipo === "mensagens" ||
-            tipo === "membros" ||
-            tipo === "moderacao"
-        ) {
-            continue;
-        }
-
-        const config = buscarCanal(tipo);
-
-        descricao += config
-            ? `${dados.nome} → 🟢 <#${config.canal_id}>\n`
-            : `${dados.nome} → 🔴 Desativado\n`;
-    }
+        `🎙️ **Voz**\n` +
+        `🟢 Entrada → ${
+            vozEntrada
+                ? `<#${vozEntrada.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🔴 Saída → ${
+            vozSaida
+                ? `<#${vozSaida.canal_id}>`
+                : "❌ Desativado"
+        }\n` +
+        `🔄 Mudança → ${
+            vozMudanca
+                ? `<#${vozMudanca.canal_id}>`
+                : "❌ Desativado"
+        }`;
 
     const embed = new EmbedBuilder()
         .setTitle("📋 Status dos Logs")
@@ -753,6 +906,10 @@ async function mostrarStatus(interaction) {
         ephemeral: true
     });
 }
+
+// =====================================================
+// 📝 REGISTRAR LOG
+// =====================================================
 
 async function registrarLog(guild, tipo, embed) {
     if (!guild) return;
@@ -964,6 +1121,10 @@ async function registrarMensagensApagadas(
     }
 }
 
+// =====================================================
+// 📦 EXPORTAÇÃO
+// =====================================================
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("logs")
@@ -1040,6 +1201,10 @@ module.exports = {
             return;
         }
 
+        // =================================================
+        // 📋 SELECT DO TIPO PRINCIPAL
+        // =================================================
+
         if (interaction.isStringSelectMenu()) {
             if (
                 interaction.customId ===
@@ -1054,6 +1219,10 @@ module.exports = {
                 );
             }
         }
+
+        // =================================================
+        // 📢 SELECT DE CANAL
+        // =================================================
 
         if (interaction.isChannelSelectMenu()) {
             if (
@@ -1140,7 +1309,15 @@ module.exports = {
             }
         }
 
+        // =================================================
+        // 🔘 BOTÕES
+        // =================================================
+
         if (interaction.isButton()) {
+
+            // ---------------------------------------------
+            // ↩️ VOLTAR AO PAINEL
+            // ---------------------------------------------
 
             if (
                 interaction.customId ===
@@ -1150,6 +1327,10 @@ module.exports = {
                     interaction
                 );
             }
+
+            // ---------------------------------------------
+            // 💬 MENSAGENS
+            // ---------------------------------------------
 
             if (
                 interaction.customId ===
@@ -1170,6 +1351,10 @@ module.exports = {
                     "mensagens_apagadas"
                 );
             }
+
+            // ---------------------------------------------
+            // 👤 MEMBROS
+            // ---------------------------------------------
 
             if (
                 interaction.customId ===
@@ -1211,6 +1396,10 @@ module.exports = {
                 );
             }
 
+            // ---------------------------------------------
+            // 🔨 MODERAÇÃO
+            // ---------------------------------------------
+
             if (
                 interaction.customId ===
                 "logs_moderacao_ban"
@@ -1251,6 +1440,44 @@ module.exports = {
                 );
             }
 
+            // ---------------------------------------------
+            // 🎙️ VOZ
+            // ---------------------------------------------
+
+            if (
+                interaction.customId ===
+                "logs_voz_entrada"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "voz_entrada"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_voz_saida"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "voz_saida"
+                );
+            }
+
+            if (
+                interaction.customId ===
+                "logs_voz_mudanca"
+            ) {
+                return mostrarConfiguracaoSubtipo(
+                    interaction,
+                    "voz_mudanca"
+                );
+            }
+
+            // ---------------------------------------------
+            // ↩️ VOLTAR DO SUBTIPO
+            // ---------------------------------------------
+
             if (
                 interaction.customId ===
                 "logs_voltar_subtipo"
@@ -1288,10 +1515,27 @@ module.exports = {
                     );
                 }
 
+                if (
+                    ultimaMensagem ===
+                    "🟢 Entrada na call" ||
+                    ultimaMensagem ===
+                    "🔴 Saída da call" ||
+                    ultimaMensagem ===
+                    "🔄 Mudança de canal"
+                ) {
+                    return mostrarVoz(
+                        interaction
+                    );
+                }
+
                 return mostrarMensagens(
                     interaction
                 );
             }
+
+            // ---------------------------------------------
+            // 🔄 ALTERAR CANAL
+            // ---------------------------------------------
 
             if (
                 interaction.customId.startsWith(
@@ -1337,6 +1581,10 @@ module.exports = {
                     ]
                 });
             }
+
+            // ---------------------------------------------
+            // 🔴 REMOVER / DESATIVAR
+            // ---------------------------------------------
 
             if (
                 interaction.customId.startsWith(
@@ -1390,6 +1638,10 @@ module.exports = {
                     ]
                 });
             }
+
+            // ---------------------------------------------
+            // ↩️ VOLTAR PARA TIPO PRINCIPAL
+            // ---------------------------------------------
 
             if (
                 interaction.customId.startsWith(
