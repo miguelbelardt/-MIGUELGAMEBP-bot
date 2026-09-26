@@ -235,6 +235,7 @@ function urlValida(url) {
     } catch {
 
         return false;
+
     }
 }
 
@@ -287,6 +288,7 @@ function criarEmbedTicket(modelo) {
         embed.setColor(
             0x5865F2
         );
+
     }
 
     if (modelo.titulo) {
@@ -294,6 +296,7 @@ function criarEmbedTicket(modelo) {
         embed.setTitle(
             modelo.titulo
         );
+
     }
 
     if (modelo.descricao) {
@@ -301,6 +304,7 @@ function criarEmbedTicket(modelo) {
         embed.setDescription(
             modelo.descricao
         );
+
     }
 
     if (modelo.autor_nome) {
@@ -804,20 +808,31 @@ function criarModalTicket() {
             );
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(nome),
 
         new ActionRowBuilder()
-            .addComponents(titulo),
+            .addComponents(
+                nome
+            ),
 
         new ActionRowBuilder()
-            .addComponents(descricao),
+            .addComponents(
+                titulo
+            ),
 
         new ActionRowBuilder()
-            .addComponents(autor),
+            .addComponents(
+                descricao
+            ),
 
         new ActionRowBuilder()
-            .addComponents(cor)
+            .addComponents(
+                autor
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                cor
+            )
     );
 
     return modal;
@@ -934,11 +949,21 @@ function criarModalEditarInformacoes(
             .setMaxLength(20);
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(nome),
-        new ActionRowBuilder().addComponents(titulo),
-        new ActionRowBuilder().addComponents(descricao),
-        new ActionRowBuilder().addComponents(autor),
-        new ActionRowBuilder().addComponents(cor)
+
+        new ActionRowBuilder()
+            .addComponents(nome),
+
+        new ActionRowBuilder()
+            .addComponents(titulo),
+
+        new ActionRowBuilder()
+            .addComponents(descricao),
+
+        new ActionRowBuilder()
+            .addComponents(autor),
+
+        new ActionRowBuilder()
+            .addComponents(cor)
     );
 
     return modal;
@@ -1012,11 +1037,21 @@ function criarModalPersonalizacao(
             .setMaxLength(100);
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(imagem),
-        new ActionRowBuilder().addComponents(thumbnail),
-        new ActionRowBuilder().addComponents(rodape),
-        new ActionRowBuilder().addComponents(botao),
-        new ActionRowBuilder().addComponents(emoji)
+
+        new ActionRowBuilder()
+            .addComponents(imagem),
+
+        new ActionRowBuilder()
+            .addComponents(thumbnail),
+
+        new ActionRowBuilder()
+            .addComponents(rodape),
+
+        new ActionRowBuilder()
+            .addComponents(botao),
+
+        new ActionRowBuilder()
+            .addComponents(emoji)
     );
 
     return modal;
@@ -1046,6 +1081,7 @@ function criarPainelModelo(
     if (config) {
 
         embed.addFields(
+
             {
                 name:
                     "📢 Canal do painel",
@@ -1350,19 +1386,38 @@ function criarMenuCargo(
             .setMinValues(1)
             .setMaxValues(1);
 
+    const botaoRemover =
+        new ButtonBuilder()
+            .setCustomId(
+                `ticket_cargo_remover_${modeloId}`
+            )
+            .setLabel(
+                "Remover cargo"
+            )
+            .setEmoji(
+                "🗑️"
+            )
+            .setStyle(
+                ButtonStyle.Danger
+            );
+
     return {
         embeds: [
             new EmbedBuilder()
                 .setColor(0x5865F2)
                 .setTitle("👥 Cargo da staff")
                 .setDescription(
-                    "Escolha o cargo que será mencionado quando um novo ticket for criado."
+                    "Escolha o cargo que será mencionado quando um novo ticket for criado.\n\n" +
+                    "🗑️ Use o botão abaixo para remover o cargo atualmente selecionado."
                 )
         ],
 
         components: [
             new ActionRowBuilder()
-                .addComponents(menu)
+                .addComponents(menu),
+
+            new ActionRowBuilder()
+                .addComponents(botaoRemover)
         ],
 
         ephemeral:
@@ -1610,7 +1665,7 @@ async function abrirTicket(
     if (
         !categoria ||
         categoria.type !==
-            ChannelType.GuildCategory
+        ChannelType.GuildCategory
     ) {
 
         await interaction.reply({
@@ -1910,7 +1965,7 @@ async function fecharTicket(
     if (
         !canal ||
         canal.type !==
-            ChannelType.GuildText
+        ChannelType.GuildText
     ) {
 
         await interaction.reply({
@@ -2126,7 +2181,6 @@ module.exports = {
                 return true;
             }
 
-            // Agora abre a tela do motivo.
             await interaction.showModal(
                 criarModalMotivoTicket(
                     id
@@ -2333,6 +2387,94 @@ module.exports = {
             await interaction.update(
                 criarMenuCategoria(
                     id
+                )
+            );
+
+            return true;
+        }
+
+        // ================================
+        // 🗑️ REMOVER CARGO
+        // ================================
+        // IMPORTANTE:
+        // Este bloco precisa ficar ANTES
+        // do ticket_cargo_ normal.
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_cargo_remover_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_cargo_remover_",
+                    ""
+                );
+
+            const modeloResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        id,
+                        interaction.guildId
+                    ]
+                );
+
+            if (
+                !modeloResult.rows.length
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Esse modelo de ticket não existe mais.",
+
+                    ephemeral:
+                        true
+                });
+
+                return true;
+            }
+
+            salvarConfiguracaoPendente(
+                interaction.guildId,
+                interaction.user.id,
+                id,
+                {
+                    cargo_mencao_id:
+                        null
+                }
+            );
+
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            const config =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    id,
+                    configResult.rows[0] || null
+                );
+
+            await interaction.update(
+                criarPainelModelo(
+                    modeloResult.rows[0],
+                    config
                 )
             );
 
@@ -2567,7 +2709,7 @@ module.exports = {
             if (
                 !categoria ||
                 categoria.type !==
-                    ChannelType.GuildCategory
+                ChannelType.GuildCategory
             ) {
 
                 await interaction.reply({
@@ -2590,7 +2732,7 @@ module.exports = {
             const mudouCanal =
                 canalAntigoId &&
                 canalAntigoId !==
-                    config.canal_painel_id;
+                config.canal_painel_id;
 
             if (mudouCanal) {
 
@@ -2650,7 +2792,7 @@ module.exports = {
                         ),
 
                     config.cargo_mencao_id ||
-                        null,
+                    null,
 
                     Boolean(
                         config.contador_nome
@@ -3256,6 +3398,7 @@ module.exports = {
                 !cor ||
                 !/^#[0-9A-Fa-f]{6}$/.test(cor)
             ) {
+
                 cor =
                     "#5865F2";
             }
@@ -3341,6 +3484,7 @@ module.exports = {
                 !cor ||
                 !/^#[0-9A-Fa-f]{6}$/.test(cor)
             ) {
+
                 cor =
                     "#5865F2";
             }
@@ -3417,7 +3561,7 @@ module.exports = {
             if (
                 config &&
                 String(config.modelo_id) ===
-                    String(id)
+                String(id)
             ) {
 
                 await atualizarPainelPublicado(
@@ -3534,7 +3678,7 @@ module.exports = {
             if (
                 config &&
                 String(config.modelo_id) ===
-                    String(id)
+                String(id)
             ) {
 
                 await atualizarPainelPublicado(
