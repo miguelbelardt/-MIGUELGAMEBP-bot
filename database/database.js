@@ -20,7 +20,8 @@ async function inicializarBanco() {
             saldo BIGINT NOT NULL DEFAULT 0,
             xp BIGINT NOT NULL DEFAULT 0,
             ultimo_daily BIGINT,
-            notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE
+            notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE,
+            notificacao_daily_em BIGINT
         )
     `);
 
@@ -32,6 +33,11 @@ async function inicializarBanco() {
     await pool.query(`
         ALTER TABLE usuarios
         ADD COLUMN IF NOT EXISTS notificacao_daily BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+    await pool.query(`
+        ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS notificacao_daily_em BIGINT
     `);
 
     await pool.query(`
@@ -55,6 +61,14 @@ async function inicializarBanco() {
         UPDATE usuarios
         SET notificacao_daily = FALSE
         WHERE notificacao_daily IS NULL
+    `);
+
+    // Se a notificação estiver desativada,
+    // não deve existir horário agendado.
+    await pool.query(`
+        UPDATE usuarios
+        SET notificacao_daily_em = NULL
+        WHERE notificacao_daily = FALSE
     `);
 
     // ================================
@@ -228,9 +242,10 @@ async function criarUsuario(userId) {
             saldo,
             xp,
             ultimo_daily,
-            notificacao_daily
+            notificacao_daily,
+            notificacao_daily_em
         )
-        VALUES ($1, 0, 0, NULL, FALSE)
+        VALUES ($1, 0, 0, NULL, FALSE, NULL)
         ON CONFLICT (id) DO NOTHING
         `,
         [userId]
@@ -262,13 +277,22 @@ async function criarUsuario(userId) {
         `,
         [userId]
     );
+
+    await pool.query(
+        `
+        UPDATE usuarios
+        SET notificacao_daily_em = NULL
+        WHERE id = $1
+        AND notificacao_daily = FALSE
+        `,
+        [userId]
+    );
 }
 
 // ================================
 // 💰 SISTEMA DE MOEDAS
 // ================================
 
-// Pegar saldo
 async function getSaldo(userId) {
     await criarUsuario(userId);
 
@@ -284,7 +308,6 @@ async function getSaldo(userId) {
     return Number(resultado.rows[0].saldo);
 }
 
-// Alterar saldo
 async function alterarSaldo(userId, quantidade) {
     await criarUsuario(userId);
 
@@ -302,7 +325,6 @@ async function alterarSaldo(userId, quantidade) {
 // ⭐ SISTEMA DE XP
 // ================================
 
-// Pegar XP
 async function getXP(userId) {
     await criarUsuario(userId);
 
@@ -318,7 +340,6 @@ async function getXP(userId) {
     return Number(resultado.rows[0].xp);
 }
 
-// Adicionar XP
 async function adicionarXP(userId, quantidade) {
     await criarUsuario(userId);
 
@@ -332,7 +353,6 @@ async function adicionarXP(userId, quantidade) {
     );
 }
 
-// Remover XP
 async function removerXP(userId, quantidade) {
     await criarUsuario(userId);
 
@@ -360,7 +380,6 @@ async function removerXP(userId, quantidade) {
     );
 }
 
-// Definir XP
 async function setarXP(userId, quantidade) {
     await criarUsuario(userId);
 
@@ -385,7 +404,6 @@ async function setarXP(userId, quantidade) {
     );
 }
 
-// Pegar ranking de XP
 async function getRankingXP(limite = 10) {
     const resultado = await pool.query(
         `
@@ -457,16 +475,29 @@ async function getNotificacaoDaily(userId) {
 }
 
 // Salvar estado da notificação do Daily
-async function salvarNotificacaoDaily(userId, ativada) {
+// horario = horário em que a notificação deve ser enviada
+async function salvarNotificacaoDaily(
+    userId,
+    ativada,
+    horario = null
+) {
     await criarUsuario(userId);
 
     await pool.query(
         `
         UPDATE usuarios
-        SET notificacao_daily = $1
-        WHERE id = $2
+        SET
+            notificacao_daily = $1,
+            notificacao_daily_em = $2
+        WHERE id = $3
         `,
-        [ativada, userId]
+        [
+            ativada,
+            ativada && horario
+                ? Number(horario)
+                : null,
+            userId
+        ]
     );
 }
 
@@ -474,16 +505,25 @@ async function salvarNotificacaoDaily(userId, ativada) {
 async function getUsuariosComNotificacaoDaily() {
     const resultado = await pool.query(
         `
-        SELECT id, ultimo_daily
+        SELECT
+            id,
+            ultimo_daily,
+            notificacao_daily_em
         FROM usuarios
-        WHERE notificacao_daily = TRUE
-        AND ultimo_daily IS NOT NULL
+        WHERE
+            notificacao_daily = TRUE
+            AND ultimo_daily IS NOT NULL
         `
     );
 
     return resultado.rows.map(usuario => ({
         id: usuario.id,
-        ultimo_daily: Number(usuario.ultimo_daily)
+        ultimo_daily:
+            Number(usuario.ultimo_daily),
+        notificacao_daily_em:
+            usuario.notificacao_daily_em
+                ? Number(usuario.notificacao_daily_em)
+                : null
     }));
 }
 
@@ -736,7 +776,6 @@ async function getRankingMoedas(
 // 👑 SISTEMA DE ADM DO BOT
 // ================================
 
-// Adicionar ADM
 async function adicionarAdm(userId) {
     await pool.query(
         `
@@ -748,7 +787,6 @@ async function adicionarAdm(userId) {
     );
 }
 
-// Remover ADM
 async function removerAdm(userId) {
     await pool.query(
         `
@@ -759,7 +797,6 @@ async function removerAdm(userId) {
     );
 }
 
-// Verificar se é ADM
 async function isAdm(userId) {
     const resultado = await pool.query(
         `
