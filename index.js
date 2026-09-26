@@ -84,6 +84,12 @@ const mensagensRecentes = new Map();
 
 // Guarda exclusões que estão esperando 1 segundo
 // para saber se foi apenas uma mensagem ou várias.
+//
+// CHAVE:
+// guild.id
+//
+// Assim cada servidor possui seu próprio grupo
+// de mensagens apagadas.
 const exclusoesPendentes = new Map();
 
 // Tempo máximo que uma mensagem fica no cache.
@@ -119,40 +125,81 @@ client.registrarLog = logs.registrarLog;
 function guardarMensagemRecente(message) {
     if (!message?.id) return;
 
+    if (!message.guild) return;
+
     const dados = {
         id: message.id,
-        guildId: message.guild?.id || null,
-        canalId: message.channel?.id || null,
-        canalNome: message.channel?.name || "Canal desconhecido",
 
-        autorId: message.author?.id || null,
-        autorTag: message.author?.tag || "Usuário desconhecido",
-        autorNome: message.author?.username || "Usuário desconhecido",
+        guildId:
+            message.guild.id,
 
-        conteudo: message.content || "",
+        guildNome:
+            message.guild.name || "Servidor desconhecido",
 
-        anexos: message.attachments
-            ? [...message.attachments.values()].map(anexo => ({
-                nome: anexo.name || "arquivo",
-                url: anexo.url
-            }))
-            : [],
+        canalId:
+            message.channel?.id || null,
 
-        criadoEm: message.createdTimestamp || Date.now()
+        canalNome:
+            message.channel?.name || "Canal desconhecido",
+
+        autorId:
+            message.author?.id || null,
+
+        autorTag:
+            message.author?.tag ||
+            message.author?.username ||
+            "Usuário desconhecido",
+
+        autorNome:
+            message.author?.username ||
+            "Usuário desconhecido",
+
+        conteudo:
+            message.content || "",
+
+        anexos:
+            message.attachments
+                ? [...message.attachments.values()].map(
+                    anexo => ({
+                        nome:
+                            anexo.name ||
+                            "arquivo",
+
+                        url:
+                            anexo.url
+                    })
+                )
+                : [],
+
+        criadoEm:
+            message.createdTimestamp ||
+            Date.now()
     };
 
-    mensagensRecentes.set(message.id, dados);
+    mensagensRecentes.set(
+        message.id,
+        dados
+    );
 
     setTimeout(() => {
-        const atual = mensagensRecentes.get(message.id);
+
+        const atual =
+            mensagensRecentes.get(
+                message.id
+            );
 
         if (
             atual &&
-            Date.now() - atual.criadoEm >=
+            Date.now() -
+            atual.criadoEm >=
             TEMPO_CACHE_MENSAGEM
         ) {
-            mensagensRecentes.delete(message.id);
+
+            mensagensRecentes.delete(
+                message.id
+            );
         }
+
     }, TEMPO_CACHE_MENSAGEM + 1000);
 }
 
@@ -161,35 +208,79 @@ function guardarMensagemRecente(message) {
 // =====================================================
 
 function obterDadosMensagemApagada(message) {
+
+    if (!message?.id) {
+        return null;
+    }
+
     const dadosCache =
-        mensagensRecentes.get(message.id);
+        mensagensRecentes.get(
+            message.id
+        );
 
     if (dadosCache) {
-        mensagensRecentes.delete(message.id);
+
+        mensagensRecentes.delete(
+            message.id
+        );
 
         return dadosCache;
     }
 
     return {
-        id: message.id,
-        guildId: message.guild?.id || null,
-        canalId: message.channel?.id || null,
-        canalNome: message.channel?.name || "Canal desconhecido",
+        id:
+            message.id,
 
-        autorId: message.author?.id || null,
-        autorTag: message.author?.tag || "Usuário desconhecido",
-        autorNome: message.author?.username || "Usuário desconhecido",
+        guildId:
+            message.guild?.id ||
+            null,
 
-        conteudo: message.content || "",
+        guildNome:
+            message.guild?.name ||
+            "Servidor desconhecido",
 
-        anexos: message.attachments
-            ? [...message.attachments.values()].map(anexo => ({
-                nome: anexo.name || "arquivo",
-                url: anexo.url
-            }))
-            : [],
+        canalId:
+            message.channel?.id ||
+            null,
 
-        criadoEm: message.createdTimestamp || Date.now()
+        canalNome:
+            message.channel?.name ||
+            "Canal desconhecido",
+
+        autorId:
+            message.author?.id ||
+            null,
+
+        autorTag:
+            message.author?.tag ||
+            message.author?.username ||
+            "Usuário desconhecido",
+
+        autorNome:
+            message.author?.username ||
+            "Usuário desconhecido",
+
+        conteudo:
+            message.content ||
+            "",
+
+        anexos:
+            message.attachments
+                ? [...message.attachments.values()].map(
+                    anexo => ({
+                        nome:
+                            anexo.name ||
+                            "arquivo",
+
+                        url:
+                            anexo.url
+                    })
+                )
+                : [],
+
+        criadoEm:
+            message.createdTimestamp ||
+            Date.now()
     };
 }
 
@@ -197,40 +288,93 @@ function obterDadosMensagemApagada(message) {
 // 📝 FORMATAR UMA MENSAGEM APAGADA
 // =====================================================
 
-function formatarMensagemApagada(dados, numero) {
-    const data = new Date(
-        dados.criadoEm || Date.now()
-    );
+function formatarMensagemApagada(
+    dados,
+    numero
+) {
 
-    const horario = data.toLocaleString(
-        "pt-BR",
-        {
-            timeZone: "America/Sao_Paulo"
-        }
-    );
+    const data =
+        new Date(
+            dados.criadoEm ||
+            Date.now()
+        );
+
+    const horario =
+        data.toLocaleString(
+            "pt-BR",
+            {
+                timeZone:
+                    "America/Sao_Paulo"
+            }
+        );
 
     let texto =
         `========================================\n` +
         `MENSAGEM ${numero}\n` +
         `========================================\n\n` +
 
-        `ID da mensagem: ${dados.id || "Desconhecido"}\n` +
-        `Autor: ${dados.autorTag || "Desconhecido"}\n` +
-        `ID do autor: ${dados.autorId || "Desconhecido"}\n` +
-        `Canal: #${dados.canalNome || "Desconhecido"}\n` +
-        `ID do canal: ${dados.canalId || "Desconhecido"}\n` +
+        `ID da mensagem: ${
+            dados.id ||
+            "Desconhecido"
+        }\n` +
+
+        `Autor: ${
+            dados.autorTag ||
+            "Desconhecido"
+        }\n` +
+
+        `ID do autor: ${
+            dados.autorId ||
+            "Desconhecido"
+        }\n` +
+
+        `Canal: #${
+            dados.canalNome ||
+            "Desconhecido"
+        }\n` +
+
+        `ID do canal: ${
+            dados.canalId ||
+            "Desconhecido"
+        }\n` +
+
+        `Servidor: ${
+            dados.guildNome ||
+            "Desconhecido"
+        }\n` +
+
+        `ID do servidor: ${
+            dados.guildId ||
+            "Desconhecido"
+        }\n` +
+
         `Horário: ${horario}\n\n` +
 
         `Mensagem:\n` +
-        `${dados.conteudo || "[Conteúdo não disponível]"}\n`;
 
-    if (dados.anexos?.length > 0) {
+        `${
+            dados.conteudo ||
+            "[Conteúdo não disponível]"
+        }\n`;
+
+    if (
+        dados.anexos?.length > 0
+    ) {
+
         texto +=
             `\nAnexos:\n`;
 
-        for (const anexo of dados.anexos) {
+        for (
+            const anexo
+            of dados.anexos
+        ) {
+
             texto +=
-                `- ${anexo.nome}: ${anexo.url}\n`;
+                `- ${
+                    anexo.nome
+                }: ${
+                    anexo.url
+                }\n`;
         }
     }
 
@@ -247,26 +391,60 @@ function formatarMensagemApagada(dados, numero) {
 function criarArquivoMensagensApagadas(
     mensagens
 ) {
+
+    if (
+        !mensagens ||
+        mensagens.length === 0
+    ) {
+        return Buffer.from(
+            "Nenhuma mensagem encontrada.",
+            "utf8"
+        );
+    }
+
+    const primeira =
+        mensagens[0];
+
     let conteudo =
         `========================================\n` +
         `MENSAGENS APAGADAS\n` +
         `========================================\n\n` +
 
-        `Servidor: ${mensagens[0]?.guildId || "Desconhecido"}\n` +
-        `Quantidade: ${mensagens.length}\n` +
-        `Data do registro: ${new Date().toLocaleString(
-            "pt-BR",
-            {
-                timeZone: "America/Sao_Paulo"
-            }
-        )}\n\n`;
+        `Servidor: ${
+            primeira.guildNome ||
+            "Desconhecido"
+        }\n` +
+
+        `ID do servidor: ${
+            primeira.guildId ||
+            "Desconhecido"
+        }\n` +
+
+        `Quantidade: ${
+            mensagens.length
+        }\n` +
+
+        `Data do registro: ${
+            new Date().toLocaleString(
+                "pt-BR",
+                {
+                    timeZone:
+                        "America/Sao_Paulo"
+                }
+            )
+        }\n\n`;
 
     mensagens.forEach(
-        (mensagem, index) => {
-            conteudo += formatarMensagemApagada(
-                mensagem,
-                index + 1
-            );
+        (
+            mensagem,
+            index
+        ) => {
+
+            conteudo +=
+                formatarMensagemApagada(
+                    mensagem,
+                    index + 1
+                );
         }
     );
 
@@ -277,14 +455,38 @@ function criarArquivoMensagensApagadas(
 }
 
 // =====================================================
-// 🗑️ ENVIAR LOG DE UMA MENSAGEM
+// 🗑️ ENVIAR LOG DE MENSAGEM APAGADA
 // =====================================================
 
 async function enviarLogMensagemApagada(
     guild,
     mensagens
 ) {
-    if (!guild || !mensagens?.length) return;
+
+    if (
+        !guild ||
+        !mensagens ||
+        mensagens.length === 0
+    ) {
+        return;
+    }
+
+    // =================================================
+    // 🔒 GARANTIR QUE AS MENSAGENS PERTENCEM AO SERVIDOR
+    // =================================================
+
+    const mensagensDoServidor =
+        mensagens.filter(
+            mensagem =>
+                mensagem.guildId ===
+                guild.id
+        );
+
+    if (
+        mensagensDoServidor.length === 0
+    ) {
+        return;
+    }
 
     const config =
         await buscarConfigLog(
@@ -292,7 +494,9 @@ async function enviarLogMensagemApagada(
             "mensagens_apagadas"
         );
 
-    if (!config) return;
+    if (!config) {
+        return;
+    }
 
     const canal =
         guild.channels.cache.get(
@@ -312,10 +516,12 @@ async function enviarLogMensagemApagada(
         // 🗑️ APENAS UMA MENSAGEM
         // =========================================
 
-        if (mensagens.length === 1) {
+        if (
+            mensagensDoServidor.length === 1
+        ) {
 
             const mensagem =
-                mensagens[0];
+                mensagensDoServidor[0];
 
             const data =
                 new Date(
@@ -323,42 +529,75 @@ async function enviarLogMensagemApagada(
                     Date.now()
                 );
 
+            let descricao =
+                `👤 **Autor:** ${
+                    mensagem.autorId
+                        ? `<@${mensagem.autorId}>`
+                        : "Desconhecido"
+                }\n` +
+
+                `📢 **Canal:** ${
+                    mensagem.canalId
+                        ? `<#${mensagem.canalId}>`
+                        : "Desconhecido"
+                }\n\n` +
+
+                `💬 **Mensagem:**\n` +
+
+                `> ${
+                    mensagem.conteudo
+                        ? mensagem.conteudo
+                            .substring(
+                                0,
+                                3900
+                            )
+                        : "[Conteúdo não disponível]"
+                }`;
+
             const embed =
                 new EmbedBuilder()
                     .setTitle(
                         "🗑️ Mensagem apagada"
                     )
                     .setDescription(
-                        `👤 **Autor:** <@${mensagem.autorId || "0"}>\n` +
-                        `📢 **Canal:** <#${mensagem.canalId || "0"}>\n\n` +
-                        `💬 **Mensagem:**\n` +
-                        `> ${
-                            mensagem.conteudo
-                                ? mensagem.conteudo.substring(0, 3900)
-                                : "[Conteúdo não disponível]"
-                        }`
+                        descricao
                     )
-                    .setColor(0xED4245)
-                    .setTimestamp(data);
+                    .setColor(
+                        0xED4245
+                    )
+                    .setTimestamp(
+                        data
+                    );
 
             if (
                 mensagem.anexos?.length > 0
             ) {
+
+                const anexosTexto =
+                    mensagem.anexos
+                        .map(
+                            anexo =>
+                                `[${anexo.nome}](${anexo.url})`
+                        )
+                        .join("\n");
+
                 embed.addFields({
-                    name: "📎 Anexos",
+                    name:
+                        "📎 Anexos",
+
                     value:
-                        mensagem.anexos
-                            .map(
-                                anexo =>
-                                    `[${anexo.nome}](${anexo.url})`
+                        anexosTexto
+                            .substring(
+                                0,
+                                1024
                             )
-                            .join("\n")
-                            .substring(0, 1024)
                 });
             }
 
             await canal.send({
-                embeds: [embed]
+                embeds: [
+                    embed
+                ]
             });
 
             return;
@@ -370,20 +609,52 @@ async function enviarLogMensagemApagada(
 
         const arquivo =
             criarArquivoMensagensApagadas(
-                mensagens
+                mensagensDoServidor
             );
+
+        const nomeArquivo =
+            `mensagens-apagadas-${
+                Date.now()
+            }.txt`;
 
         const anexo =
             new AttachmentBuilder(
                 arquivo,
                 {
                     name:
-                        `mensagens-apagadas-${Date.now()}.txt`
+                        nomeArquivo
                 }
             );
 
         const primeira =
-            mensagens[0];
+            mensagensDoServidor[0];
+
+        const canaisDiferentes =
+            new Set(
+                mensagensDoServidor
+                    .map(
+                        mensagem =>
+                            mensagem.canalId
+                    )
+                    .filter(Boolean)
+            );
+
+        let canalTexto;
+
+        if (
+            canaisDiferentes.size === 1
+        ) {
+
+            canalTexto =
+                primeira.canalId
+                    ? `<#${primeira.canalId}>`
+                    : "Desconhecido";
+
+        } else {
+
+            canalTexto =
+                "Vários canais";
+        }
 
         const embed =
             new EmbedBuilder()
@@ -391,16 +662,29 @@ async function enviarLogMensagemApagada(
                     "🗑️ Mensagens apagadas em massa"
                 )
                 .setDescription(
-                    `📊 **Quantidade:** ${mensagens.length} mensagens\n` +
-                    `📢 **Canal:** <#${primeira.canalId || "0"}>\n\n` +
+                    `📊 **Quantidade:** ${
+                        mensagensDoServidor.length
+                    } mensagens\n` +
+
+                    `📢 **Canal:** ${
+                        canalTexto
+                    }\n\n` +
+
                     `📎 As mensagens apagadas foram salvas no arquivo abaixo.`
                 )
-                .setColor(0xED4245)
+                .setColor(
+                    0xED4245
+                )
                 .setTimestamp();
 
         await canal.send({
-            embeds: [embed],
-            files: [anexo]
+            embeds: [
+                embed
+            ],
+
+            files: [
+                anexo
+            ]
         });
 
     } catch (erro) {
@@ -420,6 +704,7 @@ async function buscarConfigLog(
     guildId,
     tipo
 ) {
+
     try {
 
         const resultado =
@@ -449,8 +734,11 @@ async function logsBuscarConfig(
     guildId,
     tipo
 ) {
+
     const resultado =
-        await require("./database/database")
+        await require(
+            "./database/database"
+        )
             .pool
             .query(
                 `
@@ -472,88 +760,204 @@ async function logsBuscarConfig(
 }
 
 // =====================================================
-// 🗑️ EVENTO DE MENSAGEM APAGADA
+// 🗑️ ADICIONAR MENSAGEM AO GRUPO DE EXCLUSÕES
+// =====================================================
+
+function adicionarMensagemAoGrupo(
+    guild,
+    dados
+) {
+
+    if (
+        !guild ||
+        !dados
+    ) {
+        return;
+    }
+
+    const guildId =
+        guild.id;
+
+    let grupo =
+        exclusoesPendentes.get(
+            guildId
+        );
+
+    // =========================================
+    // 🆕 PRIMEIRA MENSAGEM DO GRUPO
+    // =========================================
+
+    if (!grupo) {
+
+        grupo = {
+            guildId,
+            mensagens: [
+                dados
+            ],
+            timer: null
+        };
+
+        exclusoesPendentes.set(
+            guildId,
+            grupo
+        );
+
+        grupo.timer =
+            setTimeout(
+                async () => {
+
+                    const atual =
+                        exclusoesPendentes.get(
+                            guildId
+                        );
+
+                    if (
+                        !atual ||
+                        atual !== grupo
+                    ) {
+                        return;
+                    }
+
+                    exclusoesPendentes.delete(
+                        guildId
+                    );
+
+                    try {
+
+                        await enviarLogMensagemApagada(
+                            guild,
+                            atual.mensagens
+                        );
+
+                    } catch (erro) {
+
+                        console.error(
+                            `❌ Erro ao finalizar grupo de mensagens apagadas no servidor ${guildId}:`,
+                            erro
+                        );
+                    }
+
+                },
+                TEMPO_AGRUPAMENTO
+            );
+
+        return;
+    }
+
+    // =========================================
+    // ➕ OUTRA MENSAGEM NO MESMO SERVIDOR
+    // =========================================
+
+    grupo.mensagens.push(
+        dados
+    );
+}
+
+// =====================================================
+// 🗑️ EVENTO DE UMA MENSAGEM APAGADA
 // =====================================================
 
 client.on(
     "messageDelete",
     async message => {
 
-        if (!message.guild) return;
+        try {
 
-        const dados =
-            obterDadosMensagemApagada(
-                message
-            );
+            if (
+                !message ||
+                !message.guild
+            ) {
+                return;
+            }
 
-        // =========================================
-        // 🔎 VERIFICAR SE JÁ EXISTE UM GRUPO
-        // =========================================
-
-        let grupo =
-            exclusoesPendentes.get(
-                message.guild.id
-            );
-
-        // =========================================
-        // 🆕 PRIMEIRA MENSAGEM
-        // =========================================
-
-        if (!grupo) {
-
-            grupo = {
-                mensagens: [
-                    dados
-                ],
-                timer: null
-            };
-
-            exclusoesPendentes.set(
-                message.guild.id,
-                grupo
-            );
-
-            // Espera 1 segundo para ver
-            // se outras mensagens serão apagadas.
-            grupo.timer =
-                setTimeout(
-                    async () => {
-
-                        const atual =
-                            exclusoesPendentes.get(
-                                message.guild.id
-                            );
-
-                        if (
-                            !atual ||
-                            atual !== grupo
-                        ) {
-                            return;
-                        }
-
-                        exclusoesPendentes.delete(
-                            message.guild.id
-                        );
-
-                        await enviarLogMensagemApagada(
-                            message.guild,
-                            atual.mensagens
-                        );
-
-                    },
-                    TEMPO_AGRUPAMENTO
+            const dados =
+                obterDadosMensagemApagada(
+                    message
                 );
 
-            return;
+            if (!dados) {
+                return;
+            }
+
+            adicionarMensagemAoGrupo(
+                message.guild,
+                dados
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento messageDelete:",
+                erro
+            );
         }
+    }
+);
 
-        // =========================================
-        // ➕ OUTRA MENSAGEM DENTRO DE 1 SEGUNDO
-        // =========================================
+// =====================================================
+// 🗑️ EVENTO DE VÁRIAS MENSAGENS APAGADAS
+// =====================================================
 
-        grupo.mensagens.push(
-            dados
-        );
+client.on(
+    "messageDeleteBulk",
+    async mensagens => {
+
+        try {
+
+            if (
+                !mensagens ||
+                mensagens.size === 0
+            ) {
+                return;
+            }
+
+            const primeiraMensagem =
+                mensagens.first();
+
+            if (
+                !primeiraMensagem ||
+                !primeiraMensagem.guild
+            ) {
+                return;
+            }
+
+            const guild =
+                primeiraMensagem.guild;
+
+            for (
+                const message
+                of mensagens.values()
+            ) {
+
+                if (
+                    message.guild?.id !==
+                    guild.id
+                ) {
+                    continue;
+                }
+
+                const dados =
+                    obterDadosMensagemApagada(
+                        message
+                    );
+
+                if (!dados) {
+                    continue;
+                }
+
+                adicionarMensagemAoGrupo(
+                    guild,
+                    dados
+                );
+            }
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento messageDeleteBulk:",
+                erro
+            );
+        }
     }
 );
 
@@ -561,14 +965,21 @@ client.on(
 // 📦 COLEÇÃO DE COMANDOS
 // =====================================================
 
-client.commands = new Collection();
+client.commands =
+    new Collection();
 
-const comandosPath = path.join(
-    __dirname,
-    "comandos"
-);
+const comandosPath =
+    path.join(
+        __dirname,
+        "comandos"
+    );
 
-if (!fs.existsSync(comandosPath)) {
+if (
+    !fs.existsSync(
+        comandosPath
+    )
+) {
+
     console.error(
         "❌ A pasta 'comandos' não foi encontrada!"
     );
@@ -576,21 +987,35 @@ if (!fs.existsSync(comandosPath)) {
     process.exit(1);
 }
 
-const arquivosComandos = fs
-    .readdirSync(comandosPath)
-    .filter(
-        arquivo => arquivo.endsWith(".js")
-    );
-
-for (const arquivo of arquivosComandos) {
-    try {
-
-        const caminho = path.join(
-            comandosPath,
-            arquivo
+const arquivosComandos =
+    fs
+        .readdirSync(
+            comandosPath
+        )
+        .filter(
+            arquivo =>
+                arquivo.endsWith(
+                    ".js"
+                )
         );
 
-        const comando = require(caminho);
+for (
+    const arquivo
+    of arquivosComandos
+) {
+
+    try {
+
+        const caminho =
+            path.join(
+                comandosPath,
+                arquivo
+            );
+
+        const comando =
+            require(
+                caminho
+            );
 
         if (
             "data" in comando &&
@@ -689,7 +1114,9 @@ async function registrarComandos() {
                 ];
             }
 
-            comandos.push(dados);
+            comandos.push(
+                dados
+            );
 
             console.log(
                 `📦 Preparado para registro: /${nome}`
@@ -710,21 +1137,35 @@ async function registrarComandos() {
 
     const nomesComandos =
         comandos.map(
-            comando => comando.name
+            comando =>
+                comando.name
         );
 
     const duplicados =
         nomesComandos.filter(
-            (nome, index) =>
-                nomesComandos.indexOf(nome) !== index
+            (
+                nome,
+                index
+            ) =>
+                nomesComandos.indexOf(
+                    nome
+                ) !== index
         );
 
-    if (duplicados.length > 0) {
+    if (
+        duplicados.length > 0
+    ) {
 
         throw new Error(
-            `Comandos duplicados encontrados: ${[
-                ...new Set(duplicados)
-            ].join(", ")}`
+            `Comandos duplicados encontrados: ${
+                [
+                    ...new Set(
+                        duplicados
+                    )
+                ].join(
+                    ", "
+                )
+            }`
         );
     }
 
@@ -734,10 +1175,14 @@ async function registrarComandos() {
 
     const rest =
         new REST({
-            version: "10"
-        }).setToken(TOKEN);
+            version:
+                "10"
+        }).setToken(
+            TOKEN
+        );
 
     console.log("");
+
     console.log(
         `🔄 Registrando ${comandos.length} comandos Slash...`
     );
@@ -753,11 +1198,13 @@ async function registrarComandos() {
                 CLIENT_ID
             ),
             {
-                body: comandos
+                body:
+                    comandos
             }
         );
 
         console.log("");
+
         console.log(
             "✅ Comandos Slash globais registrados com sucesso!"
         );
@@ -773,7 +1220,9 @@ async function registrarComandos() {
             "❌ Erro ao registrar os comandos Slash:"
         );
 
-        console.error(erro);
+        console.error(
+            erro
+        );
 
         throw erro;
     }
@@ -795,28 +1244,34 @@ client.once(
         // 🟡 STATUS DE INICIALIZAÇÃO
         // =================================================
 
-        const atualizarStatusInicializacao = async () => {
+        const atualizarStatusInicializacao =
+            async () => {
 
-            try {
+                try {
 
-                await client.user.setPresence({
-                    status: "idle",
-                    activities: [
-                        {
-                            name: "🔄 Iniciando o bot...",
-                            type: 0
-                        }
-                    ]
-                });
+                    await client.user.setPresence({
+                        status:
+                            "idle",
 
-            } catch (erro) {
+                        activities: [
+                            {
+                                name:
+                                    "🔄 Iniciando o bot...",
 
-                console.error(
-                    "❌ Erro ao atualizar status de inicialização:",
-                    erro
-                );
-            }
-        };
+                                type:
+                                    0
+                            }
+                        ]
+                    });
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ Erro ao atualizar status de inicialização:",
+                        erro
+                    );
+                }
+            };
 
         await atualizarStatusInicializacao();
 
@@ -829,7 +1284,9 @@ client.once(
         // =================================================
 
         const comandoDaily =
-            client.commands.get("daily");
+            client.commands.get(
+                "daily"
+            );
 
         if (
             comandoDaily &&
@@ -853,7 +1310,9 @@ client.once(
         // =================================================
 
         const comandoSorteio =
-            client.commands.get("sorteio");
+            client.commands.get(
+                "sorteio"
+            );
 
         if (
             comandoSorteio &&
@@ -886,8 +1345,12 @@ client.once(
             segundo++
         ) {
 
-            await new Promise(resolve =>
-                setTimeout(resolve, 1000)
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        1000
+                    )
             );
 
             await atualizarStatusInicializacao();
@@ -901,56 +1364,65 @@ client.once(
         // 🟢 STATUS NORMAL DO BOT
         // =================================================
 
-        let mostrandoServidores = true;
+        let mostrandoServidores =
+            true;
 
-        const atualizarStatus = async () => {
+        const atualizarStatus =
+            async () => {
 
-            try {
+                try {
 
-                let texto;
+                    let texto;
 
-                if (mostrandoServidores) {
+                    if (
+                        mostrandoServidores
+                    ) {
 
-                    const servidores =
-                        client.guilds.cache.size;
+                        const servidores =
+                            client.guilds.cache.size;
 
-                    texto =
-                        `🌐 Estou em ${servidores} servidores`;
+                        texto =
+                            `🌐 Estou em ${servidores} servidores`;
 
-                } else {
+                    } else {
 
-                    const comandos =
-                        client.commands.size;
+                        const comandos =
+                            client.commands.size;
 
-                    texto =
-                        `📋 Tenho ${comandos} comandos disponíveis!`;
+                        texto =
+                            `📋 Tenho ${comandos} comandos disponíveis!`;
+                    }
+
+                    await client.user.setPresence({
+                        status:
+                            "online",
+
+                        activities: [
+                            {
+                                name:
+                                    texto,
+
+                                type:
+                                    0
+                            }
+                        ]
+                    });
+
+                    console.log(
+                        `${texto}`
+                    );
+
+                    mostrandoServidores =
+                        !mostrandoServidores;
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ Erro ao atualizar status normal:",
+                        erro
+                    );
                 }
-
-                await client.user.setPresence({
-                    status: "online",
-                    activities: [
-                        {
-                            name: texto,
-                            type: 0
-                        }
-                    ]
-                });
-
-                console.log(
-                    `${texto}`
-                );
-
-                mostrandoServidores =
-                    !mostrandoServidores;
-
-            } catch (erro) {
-
-                console.error(
-                    "❌ Erro ao atualizar status normal:",
-                    erro
-                );
-            }
-        };
+            };
 
         await atualizarStatus();
 
@@ -968,6 +1440,7 @@ client.once(
 client.on(
     "error",
     erro => {
+
         console.error(
             "❌ Erro no cliente Discord:",
             erro
@@ -978,6 +1451,7 @@ client.on(
 client.on(
     "warn",
     aviso => {
+
         console.warn(
             "⚠️ Aviso do Discord:",
             aviso
@@ -987,7 +1461,11 @@ client.on(
 
 client.on(
     "shardDisconnect",
-    (evento, shardId) => {
+    (
+        evento,
+        shardId
+    ) => {
+
         console.error(
             `🔴 Discord desconectou o shard ${shardId}.`,
             evento
@@ -998,6 +1476,7 @@ client.on(
 client.on(
     "shardReconnecting",
     shardId => {
+
         console.log(
             `🔄 Tentando reconectar o shard ${shardId}...`
         );
@@ -1006,7 +1485,11 @@ client.on(
 
 client.on(
     "shardResume",
-    (replayedEvents, shardId) => {
+    (
+        replayedEvents,
+        shardId
+    ) => {
+
         console.log(
             `🟢 Conexão restaurada no shard ${shardId}. Eventos recuperados: ${replayedEvents}`
         );
@@ -1021,27 +1504,54 @@ client.on(
     "messageCreate",
     async message => {
 
-        if (message.author.bot) return;
+        // =================================================
+        // 🗑️ GUARDAR A MENSAGEM ANTES DE QUALQUER RETURN
+        // =================================================
+        //
+        // Isso permite que mensagens de bots também possam
+        // ser recuperadas caso sejam apagadas.
+        //
+        // O cache continua separado por ID da mensagem
+        // e contém o guildId para segurança.
+        // =================================================
+
+        if (
+            message.guild
+        ) {
+
+            guardarMensagemRecente(
+                message
+            );
+        }
 
         // =================================================
-        // 🗑️ GUARDAR MENSAGEM PARA POSSÍVEL LOG
+        // 🤖 IGNORAR BOTS PARA XP/PREFIXO
         // =================================================
 
-        if (message.guild) {
-            guardarMensagemRecente(message);
+        if (
+            message.author.bot
+        ) {
+            return;
         }
 
         // =================================================
         // ⭐ GANHAR XP POR MENSAGEM
         // =================================================
 
-        if (message.guild) {
+        if (
+            message.guild
+        ) {
 
             const quantidadeXP =
                 Math.floor(
                     Math.random() *
-                    (XP_MAX - XP_MIN + 1)
-                ) + XP_MIN;
+                    (
+                        XP_MAX -
+                        XP_MIN +
+                        1
+                    )
+                ) +
+                XP_MIN;
 
             try {
 
@@ -1070,13 +1580,17 @@ client.on(
         const conteudo =
             message.content.trim();
 
-        if (!conteudo) return;
+        if (!conteudo) {
+            return;
+        }
 
         if (
             conteudo
                 .charAt(0)
-                .toLowerCase() !== PREFIXO
+                .toLowerCase() !==
+            PREFIXO
         ) {
+
             return;
         }
 
@@ -1085,10 +1599,16 @@ client.on(
                 .slice(1)
                 .trim();
 
-        if (!depoisDoPrefixo) return;
+        if (
+            !depoisDoPrefixo
+        ) {
+            return;
+        }
 
         const partes =
-            depoisDoPrefixo.split(/\s+/);
+            depoisDoPrefixo.split(
+                /\s+/
+            );
 
         const nomeComando =
             partes
@@ -1238,9 +1758,13 @@ client.on(
 
                     try {
 
-                        await interaction.respond([]);
+                        await interaction.respond(
+                            []
+                        );
 
-                    } catch (erroResposta) {
+                    } catch (
+                        erroResposta
+                    ) {
 
                         console.error(
                             "❌ Não foi possível responder ao autocomplete:",
@@ -1253,7 +1777,9 @@ client.on(
 
                 try {
 
-                    await interaction.respond([]);
+                    await interaction.respond(
+                        []
+                    );
 
                 } catch (erro) {
 
@@ -1273,11 +1799,15 @@ client.on(
 
         if (
             interaction.customId &&
-            interaction.customId.startsWith("logs_")
+            interaction.customId.startsWith(
+                "logs_"
+            )
         ) {
 
             const comandoLogs =
-                client.commands.get("logs");
+                client.commands.get(
+                    "logs"
+                );
 
             if (
                 comandoLogs &&
@@ -1308,11 +1838,15 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar o sistema de logs.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
 
-                    } catch (erroResposta) {
+                    } catch (
+                        erroResposta
+                    ) {
 
                         console.error(
                             "❌ Não foi possível responder ao erro do sistema de logs:",
@@ -1353,7 +1887,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleSelect ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1377,7 +1911,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao selecionar a opção do sorteio.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1400,7 +1936,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleSelectMenu ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1424,7 +1960,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao configurar o ticket.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1447,7 +1985,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleSelect ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1471,7 +2009,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao escolher o jogador do PPT Duo.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1504,7 +2044,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1528,7 +2068,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao desativar a notificação do Daily.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1556,7 +2098,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1580,7 +2122,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1602,7 +2146,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1626,7 +2170,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1649,7 +2195,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1673,7 +2219,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1696,7 +2244,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1720,7 +2268,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao configurar o ticket.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1743,7 +2293,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleParticipation ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1767,7 +2317,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao participar do sorteio.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1790,7 +2342,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1814,7 +2366,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar o sorteio.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1837,7 +2391,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1861,7 +2415,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao jogar no PPT Duo.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1884,7 +2440,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleButton ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1908,7 +2464,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao jogar Pedra, Papel e Tesoura.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1942,7 +2500,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleModal ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -1966,7 +2524,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -1989,7 +2549,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleModal ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -2013,7 +2573,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao configurar o ticket.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -2036,7 +2598,7 @@ client.on(
                 if (
                     comando &&
                     typeof comando.handleModal ===
-                    "function"
+                        "function"
                 ) {
 
                     try {
@@ -2060,7 +2622,9 @@ client.on(
                             await interaction.reply({
                                 content:
                                     "❌ Deu erro ao configurar o sorteio.",
-                                ephemeral: true
+
+                                ephemeral:
+                                    true
                             });
                         }
                     }
@@ -2101,7 +2665,9 @@ client.on(
                 await interaction.reply({
                     content:
                         "❌ Comando não encontrado!",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
             }
 
@@ -2135,7 +2701,9 @@ client.on(
                     await interaction.followUp({
                         content:
                             "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
-                        ephemeral: true
+
+                        ephemeral:
+                            true
                     });
 
                 } else {
@@ -2143,11 +2711,15 @@ client.on(
                     await interaction.reply({
                         content:
                             "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
-                        ephemeral: true
+
+                        ephemeral:
+                            true
                     });
                 }
 
-            } catch (erroResposta) {
+            } catch (
+                erroResposta
+            ) {
 
                 console.error(
                     "❌ Não foi possível enviar a mensagem de erro:",
