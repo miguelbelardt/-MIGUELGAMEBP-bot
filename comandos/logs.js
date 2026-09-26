@@ -80,16 +80,6 @@ const TIPOS_LOG = {
     voz: {
         nome: "🎙️ Voz",
         descricao: "Entrada, saída e mudança de canal de voz."
-    },
-
-    sorteios: {
-        nome: "🎉 Sorteios",
-        descricao: "Eventos relacionados aos sorteios."
-    },
-
-    economia: {
-        nome: "💰 Economia",
-        descricao: "Eventos relacionados à economia."
     }
 };
 
@@ -97,9 +87,7 @@ const TIPOS_PRINCIPAIS = {
     mensagens: TIPOS_LOG.mensagens,
     membros: TIPOS_LOG.membros,
     moderacao: TIPOS_LOG.moderacao,
-    voz: TIPOS_LOG.voz,
-    sorteios: TIPOS_LOG.sorteios,
-    economia: TIPOS_LOG.economia
+    voz: TIPOS_LOG.voz
 };
 
 const SUBTIPOS_MENSAGENS = [
@@ -824,10 +812,6 @@ async function registrarMensagensApagadas(
     if (!canal || !canal.isTextBased()) return;
 
     try {
-        // ==========================================
-        // UMA MENSAGEM
-        // ==========================================
-
         if (mensagens.length === 1) {
             const mensagem = mensagens[0];
 
@@ -865,10 +849,6 @@ async function registrarMensagensApagadas(
                 embeds: [embed]
             });
         }
-
-        // ==========================================
-        // VÁRIAS MENSAGENS
-        // ==========================================
 
         let texto = "";
 
@@ -1060,10 +1040,6 @@ module.exports = {
             return;
         }
 
-        // ==========================================
-        // MENU DE TIPOS
-        // ==========================================
-
         if (interaction.isStringSelectMenu()) {
             if (
                 interaction.customId ===
@@ -1078,10 +1054,6 @@ module.exports = {
                 );
             }
         }
-
-        // ==========================================
-        // MENU DE CANAL
-        // ==========================================
 
         if (interaction.isChannelSelectMenu()) {
             if (
@@ -1168,13 +1140,8 @@ module.exports = {
             }
         }
 
-        // ==========================================
-        // BOTÕES
-        // ==========================================
-
         if (interaction.isButton()) {
 
-            // VOLTAR AO PAINEL PRINCIPAL
             if (
                 interaction.customId ===
                 "logs_voltar"
@@ -1184,7 +1151,6 @@ module.exports = {
                 );
             }
 
-            // MENSAGENS
             if (
                 interaction.customId ===
                 "logs_mensagens_editadas"
@@ -1205,7 +1171,6 @@ module.exports = {
                 );
             }
 
-            // MEMBROS
             if (
                 interaction.customId ===
                 "logs_membros_nickname"
@@ -1246,7 +1211,6 @@ module.exports = {
                 );
             }
 
-            // MODERAÇÃO
             if (
                 interaction.customId ===
                 "logs_moderacao_ban"
@@ -1287,7 +1251,6 @@ module.exports = {
                 );
             }
 
-            // VOLTAR DOS SUBTIPOS
             if (
                 interaction.customId ===
                 "logs_voltar_subtipo"
@@ -1330,7 +1293,6 @@ module.exports = {
                 );
             }
 
-            // ALTERAR CANAL
             if (
                 interaction.customId.startsWith(
                     "logs_alterar_"
@@ -1376,7 +1338,6 @@ module.exports = {
                 });
             }
 
-            // DESATIVAR LOG
             if (
                 interaction.customId.startsWith(
                     "logs_remover_"
@@ -1430,7 +1391,6 @@ module.exports = {
                 });
             }
 
-            // VOLTAR PARA UM TIPO PRINCIPAL
             if (
                 interaction.customId.startsWith(
                     "logs_voltar_tipo_"
