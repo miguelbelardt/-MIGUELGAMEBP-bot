@@ -16,6 +16,15 @@ const {
 const { pool } = require("../database/database.js");
 
 // ================================
+// 🎫 CONFIGURAÇÕES TEMPORÁRIAS
+// ================================
+
+// Guarda as escolhas de canal/categoria enquanto o administrador
+// está configurando o ticket.
+// Chave: guildId:userId:modeloId
+const configuracoesPendentes = new Map();
+
+// ================================
 // 🎫 BANCO DE TICKETS
 // ================================
 
@@ -69,10 +78,6 @@ async function inicializarTickets() {
         )
     `);
 
-    // ================================
-    // 🔧 GARANTIR COLUNAS NOVAS
-    // ================================
-
     await pool.query(`
         ALTER TABLE ticket_config
         ADD COLUMN IF NOT EXISTS categoria_id VARCHAR(30)
@@ -82,6 +87,113 @@ async function inicializarTickets() {
         ALTER TABLE ticket_config
         ADD COLUMN IF NOT EXISTS mensagem_painel_id VARCHAR(30)
     `);
+}
+
+// ================================
+// 🔑 CHAVE CONFIGURAÇÃO PENDENTE
+// ================================
+
+function criarChavePendente(
+    guildId,
+    userId,
+    modeloId
+) {
+
+    return `${guildId}:${userId}:${modeloId}`;
+}
+
+// ================================
+// 🔎 OBTER CONFIGURAÇÃO PENDENTE
+// ================================
+
+function obterConfiguracaoPendente(
+    guildId,
+    userId,
+    modeloId,
+    configBanco = null
+) {
+
+    const chave =
+        criarChavePendente(
+            guildId,
+            userId,
+            modeloId
+        );
+
+    const pendente =
+        configuracoesPendentes.get(chave);
+
+    if (!pendente) {
+        return configBanco;
+    }
+
+    return {
+        ...(configBanco || {}),
+        canal_painel_id:
+            pendente.canal_painel_id !== undefined
+                ? pendente.canal_painel_id
+                : configBanco?.canal_painel_id || null,
+
+        categoria_id:
+            pendente.categoria_id !== undefined
+                ? pendente.categoria_id
+                : configBanco?.categoria_id || null,
+
+        mensagem_painel_id:
+            configBanco?.mensagem_painel_id || null,
+
+        modelo_id:
+            configBanco?.modelo_id || modeloId
+    };
+}
+
+// ================================
+// 💾 SALVAR CONFIGURAÇÃO PENDENTE
+// ================================
+
+function salvarConfiguracaoPendente(
+    guildId,
+    userId,
+    modeloId,
+    dados
+) {
+
+    const chave =
+        criarChavePendente(
+            guildId,
+            userId,
+            modeloId
+        );
+
+    const atual =
+        configuracoesPendentes.get(chave) || {};
+
+    configuracoesPendentes.set(
+        chave,
+        {
+            ...atual,
+            ...dados
+        }
+    );
+}
+
+// ================================
+// 🗑️ LIMPAR CONFIGURAÇÃO PENDENTE
+// ================================
+
+function limparConfiguracaoPendente(
+    guildId,
+    userId,
+    modeloId
+) {
+
+    configuracoesPendentes.delete(
+        criarChavePendente(
+            guildId,
+            userId,
+            modeloId
+        )
+    );
 }
 
 // ================================
@@ -96,7 +208,8 @@ function urlValida(url) {
 
     try {
 
-        const resultado = new URL(url);
+        const resultado =
+            new URL(url);
 
         return (
             resultado.protocol === "http:" ||
@@ -115,26 +228,39 @@ function urlValida(url) {
 
 function criarEmbedTicket(modelo) {
 
-    const embed = new EmbedBuilder();
+    const embed =
+        new EmbedBuilder();
 
     if (
         modelo.cor &&
-        /^#[0-9A-Fa-f]{6}$/.test(modelo.cor)
+        /^#[0-9A-Fa-f]{6}$/.test(
+            modelo.cor
+        )
     ) {
 
-        embed.setColor(modelo.cor);
+        embed.setColor(
+            modelo.cor
+        );
 
     } else {
 
-        embed.setColor(0x5865F2);
+        embed.setColor(
+            0x5865F2
+        );
     }
 
     if (modelo.titulo) {
-        embed.setTitle(modelo.titulo);
+
+        embed.setTitle(
+            modelo.titulo
+        );
     }
 
     if (modelo.descricao) {
-        embed.setDescription(modelo.descricao);
+
+        embed.setDescription(
+            modelo.descricao
+        );
     }
 
     if (modelo.autor_nome) {
@@ -152,7 +278,9 @@ function criarEmbedTicket(modelo) {
                 modelo.autor_icone;
         }
 
-        embed.setAuthor(autor);
+        embed.setAuthor(
+            autor
+        );
     }
 
     if (
@@ -190,7 +318,9 @@ function criarEmbedTicket(modelo) {
                 modelo.rodape_icone;
         }
 
-        embed.setFooter(rodape);
+        embed.setFooter(
+            rodape
+        );
     }
 
     return embed;
@@ -205,42 +335,66 @@ function criarBotaoTicket(
     disabled = false
 ) {
 
-    let estilo = ButtonStyle.Primary;
+    let estilo =
+        ButtonStyle.Primary;
 
-    if (modelo.botao_estilo === "Secondary") {
-        estilo = ButtonStyle.Secondary;
-    }
+    if (
+        modelo.botao_estilo ===
+        "Secondary"
+    ) {
 
-    if (modelo.botao_estilo === "Success") {
-        estilo = ButtonStyle.Success;
-    }
-
-    if (modelo.botao_estilo === "Danger") {
-        estilo = ButtonStyle.Danger;
-    }
-
-    if (modelo.botao_estilo === "Link") {
-        estilo = ButtonStyle.Link;
-    }
-
-    const botao = new ButtonBuilder()
-        .setLabel(
-            modelo.botao_texto ||
-            "Fazer Ticket"
-        )
-        .setStyle(estilo)
-        .setDisabled(disabled);
-
-    if (estilo !== ButtonStyle.Link) {
-
-        botao.setCustomId(
-            `ticket_abrir_${modelo.id}`
-        );
+        estilo =
+            ButtonStyle.Secondary;
     }
 
     if (
-        modelo.botao_emoji &&
-        estilo !== ButtonStyle.Link
+        modelo.botao_estilo ===
+        "Success"
+    ) {
+
+        estilo =
+            ButtonStyle.Success;
+    }
+
+    if (
+        modelo.botao_estilo ===
+        "Danger"
+    ) {
+
+        estilo =
+            ButtonStyle.Danger;
+    }
+
+    // Link não é usado porque não existe
+    // URL configurada no modelo.
+    if (
+        modelo.botao_estilo ===
+        "Link"
+    ) {
+
+        estilo =
+            ButtonStyle.Primary;
+    }
+
+    const botao =
+        new ButtonBuilder()
+            .setLabel(
+                modelo.botao_texto ||
+                "Fazer Ticket"
+            )
+            .setStyle(
+                estilo
+            )
+            .setDisabled(
+                disabled
+            );
+
+    botao.setCustomId(
+        `ticket_abrir_${modelo.id}`
+    );
+
+    if (
+        modelo.botao_emoji
     ) {
 
         botao.setEmoji(
@@ -261,8 +415,12 @@ function criarBotaoFechar() {
         .setCustomId(
             "ticket_fechar"
         )
-        .setLabel("Fechar Ticket")
-        .setEmoji("🔒")
+        .setLabel(
+            "Fechar Ticket"
+        )
+        .setEmoji(
+            "🔒"
+        )
         .setStyle(
             ButtonStyle.Danger
         );
@@ -277,17 +435,24 @@ function criarPainel(
     modeloSelecionado = null
 ) {
 
-    const embed = new EmbedBuilder()
-        .setColor(0x5865F2)
-        .setTitle("🎫 Configuração de Tickets")
-        .setDescription(
-            "Escolha uma opção abaixo para continuar."
-        );
+    const embed =
+        new EmbedBuilder()
+            .setColor(
+                0x5865F2
+            )
+            .setTitle(
+                "🎫 Configuração de Tickets"
+            )
+            .setDescription(
+                "Escolha uma opção abaixo para continuar."
+            );
 
     if (modeloSelecionado) {
 
         embed.addFields({
-            name: "🎯 Ticket selecionado",
+            name:
+                "🎯 Ticket selecionado",
+
             value:
                 `**${modeloSelecionado.nome}**`
         });
@@ -297,46 +462,69 @@ function criarPainel(
 
     const opcoes = [
         {
-            label: "Criar ticket",
-            value: "criar",
+            label:
+                "Criar ticket",
+
+            value:
+                "criar",
+
             description:
                 "Criar um novo modelo de ticket",
-            emoji: "➕"
+
+            emoji:
+                "➕"
         },
         {
-            label: "Configurar ticket",
-            value: "configurar",
+            label:
+                "Configurar ticket",
+
+            value:
+                "configurar",
+
             description:
                 modelos.length > 0
                     ? "Escolher um modelo para configurar"
                     : "Nenhum modelo criado ainda",
-            emoji: "⚙️"
+
+            emoji:
+                "⚙️"
         }
     ];
 
-    if (modelos.length > 0) {
+    if (
+        modelos.length > 0
+    ) {
 
         modelos
             .slice(0, 23)
-            .forEach(modelo => {
+            .forEach(
+                modelo => {
 
-                opcoes.push({
-                    label:
-                        modelo.nome
-                            .slice(0, 100),
+                    opcoes.push({
+                        label:
+                            modelo.nome
+                                .slice(
+                                    0,
+                                    100
+                                ),
 
-                    value:
-                        `modelo_${modelo.id}`,
+                        value:
+                            `modelo_${modelo.id}`,
 
-                    description:
-                        (
-                            modelo.titulo ||
-                            "Abrir este modelo"
-                        ).slice(0, 100),
+                        description:
+                            (
+                                modelo.titulo ||
+                                "Abrir este modelo"
+                            ).slice(
+                                0,
+                                100
+                            ),
 
-                    emoji: "🎫"
-                });
-            });
+                        emoji:
+                            "🎫"
+                    });
+                }
+            );
     }
 
     const menu =
@@ -347,11 +535,15 @@ function criarPainel(
             .setPlaceholder(
                 "🎫 Escolha uma opção"
             )
-            .addOptions(opcoes);
+            .addOptions(
+                opcoes
+            );
 
     componentes.push(
         new ActionRowBuilder()
-            .addComponents(menu)
+            .addComponents(
+                menu
+            )
     );
 
     componentes.push(
@@ -362,8 +554,12 @@ function criarPainel(
                     .setCustomId(
                         "ticket_atualizar"
                     )
-                    .setLabel("Atualizar")
-                    .setEmoji("🔄")
+                    .setLabel(
+                        "Atualizar"
+                    )
+                    .setEmoji(
+                        "🔄"
+                    )
                     .setStyle(
                         ButtonStyle.Secondary
                     )
@@ -371,9 +567,15 @@ function criarPainel(
     );
 
     return {
-        embeds: [embed],
-        components: componentes,
-        ephemeral: true
+        embeds: [
+            embed
+        ],
+
+        components:
+            componentes,
+
+        ephemeral:
+            true
     };
 }
 
@@ -387,7 +589,9 @@ function criarPainelConfiguracao(
 
     const embed =
         new EmbedBuilder()
-            .setColor(0x5865F2)
+            .setColor(
+                0x5865F2
+            )
             .setTitle(
                 "⚙️ Configurar ticket"
             )
@@ -399,7 +603,9 @@ function criarPainelConfiguracao(
 
     const componentes = [];
 
-    if (modelos.length > 0) {
+    if (
+        modelos.length > 0
+    ) {
 
         const menu =
             new StringSelectMenuBuilder()
@@ -411,37 +617,57 @@ function criarPainelConfiguracao(
                 )
                 .addOptions(
                     modelos
-                        .slice(0, 25)
-                        .map(modelo => ({
-                            label:
-                                modelo.nome
-                                    .slice(0, 100),
+                        .slice(
+                            0,
+                            25
+                        )
+                        .map(
+                            modelo => ({
+                                label:
+                                    modelo.nome
+                                        .slice(
+                                            0,
+                                            100
+                                        ),
 
-                            value:
-                                String(
-                                    modelo.id
-                                ),
+                                value:
+                                    String(
+                                        modelo.id
+                                    ),
 
-                            description:
-                                (
-                                    modelo.titulo ||
-                                    "Sem título definido"
-                                ).slice(0, 100),
+                                description:
+                                    (
+                                        modelo.titulo ||
+                                        "Sem título definido"
+                                    ).slice(
+                                        0,
+                                        100
+                                    ),
 
-                            emoji: "🎫"
-                        }))
+                                emoji:
+                                    "🎫"
+                            })
+                        )
                 );
 
         componentes.push(
             new ActionRowBuilder()
-                .addComponents(menu)
+                .addComponents(
+                    menu
+                )
         );
     }
 
     return {
-        embeds: [embed],
-        components: componentes,
-        ephemeral: true
+        embeds: [
+            embed
+        ],
+
+        components:
+            componentes,
+
+        ephemeral:
+            true
     };
 }
 
@@ -462,84 +688,134 @@ function criarModalTicket() {
 
     const nome =
         new TextInputBuilder()
-            .setCustomId("nome")
-            .setLabel("Nome do ticket")
+            .setCustomId(
+                "nome"
+            )
+            .setLabel(
+                "Nome do ticket"
+            )
             .setPlaceholder(
                 "Ex: Suporte"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(true)
-            .setMaxLength(100);
+            .setRequired(
+                true
+            )
+            .setMaxLength(
+                100
+            );
 
     const titulo =
         new TextInputBuilder()
-            .setCustomId("titulo")
-            .setLabel("Título do embed")
+            .setCustomId(
+                "titulo"
+            )
+            .setLabel(
+                "Título do embed"
+            )
             .setPlaceholder(
                 "Ex: 🎫 Atendimento"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
-            .setMaxLength(256);
+            .setRequired(
+                false
+            )
+            .setMaxLength(
+                256
+            );
 
     const descricao =
         new TextInputBuilder()
-            .setCustomId("descricao")
-            .setLabel("Descrição")
+            .setCustomId(
+                "descricao"
+            )
+            .setLabel(
+                "Descrição"
+            )
             .setPlaceholder(
                 "Explique para que serve este ticket."
             )
             .setStyle(
                 TextInputStyle.Paragraph
             )
-            .setRequired(false)
-            .setMaxLength(4000);
+            .setRequired(
+                false
+            )
+            .setMaxLength(
+                4000
+            );
 
     const autor =
         new TextInputBuilder()
-            .setCustomId("autor")
-            .setLabel("Autor do embed")
+            .setCustomId(
+                "autor"
+            )
+            .setLabel(
+                "Autor do embed"
+            )
             .setPlaceholder(
                 "Ex: MIGUELGAMEBP"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
-            .setMaxLength(256);
+            .setRequired(
+                false
+            )
+            .setMaxLength(
+                256
+            );
 
     const cor =
         new TextInputBuilder()
-            .setCustomId("cor")
-            .setLabel("Cor hexadecimal")
+            .setCustomId(
+                "cor"
+            )
+            .setLabel(
+                "Cor hexadecimal"
+            )
             .setPlaceholder(
                 "Ex: #5865F2"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
-            .setMaxLength(20);
+            .setRequired(
+                false
+            )
+            .setMaxLength(
+                20
+            );
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(nome),
+            .addComponents(
+                nome
+            ),
 
         new ActionRowBuilder()
-            .addComponents(titulo),
+            .addComponents(
+                titulo
+            ),
 
         new ActionRowBuilder()
-            .addComponents(descricao),
+            .addComponents(
+                descricao
+            ),
 
         new ActionRowBuilder()
-            .addComponents(autor),
+            .addComponents(
+                autor
+            ),
 
         new ActionRowBuilder()
-            .addComponents(cor)
+            .addComponents(
+                cor
+            )
     );
 
     return modal;
@@ -564,75 +840,134 @@ function criarModalEditarInformacoes(
 
     const nome =
         new TextInputBuilder()
-            .setCustomId("nome")
-            .setLabel("Nome do modelo")
+            .setCustomId(
+                "nome"
+            )
+            .setLabel(
+                "Nome do modelo"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(true)
+            .setRequired(
+                true
+            )
             .setValue(
                 modelo.nome || ""
             )
-            .setMaxLength(100);
+            .setMaxLength(
+                100
+            );
 
     const titulo =
         new TextInputBuilder()
-            .setCustomId("titulo")
-            .setLabel("Título do embed")
+            .setCustomId(
+                "titulo"
+            )
+            .setLabel(
+                "Título do embed"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.titulo || ""
             )
-            .setMaxLength(256);
+            .setMaxLength(
+                256
+            );
 
     const descricao =
         new TextInputBuilder()
-            .setCustomId("descricao")
-            .setLabel("Descrição")
+            .setCustomId(
+                "descricao"
+            )
+            .setLabel(
+                "Descrição"
+            )
             .setStyle(
                 TextInputStyle.Paragraph
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.descricao || ""
             )
-            .setMaxLength(4000);
+            .setMaxLength(
+                4000
+            );
 
     const autor =
         new TextInputBuilder()
-            .setCustomId("autor")
-            .setLabel("Autor do embed")
+            .setCustomId(
+                "autor"
+            )
+            .setLabel(
+                "Autor do embed"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.autor_nome || ""
             )
-            .setMaxLength(256);
+            .setMaxLength(
+                256
+            );
 
     const cor =
         new TextInputBuilder()
-            .setCustomId("cor")
-            .setLabel("Cor hexadecimal")
+            .setCustomId(
+                "cor"
+            )
+            .setLabel(
+                "Cor hexadecimal"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.cor || "#5865F2"
             )
-            .setMaxLength(20);
+            .setMaxLength(
+                20
+            );
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(nome),
-        new ActionRowBuilder().addComponents(titulo),
-        new ActionRowBuilder().addComponents(descricao),
-        new ActionRowBuilder().addComponents(autor),
-        new ActionRowBuilder().addComponents(cor)
+        new ActionRowBuilder()
+            .addComponents(
+                nome
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                titulo
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                descricao
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                autor
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                cor
+            )
     );
 
     return modal;
@@ -657,98 +992,150 @@ function criarModalPersonalizacao(
 
     const imagem =
         new TextInputBuilder()
-            .setCustomId("imagem")
-            .setLabel("URL da imagem")
+            .setCustomId(
+                "imagem"
+            )
+            .setLabel(
+                "URL da imagem"
+            )
             .setPlaceholder(
                 "https://..."
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.imagem || ""
             )
-            .setMaxLength(1000);
+            .setMaxLength(
+                1000
+            );
 
     const thumbnail =
         new TextInputBuilder()
-            .setCustomId("thumbnail")
-            .setLabel("URL da thumbnail")
+            .setCustomId(
+                "thumbnail"
+            )
+            .setLabel(
+                "URL da thumbnail"
+            )
             .setPlaceholder(
                 "https://..."
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.thumbnail || ""
             )
-            .setMaxLength(1000);
+            .setMaxLength(
+                1000
+            );
 
     const rodape =
         new TextInputBuilder()
-            .setCustomId("rodape")
-            .setLabel("Rodapé")
+            .setCustomId(
+                "rodape"
+            )
+            .setLabel(
+                "Rodapé"
+            )
             .setPlaceholder(
                 "Texto do rodapé"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.rodape || ""
             )
-            .setMaxLength(2048);
+            .setMaxLength(
+                2048
+            );
 
     const botao =
         new TextInputBuilder()
-            .setCustomId("botao")
-            .setLabel("Texto do botão")
+            .setCustomId(
+                "botao"
+            )
+            .setLabel(
+                "Texto do botão"
+            )
             .setPlaceholder(
                 "Ex: Fazer Ticket"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(true)
+            .setRequired(
+                true
+            )
             .setValue(
                 modelo.botao_texto ||
                 "Fazer Ticket"
             )
-            .setMaxLength(80);
+            .setMaxLength(
+                80
+            );
 
     const emoji =
         new TextInputBuilder()
-            .setCustomId("emoji")
-            .setLabel("Emoji do botão")
-            .setPlaceholder("🎫")
+            .setCustomId(
+                "emoji"
+            )
+            .setLabel(
+                "Emoji do botão"
+            )
+            .setPlaceholder(
+                "🎫"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(false)
+            .setRequired(
+                false
+            )
             .setValue(
                 modelo.botao_emoji || ""
             )
-            .setMaxLength(100);
+            .setMaxLength(
+                100
+            );
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(imagem),
+            .addComponents(
+                imagem
+            ),
 
         new ActionRowBuilder()
-            .addComponents(thumbnail),
+            .addComponents(
+                thumbnail
+            ),
 
         new ActionRowBuilder()
-            .addComponents(rodape),
+            .addComponents(
+                rodape
+            ),
 
         new ActionRowBuilder()
-            .addComponents(botao),
+            .addComponents(
+                botao
+            ),
 
         new ActionRowBuilder()
-            .addComponents(emoji)
+            .addComponents(
+                emoji
+            )
     );
 
     return modal;
@@ -774,18 +1161,29 @@ function criarPainelModelo(
 
         embed.addFields(
             {
-                name: "📢 Canal do painel",
-                value: config.canal_painel_id
-                    ? `<#${config.canal_painel_id}>`
-                    : "❌ Não definido",
-                inline: true
+                name:
+                    "📢 Canal do painel",
+
+                value:
+                    config.canal_painel_id
+                        ? `<#${config.canal_painel_id}>`
+                        : "❌ Não definido",
+
+                inline:
+                    true
             },
+
             {
-                name: "📁 Categoria",
-                value: config.categoria_id
-                    ? `<#${config.categoria_id}>`
-                    : "❌ Não definida",
-                inline: true
+                name:
+                    "📁 Categoria",
+
+                value:
+                    config.categoria_id
+                        ? `<#${config.categoria_id}>`
+                        : "❌ Não definida",
+
+                inline:
+                    true
             }
         );
     }
@@ -798,8 +1196,12 @@ function criarPainelModelo(
                     .setCustomId(
                         `ticket_info_${modelo.id}`
                     )
-                    .setLabel("Editar informações")
-                    .setEmoji("✏️")
+                    .setLabel(
+                        "Editar informações"
+                    )
+                    .setEmoji(
+                        "✏️"
+                    )
                     .setStyle(
                         ButtonStyle.Primary
                     ),
@@ -808,8 +1210,12 @@ function criarPainelModelo(
                     .setCustomId(
                         `ticket_personalizar_${modelo.id}`
                     )
-                    .setLabel("Personalizar")
-                    .setEmoji("🎨")
+                    .setLabel(
+                        "Personalizar"
+                    )
+                    .setEmoji(
+                        "🎨"
+                    )
                     .setStyle(
                         ButtonStyle.Primary
                     )
@@ -823,8 +1229,12 @@ function criarPainelModelo(
                     .setCustomId(
                         `ticket_canal_${modelo.id}`
                     )
-                    .setLabel("Escolher canal")
-                    .setEmoji("📢")
+                    .setLabel(
+                        "Escolher canal"
+                    )
+                    .setEmoji(
+                        "📢"
+                    )
                     .setStyle(
                         ButtonStyle.Secondary
                     ),
@@ -833,8 +1243,12 @@ function criarPainelModelo(
                     .setCustomId(
                         `ticket_categoria_${modelo.id}`
                     )
-                    .setLabel("Escolher categoria")
-                    .setEmoji("📁")
+                    .setLabel(
+                        "Escolher categoria"
+                    )
+                    .setEmoji(
+                        "📁"
+                    )
                     .setStyle(
                         ButtonStyle.Secondary
                     ),
@@ -843,20 +1257,29 @@ function criarPainelModelo(
                     .setCustomId(
                         `ticket_confirmar_${modelo.id}`
                     )
-                    .setLabel("Salvar")
-                    .setEmoji("✅")
+                    .setLabel(
+                        "Salvar"
+                    )
+                    .setEmoji(
+                        "✅"
+                    )
                     .setStyle(
                         ButtonStyle.Success
                     )
             );
 
     return {
-        embeds: [embed],
+        embeds: [
+            embed
+        ],
+
         components: [
             botoes,
             botoes2
         ],
-        ephemeral: true
+
+        ephemeral:
+            true
     };
 }
 
@@ -880,23 +1303,36 @@ function criarMenuCanal(
                 ChannelType.GuildText,
                 ChannelType.GuildAnnouncement
             )
-            .setMinValues(1)
-            .setMaxValues(1);
+            .setMinValues(
+                1
+            )
+            .setMaxValues(
+                1
+            );
 
     return {
         embeds: [
             new EmbedBuilder()
-                .setColor(0x5865F2)
-                .setTitle("📢 Canal do painel")
+                .setColor(
+                    0x5865F2
+                )
+                .setTitle(
+                    "📢 Canal do painel"
+                )
                 .setDescription(
                     "Escolha o canal onde o painel de tickets será enviado."
                 )
         ],
+
         components: [
             new ActionRowBuilder()
-                .addComponents(menu)
+                .addComponents(
+                    menu
+                )
         ],
-        ephemeral: true
+
+        ephemeral:
+            true
     };
 }
 
@@ -919,28 +1355,114 @@ function criarMenuCategoria(
             .setChannelTypes(
                 ChannelType.GuildCategory
             )
-            .setMinValues(1)
-            .setMaxValues(1);
+            .setMinValues(
+                1
+            )
+            .setMaxValues(
+                1
+            );
 
     return {
         embeds: [
             new EmbedBuilder()
-                .setColor(0x5865F2)
-                .setTitle("📁 Categoria dos tickets")
+                .setColor(
+                    0x5865F2
+                )
+                .setTitle(
+                    "📁 Categoria dos tickets"
+                )
                 .setDescription(
                     "Escolha a categoria onde os tickets serão criados."
                 )
         ],
+
         components: [
             new ActionRowBuilder()
-                .addComponents(menu)
+                .addComponents(
+                    menu
+                )
         ],
-        ephemeral: true
+
+        ephemeral:
+            true
     };
 }
 
 // ================================
-// 🎫 ATUALIZAR PAINEL EXISTENTE
+// 🗑️ APAGAR PAINEL ANTIGO
+// ================================
+
+async function apagarPainelAntigo(
+    guild,
+    canalAntigoId,
+    mensagemAntigaId
+) {
+
+    if (
+        !canalAntigoId ||
+        !mensagemAntigaId
+    ) {
+        return;
+    }
+
+    try {
+
+        const canalAntigo =
+            await guild.channels.fetch(
+                canalAntigoId
+            );
+
+        if (
+            !canalAntigo ||
+            !canalAntigo.isTextBased()
+        ) {
+            return;
+        }
+
+        try {
+
+            const mensagem =
+                await canalAntigo.messages.fetch(
+                    mensagemAntigaId
+                );
+
+            await mensagem.delete();
+
+            console.log(
+                `🗑️ Painel antigo apagado: #${canalAntigo.name}`
+            );
+
+        } catch (erro) {
+
+            // A mensagem pode já ter sido apagada manualmente.
+            if (
+                erro?.code === 10008
+            ) {
+
+                console.log(
+                    "ℹ️ O painel antigo já não existia."
+                );
+
+            } else {
+
+                console.error(
+                    "❌ Erro ao apagar painel antigo:",
+                    erro
+                );
+            }
+        }
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao acessar canal antigo do painel:",
+            erro
+        );
+    }
+}
+
+// ================================
+// 🎫 ATUALIZAR PAINEL PUBLICADO
 // ================================
 
 async function atualizarPainelPublicado(
@@ -953,6 +1475,7 @@ async function atualizarPainelPublicado(
         !config ||
         !config.canal_painel_id
     ) {
+
         return null;
     }
 
@@ -967,12 +1490,33 @@ async function atualizarPainelPublicado(
             !canal ||
             !canal.isTextBased()
         ) {
+
             return null;
         }
 
-        // Se já temos uma mensagem salva,
-        // tenta editar ela.
-        if (config.mensagem_painel_id) {
+        const embed =
+            criarEmbedTicket(modelo)
+                .setTitle(
+                    modelo.titulo ||
+                    "🎫 Abra um Ticket"
+                );
+
+        const componentes = [
+            new ActionRowBuilder()
+                .addComponents(
+                    criarBotaoTicket(
+                        modelo
+                    )
+                )
+        ];
+
+        // ================================
+        // ✏️ EDITAR MENSAGEM EXISTENTE
+        // ================================
+
+        if (
+            config.mensagem_painel_id
+        ) {
 
             try {
 
@@ -981,48 +1525,42 @@ async function atualizarPainelPublicado(
                         config.mensagem_painel_id
                     );
 
-                const embed =
-                    criarEmbedTicket(modelo)
-                        .setTitle(
-                            modelo.titulo ||
-                            "🎫 Abra um Ticket"
-                        );
-
                 await mensagem.edit({
-                    embeds: [embed],
-                    components: [
-                        new ActionRowBuilder()
-                            .addComponents(
-                                criarBotaoTicket(modelo)
-                            )
-                    ]
+                    embeds: [
+                        embed
+                    ],
+
+                    components:
+                        componentes
                 });
 
                 return mensagem;
 
-            } catch {
-                // Mensagem antiga não existe mais.
+            } catch (erro) {
+
+                if (
+                    erro?.code !== 10008
+                ) {
+
+                    console.log(
+                        "ℹ️ Não foi possível editar o painel antigo. Será criada uma nova mensagem."
+                    );
+                }
             }
         }
 
-        // Se não existe mensagem salva,
-        // cria uma nova.
-        const embed =
-            criarEmbedTicket(modelo)
-                .setTitle(
-                    modelo.titulo ||
-                    "🎫 Abra um Ticket"
-                );
+        // ================================
+        // 🆕 CRIAR NOVA MENSAGEM
+        // ================================
 
         const mensagem =
             await canal.send({
-                embeds: [embed],
-                components: [
-                    new ActionRowBuilder()
-                        .addComponents(
-                            criarBotaoTicket(modelo)
-                        )
-                ]
+                embeds: [
+                    embed
+                ],
+
+                components:
+                    componentes
             });
 
         await pool.query(
@@ -1062,9 +1600,12 @@ function encontrarTicketDoUsuario(
 
     return guild.channels.cache.find(
         canal =>
-            canal.type === ChannelType.GuildText &&
-            canal.parentId === categoriaId &&
-            canal.topic === `ticket:${userId}`
+            canal.type ===
+                ChannelType.GuildText &&
+            canal.parentId ===
+                categoriaId &&
+            canal.topic ===
+                `ticket:${userId}`
     );
 }
 
@@ -1101,7 +1642,9 @@ async function abrirTicket(
         await interaction.reply({
             content:
                 "❌ O sistema de tickets ainda não foi configurado corretamente. Um administrador precisa escolher a categoria dos tickets.",
-            ephemeral: true
+
+            ephemeral:
+                true
         });
 
         return true;
@@ -1114,13 +1657,16 @@ async function abrirTicket(
 
     if (
         !categoria ||
-        categoria.type !== ChannelType.GuildCategory
+        categoria.type !==
+            ChannelType.GuildCategory
     ) {
 
         await interaction.reply({
             content:
                 "❌ A categoria configurada não existe mais. Configure o ticket novamente.",
-            ephemeral: true
+
+            ephemeral:
+                true
         });
 
         return true;
@@ -1138,7 +1684,9 @@ async function abrirTicket(
         await interaction.reply({
             content:
                 `❌ Você já possui um ticket aberto: ${ticketExistente}`,
-            ephemeral: true
+
+            ephemeral:
+                true
         });
 
         return true;
@@ -1151,7 +1699,10 @@ async function abrirTicket(
                 /[^a-z0-9-]/g,
                 "-"
             )
-            .slice(0, 20);
+            .slice(
+                0,
+                20
+            );
 
     const nomeCanal =
         `ticket-${nomeUsuario}`;
@@ -1159,7 +1710,8 @@ async function abrirTicket(
     const canal =
         await interaction.guild.channels.create({
 
-            name: nomeCanal,
+            name:
+                nomeCanal,
 
             type:
                 ChannelType.GuildText,
@@ -1210,7 +1762,9 @@ async function abrirTicket(
         });
 
     const embed =
-        criarEmbedTicket(modelo)
+        criarEmbedTicket(
+            modelo
+        )
             .setTitle(
                 modelo.titulo ||
                 `🎫 Ticket de ${interaction.user.username}`
@@ -1238,7 +1792,9 @@ async function abrirTicket(
     await interaction.reply({
         content:
             `✅ Seu ticket foi criado com sucesso: ${canal}`,
-        ephemeral: true
+
+        ephemeral:
+            true
     });
 
     console.log(
@@ -1261,13 +1817,16 @@ async function fecharTicket(
 
     if (
         !canal ||
-        canal.type !== ChannelType.GuildText
+        canal.type !==
+            ChannelType.GuildText
     ) {
 
         await interaction.reply({
             content:
                 "❌ Este botão só pode ser usado dentro de um ticket.",
-            ephemeral: true
+
+            ephemeral:
+                true
         });
 
         return true;
@@ -1275,13 +1834,17 @@ async function fecharTicket(
 
     if (
         !canal.topic ||
-        !canal.topic.startsWith("ticket:")
+        !canal.topic.startsWith(
+            "ticket:"
+        )
     ) {
 
         await interaction.reply({
             content:
                 "❌ Este canal não é um ticket.",
-            ephemeral: true
+
+            ephemeral:
+                true
         });
 
         return true;
@@ -1328,7 +1891,9 @@ module.exports = {
 
     data:
         new SlashCommandBuilder()
-            .setName("ticket")
+            .setName(
+                "ticket"
+            )
             .setDescription(
                 "Configura o sistema de tickets"
             ),
@@ -1342,7 +1907,9 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ O comando `/ticket` só pode ser usado dentro de um servidor.",
-                ephemeral: true
+
+                ephemeral:
+                    true
             });
         }
 
@@ -1367,7 +1934,9 @@ module.exports = {
                 resultado.rows;
 
             await interaction.reply(
-                criarPainel(modelos)
+                criarPainel(
+                    modelos
+                )
             );
 
         } catch (erro) {
@@ -1377,12 +1946,16 @@ module.exports = {
                 erro
             );
 
-            if (interaction.replied) {
+            if (
+                interaction.replied
+            ) {
 
                 await interaction.editReply({
                     content:
                         "❌ Ocorreu um erro ao abrir a configuração de tickets.",
+
                     embeds: [],
+
                     components: []
                 });
 
@@ -1391,7 +1964,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Ocorreu um erro ao abrir a configuração de tickets.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
             }
         }
@@ -1415,7 +1990,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ O sistema de tickets só pode ser usado dentro de um servidor.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
             }
 
@@ -1423,9 +2000,11 @@ module.exports = {
         }
 
         if (
-            !interaction.customId
-                .startsWith("ticket_")
+            !interaction.customId.startsWith(
+                "ticket_"
+            )
         ) {
+
             return false;
         }
 
@@ -1468,7 +2047,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Esse modelo de ticket não existe mais.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -1562,7 +2143,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Esse modelo de ticket não existe.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -1614,7 +2197,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Esse modelo de ticket não existe.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -1646,7 +2231,9 @@ module.exports = {
                 );
 
             await interaction.update(
-                criarMenuCanal(id)
+                criarMenuCanal(
+                    id
+                )
             );
 
             return true;
@@ -1669,7 +2256,9 @@ module.exports = {
                 );
 
             await interaction.update(
-                criarMenuCategoria(id)
+                criarMenuCategoria(
+                    id
+                )
             );
 
             return true;
@@ -1712,7 +2301,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Esse modelo não existe.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -1721,6 +2312,7 @@ module.exports = {
             const modelo =
                 modeloResult.rows[0];
 
+            // Configuração atualmente salva no banco.
             const configResult =
                 await pool.query(
                     `
@@ -1733,8 +2325,17 @@ module.exports = {
                     ]
                 );
 
-            const config =
+            const configBanco =
                 configResult.rows[0];
+
+            // Configuração escolhida durante esta sessão.
+            const config =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    id,
+                    configBanco
+                );
 
             if (
                 !config ||
@@ -1745,7 +2346,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Antes de salvar, escolha o **canal do painel** e a **categoria dos tickets**.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -1769,7 +2372,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ O canal escolhido para o painel não existe mais.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -1777,17 +2382,49 @@ module.exports = {
 
             if (
                 !categoria ||
-                categoria.type !== ChannelType.GuildCategory
+                categoria.type !==
+                    ChannelType.GuildCategory
             ) {
 
                 await interaction.reply({
                     content:
                         "❌ A categoria escolhida não existe mais.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
             }
+
+            // ================================
+            // 🔄 VERIFICAR MUDANÇA DE CANAL
+            // ================================
+
+            const canalAntigoId =
+                configBanco?.canal_painel_id || null;
+
+            const mensagemAntigaId =
+                configBanco?.mensagem_painel_id || null;
+
+            const mudouCanal =
+                canalAntigoId &&
+                canalAntigoId !==
+                    config.canal_painel_id;
+
+            // Se mudou de canal, apaga o painel antigo.
+            if (mudouCanal) {
+
+                await apagarPainelAntigo(
+                    interaction.guild,
+                    canalAntigoId,
+                    mensagemAntigaId
+                );
+            }
+
+            // ================================
+            // 💾 SALVAR CONFIGURAÇÃO
+            // ================================
 
             await pool.query(
                 `
@@ -1796,6 +2433,7 @@ module.exports = {
                     modelo_id,
                     canal_painel_id,
                     categoria_id,
+                    mensagem_painel_id,
                     configurado
                 )
                 VALUES (
@@ -1803,6 +2441,7 @@ module.exports = {
                     $2,
                     $3,
                     $4,
+                    $5,
                     TRUE
                 )
 
@@ -1811,13 +2450,24 @@ module.exports = {
                     modelo_id = EXCLUDED.modelo_id,
                     canal_painel_id = EXCLUDED.canal_painel_id,
                     categoria_id = EXCLUDED.categoria_id,
+                    mensagem_painel_id = EXCLUDED.mensagem_painel_id,
                     configurado = TRUE
                 `,
                 [
                     interaction.guildId,
+
                     id,
+
                     config.canal_painel_id,
-                    config.categoria_id
+
+                    config.categoria_id,
+
+                    mudouCanal
+                        ? null
+                        : (
+                            configBanco?.mensagem_painel_id ||
+                            null
+                        )
                 ]
             );
 
@@ -1836,6 +2486,10 @@ module.exports = {
             const novaConfig =
                 novaConfigResult.rows[0];
 
+            // ================================
+            // 📢 PUBLICAR / EDITAR PAINEL
+            // ================================
+
             const painel =
                 await atualizarPainelPublicado(
                     interaction.guild,
@@ -1848,21 +2502,32 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Não consegui enviar/atualizar o painel. Verifique se o bot tem permissão para enviar mensagens no canal escolhido.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
             }
 
+            // Limpa a configuração temporária.
+            limparConfiguracaoPendente(
+                interaction.guildId,
+                interaction.user.id,
+                id
+            );
+
             await interaction.update({
                 content:
                     `✅ Configuração salva!\n\n📢 Canal: ${canalPainel}\n📁 Categoria: ${categoria}\n🎫 Modelo: **${modelo.nome}**`,
+
                 embeds: [],
+
                 components: []
             });
 
             console.log(
-                `🎫 Ticket configurado: ${modelo.nome} | Servidor: ${interaction.guild.name}`
+                `🎫 Ticket configurado: ${modelo.nome} | Canal: ${canalPainel.name} | Categoria: ${categoria.name} | Servidor: ${interaction.guild.name}`
             );
 
             return true;
@@ -1889,7 +2554,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ O sistema de tickets só pode ser usado dentro de um servidor.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
             }
 
@@ -1901,6 +2568,7 @@ module.exports = {
                 "ticket_"
             )
         ) {
+
             return false;
         }
 
@@ -1918,7 +2586,10 @@ module.exports = {
             const valor =
                 interaction.values[0];
 
-            if (valor === "criar") {
+            if (
+                valor ===
+                "criar"
+            ) {
 
                 await interaction.showModal(
                     criarModalTicket()
@@ -1928,7 +2599,8 @@ module.exports = {
             }
 
             if (
-                valor === "configurar"
+                valor ===
+                "configurar"
             ) {
 
                 const resultado =
@@ -1961,6 +2633,7 @@ module.exports = {
                                     "❌ Você ainda não criou nenhum modelo de ticket."
                                 )
                         ],
+
                         components: []
                     });
                 }
@@ -2005,7 +2678,9 @@ module.exports = {
                     await interaction.reply({
                         content:
                             "❌ Esse modelo de ticket não existe.",
-                        ephemeral: true
+
+                        ephemeral:
+                            true
                     });
 
                     return true;
@@ -2023,10 +2698,19 @@ module.exports = {
                         ]
                     );
 
+                const config =
+                    obterConfiguracaoPendente(
+                        interaction.guildId,
+                        interaction.user.id,
+                        id,
+                        configResult.rows[0] ||
+                            null
+                    );
+
                 return interaction.update(
                     criarPainelModelo(
                         resultado.rows[0],
-                        configResult.rows[0] || null
+                        config
                     )
                 );
             }
@@ -2065,7 +2749,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ Esse modelo de ticket não existe.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
 
                 return true;
@@ -2083,10 +2769,19 @@ module.exports = {
                     ]
                 );
 
+            const config =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    id,
+                    configResult.rows[0] ||
+                        null
+                );
+
             return interaction.update(
                 criarPainelModelo(
                     resultado.rows[0],
-                    configResult.rows[0] || null
+                    config
                 )
             );
         }
@@ -2110,27 +2805,33 @@ module.exports = {
             const canalId =
                 interaction.values[0];
 
-            await pool.query(
-                `
-                INSERT INTO ticket_config (
-                    guild_id,
-                    canal_painel_id,
-                    configurado
-                )
-                VALUES (
-                    $1,
-                    $2,
-                    FALSE
-                )
+            // Busca a configuração atual do banco.
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
 
-                ON CONFLICT (guild_id)
-                DO UPDATE SET
-                    canal_painel_id = EXCLUDED.canal_painel_id
-                `,
-                [
-                    interaction.guildId,
-                    canalId
-                ]
+            const configBanco =
+                configResult.rows[0] ||
+                null;
+
+            // Guarda apenas como configuração pendente.
+            // O painel antigo continua intacto até clicar em Salvar.
+            salvarConfiguracaoPendente(
+                interaction.guildId,
+                interaction.user.id,
+                modeloId,
+                {
+                    canal_painel_id:
+                        canalId
+                }
             );
 
             const modeloResult =
@@ -2147,22 +2848,18 @@ module.exports = {
                     ]
                 );
 
-            const configResult =
-                await pool.query(
-                    `
-                    SELECT *
-                    FROM ticket_config
-                    WHERE guild_id = $1
-                    `,
-                    [
-                        interaction.guildId
-                    ]
+            const config =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    modeloId,
+                    configBanco
                 );
 
             return interaction.update(
                 criarPainelModelo(
                     modeloResult.rows[0],
-                    configResult.rows[0]
+                    config
                 )
             );
         }
@@ -2186,27 +2883,30 @@ module.exports = {
             const categoriaId =
                 interaction.values[0];
 
-            await pool.query(
-                `
-                INSERT INTO ticket_config (
-                    guild_id,
-                    categoria_id,
-                    configurado
-                )
-                VALUES (
-                    $1,
-                    $2,
-                    FALSE
-                )
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
 
-                ON CONFLICT (guild_id)
-                DO UPDATE SET
-                    categoria_id = EXCLUDED.categoria_id
-                `,
-                [
-                    interaction.guildId,
-                    categoriaId
-                ]
+            const configBanco =
+                configResult.rows[0] ||
+                null;
+
+            salvarConfiguracaoPendente(
+                interaction.guildId,
+                interaction.user.id,
+                modeloId,
+                {
+                    categoria_id:
+                        categoriaId
+                }
             );
 
             const modeloResult =
@@ -2223,22 +2923,18 @@ module.exports = {
                     ]
                 );
 
-            const configResult =
-                await pool.query(
-                    `
-                    SELECT *
-                    FROM ticket_config
-                    WHERE guild_id = $1
-                    `,
-                    [
-                        interaction.guildId
-                    ]
+            const config =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    modeloId,
+                    configBanco
                 );
 
             return interaction.update(
                 criarPainelModelo(
                     modeloResult.rows[0],
-                    configResult.rows[0]
+                    config
                 )
             );
         }
@@ -2264,7 +2960,9 @@ module.exports = {
                 await interaction.reply({
                     content:
                         "❌ O sistema de tickets só pode ser usado dentro de um servidor.",
-                    ephemeral: true
+
+                    ephemeral:
+                        true
                 });
             }
 
@@ -2276,6 +2974,7 @@ module.exports = {
                 "ticket_modal_"
             )
         ) {
+
             return false;
         }
 
@@ -2303,11 +3002,15 @@ module.exports = {
                     cor
                 )
             ) {
-                cor = "#5865F2";
+
+                cor =
+                    "#5865F2";
             }
 
             if (!cor) {
-                cor = "#5865F2";
+
+                cor =
+                    "#5865F2";
             }
 
             const resultado =
@@ -2407,11 +3110,14 @@ module.exports = {
                 )
             ) {
 
-                cor = "#5865F2";
+                cor =
+                    "#5865F2";
             }
 
             if (!cor) {
-                cor = "#5865F2";
+
+                cor =
+                    "#5865F2";
             }
 
             await pool.query(
@@ -2457,6 +3163,7 @@ module.exports = {
                     cor,
 
                     id,
+
                     interaction.guildId
                 ]
             );
@@ -2487,16 +3194,36 @@ module.exports = {
                     ]
                 );
 
-            await atualizarPainelPublicado(
-                interaction.guild,
-                resultado.rows[0],
-                configResult.rows[0]
-            );
+            // Só atualiza o painel publicado se esse
+            // modelo for o modelo atualmente configurado.
+            const config =
+                configResult.rows[0];
+
+            if (
+                config &&
+                String(config.modelo_id) ===
+                    String(id)
+            ) {
+
+                await atualizarPainelPublicado(
+                    interaction.guild,
+                    resultado.rows[0],
+                    config
+                );
+            }
+
+            const configTela =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    id,
+                    config || null
+                );
 
             await interaction.reply(
                 criarPainelModelo(
                     resultado.rows[0],
-                    configResult.rows[0] || null
+                    configTela
                 )
             );
 
@@ -2504,7 +3231,7 @@ module.exports = {
         }
 
         // ================================
-        // ✏️ EDITAR PERSONALIZAÇÃO
+        // 🎨 EDITAR PERSONALIZAÇÃO
         // ================================
 
         if (
@@ -2568,6 +3295,7 @@ module.exports = {
                         null,
 
                     id,
+
                     interaction.guildId
                 ]
             );
@@ -2598,16 +3326,34 @@ module.exports = {
                     ]
                 );
 
-            await atualizarPainelPublicado(
-                interaction.guild,
-                resultado.rows[0],
-                configResult.rows[0]
-            );
+            const config =
+                configResult.rows[0];
+
+            if (
+                config &&
+                String(config.modelo_id) ===
+                    String(id)
+            ) {
+
+                await atualizarPainelPublicado(
+                    interaction.guild,
+                    resultado.rows[0],
+                    config
+                );
+            }
+
+            const configTela =
+                obterConfiguracaoPendente(
+                    interaction.guildId,
+                    interaction.user.id,
+                    id,
+                    config || null
+                );
 
             await interaction.reply(
                 criarPainelModelo(
                     resultado.rows[0],
-                    configResult.rows[0] || null
+                    configTela
                 )
             );
 
