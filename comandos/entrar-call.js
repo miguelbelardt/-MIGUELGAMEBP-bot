@@ -10,6 +10,16 @@ const {
 
 const DONO_ID = "1124140396516225044";
 
+// =====================================================
+// 🎨 COR DO EMBED
+// =====================================================
+
+const COR_CALL = 0x5865F2;
+
+// =====================================================
+// 🤖 COMANDO
+// =====================================================
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("entrar-call")
@@ -42,6 +52,7 @@ module.exports = {
             });
 
             const embed = new EmbedBuilder()
+                .setColor(COR_CALL)
                 .setTitle("🔊 BOT NA CALL")
                 .setDescription(
                     `✅ Entrei no canal de voz **${canal.name}**!`
@@ -97,6 +108,7 @@ module.exports = {
             });
 
             const embed = new EmbedBuilder()
+                .setColor(COR_CALL)
                 .setTitle("🔊 BOT NA CALL")
                 .setDescription(
                     `✅ Entrei no canal de voz **${canal.name}**!`
