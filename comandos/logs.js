@@ -291,8 +291,8 @@ async function buscarConfig(guildId, tipo) {
             `
             SELECT canal_id
             FROM logs_config
-            WHERE guild_id = $1
-              AND tipo = $2
+            WHERE guild_id = ?
+              AND tipo = ?
             `,
             [guildId, tipo]
         );
@@ -320,11 +320,10 @@ async function salvarConfig(
             INSERT INTO logs_config
                 (guild_id, tipo, canal_id)
             VALUES
-                ($1, $2, $3)
+                (?, ?, ?)
 
-            ON CONFLICT (guild_id, tipo)
-            DO UPDATE SET
-                canal_id = EXCLUDED.canal_id
+            ON DUPLICATE KEY UPDATE
+                canal_id = VALUES(canal_id)
             `,
             [guildId, tipo, canalId]
         );
@@ -349,8 +348,8 @@ async function removerConfig(
         await pool.query(
             `
             DELETE FROM logs_config
-            WHERE guild_id = $1
-              AND tipo = $2
+            WHERE guild_id = ?
+              AND tipo = ?
             `,
             [guildId, tipo]
         );
@@ -1028,7 +1027,7 @@ async function mostrarStatus(
                 `
                 SELECT tipo, canal_id
                 FROM logs_config
-                WHERE guild_id = $1
+                WHERE guild_id = ?
                 ORDER BY tipo
                 `,
                 [interaction.guild.id]
