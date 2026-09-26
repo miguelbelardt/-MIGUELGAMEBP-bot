@@ -168,27 +168,156 @@ function criarEmbed(config, usuario) {
 }
 
 // =====================================================
-// 🔘 BOTÕES DO EMBED PUBLICADO
+// 📋 PAINEL PRINCIPAL DO /EMBED
 // =====================================================
 
-function criarBotoesEmbed(embedId) {
-    return [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`embed_config_${embedId}`)
-                .setLabel("⚙️ Configurar")
-                .setStyle(ButtonStyle.Secondary),
-
-            new ButtonBuilder()
-                .setCustomId(`embed_edit_${embedId}`)
-                .setLabel("✏️ Editar")
-                .setStyle(ButtonStyle.Primary)
+function criarPainelPrincipal() {
+    const embed = new EmbedBuilder()
+        .setTitle("🎨 GERENCIADOR DE EMBEDS")
+        .setDescription(
+            "Escolha uma opção abaixo.\n\n" +
+            "➕ **Criar** — Cria e envia um novo embed.\n" +
+            "⚙️ **Configurar** — Gerencia os embeds já criados neste servidor."
         )
-    ];
+        .setColor("#5865F2");
+
+    const linha = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId("embed_criar")
+            .setLabel("Criar")
+            .setEmoji("➕")
+            .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+            .setCustomId("embed_configurar")
+            .setLabel("Configurar")
+            .setEmoji("⚙️")
+            .setStyle(ButtonStyle.Primary)
+    );
+
+    return {
+        embeds: [embed],
+        components: [linha]
+    };
 }
 
 // =====================================================
-// 📋 PAINEL PRINCIPAL
+// ⚙️ PAINEL DE CONFIGURAÇÃO DOS EMBEDS
+// =====================================================
+
+async function criarPainelConfiguracao(guildId) {
+    const embeds = await getEmbedsDoServidor(guildId);
+
+    const painel = new EmbedBuilder()
+        .setTitle("⚙️ CONFIGURAR EMBEDS")
+        .setColor("#5865F2");
+
+    if (!embeds || embeds.length === 0) {
+        painel.setDescription(
+            "📭 Nenhum embed foi criado neste servidor ainda.\n\n" +
+            "Use **➕ Criar** para criar um novo embed."
+        );
+
+        const voltar = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("embed_voltar")
+                .setLabel("Voltar")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        return {
+            embeds: [painel],
+            components: [voltar]
+        };
+    }
+
+    painel.setDescription(
+        "Selecione um embed abaixo para configurar ou excluir.\n\n" +
+        `📦 **${embeds.length}** embed(s) encontrado(s).`
+    );
+
+    const componentes = [];
+
+    /*
+     * Discord permite no máximo 5 ActionRows.
+     * Cada linha pode ter até 5 botões.
+     * Por isso mostramos até 25 embeds por painel.
+     */
+
+    const embedsExibidos = embeds.slice(0, 25);
+
+    for (let i = 0; i < embedsExibidos.length; i++) {
+        const dados = embedsExibidos[i];
+
+        const numero =
+            dados.id !== undefined && dados.id !== null
+                ? `#${dados.id}`
+                : `#${i + 1}`;
+
+        const nome =
+            dados.config &&
+            dados.config.titulo
+                ? dados.config.titulo.substring(0, 60)
+                : "Embed sem título";
+
+        const configurar = new ButtonBuilder()
+            .setCustomId(`embed_edit_${dados.id}`)
+            .setLabel(`Configurar ${numero}`)
+            .setEmoji("⚙️")
+            .setStyle(ButtonStyle.Primary);
+
+        const excluir = new ButtonBuilder()
+            .setCustomId(`embed_delete_${dados.id}`)
+            .setLabel("Excluir")
+            .setEmoji("🗑️")
+            .setStyle(ButtonStyle.Danger);
+
+        const linha = new ActionRowBuilder().addComponents(
+            configurar,
+            excluir
+        );
+
+        componentes.push(linha);
+
+        painel.addFields({
+            name: `${numero} • ${nome}`,
+            value:
+                dados.canal_id
+                    ? `📍 Canal: <#${dados.canal_id}>`
+                    : "📍 Canal não definido",
+            inline: false
+        });
+
+        if (componentes.length >= 5) {
+            break;
+        }
+    }
+
+    componentes.push(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("embed_criar")
+                .setLabel("Criar novo")
+                .setEmoji("➕")
+                .setStyle(ButtonStyle.Success),
+
+            new ButtonBuilder()
+                .setCustomId("embed_voltar")
+                .setLabel("Voltar")
+                .setEmoji("↩️")
+                .setStyle(ButtonStyle.Secondary)
+        )
+    );
+
+    return {
+        embeds: [painel],
+        components: componentes
+    };
+}
+
+// =====================================================
+// 📋 PAINEL PRINCIPAL DO CONFIGURADOR
 // =====================================================
 
 function criarPainel(config) {
@@ -198,7 +327,7 @@ function criarPainel(config) {
             "Configure seu embed usando os botões abaixo.\n\n" +
             "🔒 **Somente administradores podem utilizar este painel.**\n\n" +
             "👀 Depois de enviar, o embed ficará visível para todos no servidor.\n" +
-            "✏️ Administradores poderão editar o mesmo embed depois."
+            "⚙️ Depois você poderá voltar em `/embed` → **Configurar** para alterar este embed."
         )
         .setColor(config.cor || "#5865F2");
 
@@ -349,24 +478,9 @@ module.exports = {
             });
         }
 
-        const userId = interaction.user.id;
-        const guildId = interaction.guild.id;
+        const painel = criarPainelPrincipal();
 
-        const chave = chaveConfiguracao(
-            userId,
-            guildId
-        );
-
-        const config = criarConfiguracao();
-
-        configuracoes.set(
-            chave,
-            config
-        );
-
-        const painel = criarPainel(config);
-
-        await interaction.reply({
+        return interaction.reply({
             embeds: painel.embeds,
             components: painel.components,
             ephemeral: true
@@ -398,7 +512,90 @@ module.exports = {
         const guildId = interaction.guild.id;
 
         // =================================================
-        // ✏️ EDITAR EMBED EXISTENTE
+        // ➕ CRIAR
+        // =================================================
+
+        if (
+            interaction.customId ===
+            "embed_criar"
+        ) {
+            const chave =
+                chaveConfiguracao(
+                    userId,
+                    guildId
+                );
+
+            const config =
+                criarConfiguracao();
+
+            configuracoes.set(
+                chave,
+                config
+            );
+
+            const painel =
+                criarPainel(config);
+
+            return interaction.update({
+                content: "",
+                embeds: painel.embeds,
+                components: painel.components
+            });
+        }
+
+        // =================================================
+        // ⚙️ CONFIGURAR
+        // =================================================
+
+        if (
+            interaction.customId ===
+            "embed_configurar"
+        ) {
+            try {
+                const painel =
+                    await criarPainelConfiguracao(
+                        guildId
+                    );
+
+                return interaction.update({
+                    content: "",
+                    embeds: painel.embeds,
+                    components: painel.components
+                });
+            } catch (erro) {
+                console.error(
+                    "❌ Erro ao carregar embeds:",
+                    erro
+                );
+
+                return interaction.reply({
+                    content:
+                        "❌ Não foi possível carregar os embeds deste servidor.",
+                    ephemeral: true
+                });
+            }
+        }
+
+        // =================================================
+        // ↩️ VOLTAR
+        // =================================================
+
+        if (
+            interaction.customId ===
+            "embed_voltar"
+        ) {
+            const painel =
+                criarPainelPrincipal();
+
+            return interaction.update({
+                content: "",
+                embeds: painel.embeds,
+                components: painel.components
+            });
+        }
+
+        // =================================================
+        // ✏️ EDITAR / CONFIGURAR EMBED EXISTENTE
         // =================================================
 
         if (
@@ -428,11 +625,12 @@ module.exports = {
                 });
             }
 
-            const config = JSON.parse(
-                JSON.stringify(
-                    dados.config
-                )
-            );
+            const config =
+                JSON.parse(
+                    JSON.stringify(
+                        dados.config
+                    )
+                );
 
             config.editandoEmbedId =
                 dados.id;
@@ -451,19 +649,18 @@ module.exports = {
             const painel =
                 criarPainel(config);
 
-            return interaction.reply({
+            return interaction.update({
                 content:
-                    "✏️ **Modo de edição ativado.**\nAs alterações serão aplicadas na mesma mensagem.",
+                    "✏️ **Modo de configuração ativado.**\nAs alterações serão aplicadas na mesma mensagem.",
                 embeds:
                     painel.embeds,
                 components:
-                    painel.components,
-                ephemeral: true
+                    painel.components
             });
         }
 
         // =================================================
-        // ⚙️ CONFIGURAR EMBED
+        // ⚙️ CONFIGURAR EMBED - COMPATIBILIDADE
         // =================================================
 
         if (
@@ -493,12 +690,37 @@ module.exports = {
                 });
             }
 
+            const config =
+                JSON.parse(
+                    JSON.stringify(
+                        dados.config
+                    )
+                );
+
+            config.editandoEmbedId =
+                dados.id;
+
+            const chave =
+                chaveConfiguracao(
+                    userId,
+                    guildId
+                );
+
+            configuracoes.set(
+                chave,
+                config
+            );
+
+            const painel =
+                criarPainel(config);
+
             return interaction.reply({
                 content:
-                    "⚙️ **Configuração do embed**\n\n" +
-                    `📍 Canal: <#${dados.canal_id}>\n` +
-                    `👤 Criado por: <@${dados.usuario_id}>\n\n` +
-                    "Use **✏️ Editar** para alterar o conteúdo do embed.",
+                    "⚙️ **Configuração do embed ativada.**",
+                embeds:
+                    painel.embeds,
+                components:
+                    painel.components,
                 ephemeral: true
             });
         }
@@ -569,10 +791,18 @@ module.exports = {
                     guildId
                 );
 
-                return interaction.reply({
+                const painel =
+                    await criarPainelConfiguracao(
+                        guildId
+                    );
+
+                return interaction.update({
                     content:
                         "🗑️ Embed excluído com sucesso.",
-                    ephemeral: true
+                    embeds:
+                        painel.embeds,
+                    components:
+                        painel.components
                 });
             } catch (erro) {
                 console.error(
@@ -1108,7 +1338,7 @@ module.exports = {
                 ) {
                     return interaction.reply({
                         content:
-                            "❌ Não encontrei o embed que você estava editando.",
+                            "❌ Não encontrei o embed que você estava configurando.",
                         ephemeral: true
                     });
                 }
@@ -1145,14 +1375,12 @@ module.exports = {
                     // -----------------------------------------
 
                     if (mensagem) {
+                        // Embed publicado fica SEM botões.
                         await mensagem.edit({
                             embeds: [
                                 resultado.embed
                             ],
-                            components:
-                                criarBotoesEmbed(
-                                    dados.id
-                                )
+                            components: []
                         });
 
                         await atualizarEmbedBanco(
@@ -1197,16 +1425,6 @@ module.exports = {
                             ],
                             components: []
                         });
-
-                    await novaMensagem.edit({
-                        embeds: [
-                            resultado.embed
-                        ],
-                        components:
-                            criarBotoesEmbed(
-                                dados.id
-                            )
-                    });
 
                     await atualizarEmbedBanco(
                         dados.id,
@@ -1277,15 +1495,8 @@ module.exports = {
                     mensagem.id
                 );
 
-                await mensagem.edit({
-                    embeds: [
-                        resultado.embed
-                    ],
-                    components:
-                        criarBotoesEmbed(
-                            dadosBanco.id
-                        )
-                });
+                // IMPORTANTE:
+                // O embed publicado permanece sem botões.
 
                 configuracoes.delete(
                     chave
@@ -1564,7 +1775,7 @@ module.exports = {
 
         if (
             interaction.customId ===
-            "embed_modal_footer"
+            "embed_footer"
         ) {
             const footer =
                 interaction.fields
