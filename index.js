@@ -3,7 +3,9 @@ const {
     GatewayIntentBits,
     Collection,
     REST,
-    Routes
+    Routes,
+    EmbedBuilder,
+    AttachmentBuilder
 } = require("discord.js");
 
 const http = require("http");
@@ -14,6 +16,8 @@ const {
     inicializarBanco,
     adicionarXP
 } = require("./database/database");
+
+const logs = require("./comandos/logs");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
@@ -71,6 +75,24 @@ const XP_MIN = 5;
 const XP_MAX = 15;
 
 // =====================================================
+// 🗑️ SISTEMA DE MENSAGENS APAGADAS
+// =====================================================
+
+// Guarda mensagens recentes para tentar preservar
+// o conteúdo mesmo depois que elas forem apagadas.
+const mensagensRecentes = new Map();
+
+// Guarda exclusões que estão esperando 1 segundo
+// para saber se foi apenas uma mensagem ou várias.
+const exclusoesPendentes = new Map();
+
+// Tempo máximo que uma mensagem fica no cache.
+const TEMPO_CACHE_MENSAGEM = 10 * 60 * 1000;
+
+// Tempo para agrupar mensagens apagadas.
+const TEMPO_AGRUPAMENTO = 1000;
+
+// =====================================================
 // 🤖 CLIENTE DISCORD
 // =====================================================
 
@@ -83,6 +105,457 @@ const client = new Client({
         GatewayIntentBits.GuildMembers
     ]
 });
+
+// =====================================================
+// 📋 DISPONIBILIZAR SISTEMA DE LOGS NO CLIENT
+// =====================================================
+
+client.registrarLog = logs.registrarLog;
+
+// =====================================================
+// 🗑️ FUNÇÃO PARA GUARDAR MENSAGEM RECENTE
+// =====================================================
+
+function guardarMensagemRecente(message) {
+    if (!message?.id) return;
+
+    const dados = {
+        id: message.id,
+        guildId: message.guild?.id || null,
+        canalId: message.channel?.id || null,
+        canalNome: message.channel?.name || "Canal desconhecido",
+
+        autorId: message.author?.id || null,
+        autorTag: message.author?.tag || "Usuário desconhecido",
+        autorNome: message.author?.username || "Usuário desconhecido",
+
+        conteudo: message.content || "",
+
+        anexos: message.attachments
+            ? [...message.attachments.values()].map(anexo => ({
+                nome: anexo.name || "arquivo",
+                url: anexo.url
+            }))
+            : [],
+
+        criadoEm: message.createdTimestamp || Date.now()
+    };
+
+    mensagensRecentes.set(message.id, dados);
+
+    setTimeout(() => {
+        const atual = mensagensRecentes.get(message.id);
+
+        if (
+            atual &&
+            Date.now() - atual.criadoEm >=
+            TEMPO_CACHE_MENSAGEM
+        ) {
+            mensagensRecentes.delete(message.id);
+        }
+    }, TEMPO_CACHE_MENSAGEM + 1000);
+}
+
+// =====================================================
+// 🗑️ PEGAR DADOS DA MENSAGEM APAGADA
+// =====================================================
+
+function obterDadosMensagemApagada(message) {
+    const dadosCache =
+        mensagensRecentes.get(message.id);
+
+    if (dadosCache) {
+        mensagensRecentes.delete(message.id);
+
+        return dadosCache;
+    }
+
+    return {
+        id: message.id,
+        guildId: message.guild?.id || null,
+        canalId: message.channel?.id || null,
+        canalNome: message.channel?.name || "Canal desconhecido",
+
+        autorId: message.author?.id || null,
+        autorTag: message.author?.tag || "Usuário desconhecido",
+        autorNome: message.author?.username || "Usuário desconhecido",
+
+        conteudo: message.content || "",
+
+        anexos: message.attachments
+            ? [...message.attachments.values()].map(anexo => ({
+                nome: anexo.name || "arquivo",
+                url: anexo.url
+            }))
+            : [],
+
+        criadoEm: message.createdTimestamp || Date.now()
+    };
+}
+
+// =====================================================
+// 📝 FORMATAR UMA MENSAGEM APAGADA
+// =====================================================
+
+function formatarMensagemApagada(dados, numero) {
+    const data = new Date(
+        dados.criadoEm || Date.now()
+    );
+
+    const horario = data.toLocaleString(
+        "pt-BR",
+        {
+            timeZone: "America/Sao_Paulo"
+        }
+    );
+
+    let texto =
+        `========================================\n` +
+        `MENSAGEM ${numero}\n` +
+        `========================================\n\n` +
+
+        `ID da mensagem: ${dados.id || "Desconhecido"}\n` +
+        `Autor: ${dados.autorTag || "Desconhecido"}\n` +
+        `ID do autor: ${dados.autorId || "Desconhecido"}\n` +
+        `Canal: #${dados.canalNome || "Desconhecido"}\n` +
+        `ID do canal: ${dados.canalId || "Desconhecido"}\n` +
+        `Horário: ${horario}\n\n` +
+
+        `Mensagem:\n` +
+        `${dados.conteudo || "[Conteúdo não disponível]"}\n`;
+
+    if (dados.anexos?.length > 0) {
+        texto +=
+            `\nAnexos:\n`;
+
+        for (const anexo of dados.anexos) {
+            texto +=
+                `- ${anexo.nome}: ${anexo.url}\n`;
+        }
+    }
+
+    texto +=
+        `\n----------------------------------------\n\n`;
+
+    return texto;
+}
+
+// =====================================================
+// 📄 CRIAR ARQUIVO DAS MENSAGENS APAGADAS
+// =====================================================
+
+function criarArquivoMensagensApagadas(
+    mensagens
+) {
+    let conteudo =
+        `========================================\n` +
+        `MENSAGENS APAGADAS\n` +
+        `========================================\n\n` +
+
+        `Servidor: ${mensagens[0]?.guildId || "Desconhecido"}\n` +
+        `Quantidade: ${mensagens.length}\n` +
+        `Data do registro: ${new Date().toLocaleString(
+            "pt-BR",
+            {
+                timeZone: "America/Sao_Paulo"
+            }
+        )}\n\n`;
+
+    mensagens.forEach(
+        (mensagem, index) => {
+            conteudo += formatarMensagemApagada(
+                mensagem,
+                index + 1
+            );
+        }
+    );
+
+    return Buffer.from(
+        conteudo,
+        "utf8"
+    );
+}
+
+// =====================================================
+// 🗑️ ENVIAR LOG DE UMA MENSAGEM
+// =====================================================
+
+async function enviarLogMensagemApagada(
+    guild,
+    mensagens
+) {
+    if (!guild || !mensagens?.length) return;
+
+    const config =
+        await buscarConfigLog(
+            guild.id,
+            "mensagens_apagadas"
+        );
+
+    if (!config) return;
+
+    const canal =
+        guild.channels.cache.get(
+            config.canal_id
+        );
+
+    if (
+        !canal ||
+        !canal.isTextBased()
+    ) {
+        return;
+    }
+
+    try {
+
+        // =========================================
+        // 🗑️ APENAS UMA MENSAGEM
+        // =========================================
+
+        if (mensagens.length === 1) {
+
+            const mensagem =
+                mensagens[0];
+
+            const data =
+                new Date(
+                    mensagem.criadoEm ||
+                    Date.now()
+                );
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "🗑️ Mensagem apagada"
+                    )
+                    .setDescription(
+                        `👤 **Autor:** <@${mensagem.autorId || "0"}>\n` +
+                        `📢 **Canal:** <#${mensagem.canalId || "0"}>\n\n` +
+                        `💬 **Mensagem:**\n` +
+                        `> ${
+                            mensagem.conteudo
+                                ? mensagem.conteudo.substring(0, 3900)
+                                : "[Conteúdo não disponível]"
+                        }`
+                    )
+                    .setColor(0xED4245)
+                    .setTimestamp(data);
+
+            if (
+                mensagem.anexos?.length > 0
+            ) {
+                embed.addFields({
+                    name: "📎 Anexos",
+                    value:
+                        mensagem.anexos
+                            .map(
+                                anexo =>
+                                    `[${anexo.nome}](${anexo.url})`
+                            )
+                            .join("\n")
+                            .substring(0, 1024)
+                });
+            }
+
+            await canal.send({
+                embeds: [embed]
+            });
+
+            return;
+        }
+
+        // =========================================
+        // 🗑️🗑️ VÁRIAS MENSAGENS
+        // =========================================
+
+        const arquivo =
+            criarArquivoMensagensApagadas(
+                mensagens
+            );
+
+        const anexo =
+            new AttachmentBuilder(
+                arquivo,
+                {
+                    name:
+                        `mensagens-apagadas-${Date.now()}.txt`
+                }
+            );
+
+        const primeira =
+            mensagens[0];
+
+        const embed =
+            new EmbedBuilder()
+                .setTitle(
+                    "🗑️ Mensagens apagadas em massa"
+                )
+                .setDescription(
+                    `📊 **Quantidade:** ${mensagens.length} mensagens\n` +
+                    `📢 **Canal:** <#${primeira.canalId || "0"}>\n\n` +
+                    `📎 As mensagens apagadas foram salvas no arquivo abaixo.`
+                )
+                .setColor(0xED4245)
+                .setTimestamp();
+
+        await canal.send({
+            embeds: [embed],
+            files: [anexo]
+        });
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao registrar mensagens apagadas:",
+            erro
+        );
+    }
+}
+
+// =====================================================
+// 🔎 BUSCAR CONFIGURAÇÃO DE LOG
+// =====================================================
+
+async function buscarConfigLog(
+    guildId,
+    tipo
+) {
+    try {
+
+        const resultado =
+            await logsBuscarConfig(
+                guildId,
+                tipo
+            );
+
+        return resultado;
+
+    } catch (erro) {
+
+        console.error(
+            `❌ Erro ao buscar configuração do log ${tipo}:`,
+            erro
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
+// 🔎 FUNÇÃO INTERNA PARA CONSULTAR LOGS
+// =====================================================
+
+async function logsBuscarConfig(
+    guildId,
+    tipo
+) {
+    const resultado =
+        await require("./database/database")
+            .pool
+            .query(
+                `
+                SELECT canal_id
+                FROM logs_config
+                WHERE guild_id = $1
+                  AND tipo = $2
+                `,
+                [
+                    guildId,
+                    tipo
+                ]
+            );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+// =====================================================
+// 🗑️ EVENTO DE MENSAGEM APAGADA
+// =====================================================
+
+client.on(
+    "messageDelete",
+    async message => {
+
+        if (!message.guild) return;
+
+        const dados =
+            obterDadosMensagemApagada(
+                message
+            );
+
+        // =========================================
+        // 🔎 VERIFICAR SE JÁ EXISTE UM GRUPO
+        // =========================================
+
+        let grupo =
+            exclusoesPendentes.get(
+                message.guild.id
+            );
+
+        // =========================================
+        // 🆕 PRIMEIRA MENSAGEM
+        // =========================================
+
+        if (!grupo) {
+
+            grupo = {
+                mensagens: [
+                    dados
+                ],
+                timer: null
+            };
+
+            exclusoesPendentes.set(
+                message.guild.id,
+                grupo
+            );
+
+            // Espera 1 segundo para ver
+            // se outras mensagens serão apagadas.
+            grupo.timer =
+                setTimeout(
+                    async () => {
+
+                        const atual =
+                            exclusoesPendentes.get(
+                                message.guild.id
+                            );
+
+                        if (
+                            !atual ||
+                            atual !== grupo
+                        ) {
+                            return;
+                        }
+
+                        exclusoesPendentes.delete(
+                            message.guild.id
+                        );
+
+                        await enviarLogMensagemApagada(
+                            message.guild,
+                            atual.mensagens
+                        );
+
+                    },
+                    TEMPO_AGRUPAMENTO
+                );
+
+            return;
+        }
+
+        // =========================================
+        // ➕ OUTRA MENSAGEM DENTRO DE 1 SEGUNDO
+        // =========================================
+
+        grupo.mensagens.push(
+            dados
+        );
+    }
+);
 
 // =====================================================
 // 📦 COLEÇÃO DE COMANDOS
@@ -345,7 +818,6 @@ client.once(
             }
         };
 
-        // Coloca Ausente imediatamente
         await atualizarStatusInicializacao();
 
         console.log(
@@ -480,15 +952,7 @@ client.once(
             }
         };
 
-        // =================================================
-        // 🟢 PRIMEIRO STATUS NORMAL
-        // =================================================
-
         await atualizarStatus();
-
-        // =================================================
-        // 🔄 ALTERNAR A CADA 5 SEGUNDOS
-        // =================================================
 
         setInterval(
             atualizarStatus,
@@ -558,6 +1022,14 @@ client.on(
     async message => {
 
         if (message.author.bot) return;
+
+        // =================================================
+        // 🗑️ GUARDAR MENSAGEM PARA POSSÍVEL LOG
+        // =================================================
+
+        if (message.guild) {
+            guardarMensagemRecente(message);
+        }
 
         // =================================================
         // ⭐ GANHAR XP POR MENSAGEM
