@@ -69,8 +69,15 @@ for (const arquivo of arquivosComandos) {
         ) {
             const dados = comando.data.toJSON();
 
-            dados.integration_types = [0, 1];
-            dados.contexts = [0, 1, 2];
+            // Só define os padrões se o comando
+            // ainda não tiver esses valores.
+            if (!dados.integration_types) {
+                dados.integration_types = [0, 1];
+            }
+
+            if (!dados.contexts) {
+                dados.contexts = [0, 1, 2];
+            }
 
             comandos.push(dados);
 
@@ -82,6 +89,7 @@ for (const arquivo of arquivosComandos) {
                 `⚠️ Ignorado: ${arquivo} não possui data ou execute.`
             );
         }
+
     } catch (erro) {
         console.error(
             `❌ Erro ao carregar ${arquivo}:`,
@@ -124,6 +132,7 @@ const rest = new REST({
 (async () => {
     try {
         console.log("");
+
         console.log(
             `🔄 Limpando e registrando ${comandos.length} comandos globais...`
         );
@@ -142,6 +151,7 @@ const rest = new REST({
         );
 
         console.log("");
+
         console.log(
             "✅ Comandos Slash globais registrados com sucesso!"
         );
@@ -151,7 +161,7 @@ const rest = new REST({
         );
 
         console.log(
-            "🌐 Contextos: servidor + DM do bot + DM entre usuários."
+            "🌐 Contextos: cada comando mantém sua configuração própria."
         );
 
         console.log(
@@ -160,6 +170,7 @@ const rest = new REST({
 
     } catch (erro) {
         console.error("");
+
         console.error(
             "❌ Erro ao registrar comandos:"
         );
