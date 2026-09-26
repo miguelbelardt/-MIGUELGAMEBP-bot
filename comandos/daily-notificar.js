@@ -12,10 +12,12 @@ const {
 } = require("../database/database");
 
 // =====================================================
-// 🎨 COR DO EMBED
+// 🎨 CORES DOS EMBEDS
 // =====================================================
 
-const COR_NOTIFICACAO = 0x5865F2;
+const COR_ATIVA = 0x57F287;       // 🟢 Verde
+const COR_DESATIVADA = 0xED4245;  // 🔴 Vermelho
+const COR_INFO = 0x5865F2;        // 🔵 Azul
 
 // =====================================================
 // 🤖 COMANDO
@@ -34,9 +36,7 @@ module.exports = {
     // 💬 SLASH COMMAND
     // =================================================
 
-    async execute(
-        interaction
-    ) {
+    async execute(interaction) {
 
         const userId =
             interaction.user.id;
@@ -56,7 +56,7 @@ module.exports = {
 
                 const embed =
                     new EmbedBuilder()
-                        .setColor(COR_NOTIFICACAO)
+                        .setColor(COR_ATIVA)
                         .setTitle("🔔 Notificação do Daily")
                         .setDescription(
                             "Sua notificação do Daily está **ativada**.\n\n" +
@@ -99,7 +99,7 @@ module.exports = {
 
             const embed =
                 new EmbedBuilder()
-                    .setColor(COR_NOTIFICACAO)
+                    .setColor(COR_DESATIVADA)
                     .setTitle("🔕 Notificação do Daily")
                     .setDescription(
                         "Sua notificação do Daily está **desativada**.\n\n" +
@@ -142,9 +142,7 @@ module.exports = {
     // 🔘 BOTÃO
     // =================================================
 
-    async handleButton(
-        interaction
-    ) {
+    async handleButton(interaction) {
 
         if (
             interaction.customId !==
@@ -163,14 +161,12 @@ module.exports = {
                     userId
                 );
 
-            if (
-                !notificacaoAtiva
-            ) {
+            if (!notificacaoAtiva) {
 
                 return interaction.update({
                     embeds: [
                         new EmbedBuilder()
-                            .setColor(COR_NOTIFICACAO)
+                            .setColor(COR_DESATIVADA)
                             .setTitle("🔕 Notificação do Daily")
                             .setDescription(
                                 "Sua notificação do Daily já está **desativada**."
@@ -195,7 +191,7 @@ module.exports = {
 
             const embed =
                 new EmbedBuilder()
-                    .setColor(COR_NOTIFICACAO)
+                    .setColor(COR_DESATIVADA)
                     .setTitle("🔕 Notificação desativada")
                     .setDescription(
                         "Pronto! As notificações do seu Daily foram **desativadas**.\n\n" +
