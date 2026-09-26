@@ -1,7 +1,9 @@
 const {
     Client,
     GatewayIntentBits,
-    Collection
+    Collection,
+    REST,
+    Routes
 } = require("discord.js");
 
 const http = require("http");
@@ -93,6 +95,14 @@ const comandosPath = path.join(
     "comandos"
 );
 
+if (!fs.existsSync(comandosPath)) {
+    console.error(
+        "❌ A pasta 'comandos' não foi encontrada!"
+    );
+
+    process.exit(1);
+}
+
 const arquivosComandos = fs
     .readdirSync(comandosPath)
     .filter(
@@ -136,6 +146,172 @@ for (const arquivo of arquivosComandos) {
             `❌ Erro ao carregar ${arquivo}:`,
             erro
         );
+    }
+}
+
+// =====================================================
+// 🚀 REGISTRAR COMANDOS SLASH AUTOMATICAMENTE
+// =====================================================
+
+async function registrarComandos() {
+
+    const TOKEN =
+        process.env.DISCORD_TOKEN;
+
+    const CLIENT_ID =
+        process.env.CLIENT_ID;
+
+    if (!TOKEN) {
+
+        console.error(
+            "❌ DISCORD_TOKEN não foi encontrado."
+        );
+
+        throw new Error(
+            "DISCORD_TOKEN não configurado."
+        );
+    }
+
+    if (!CLIENT_ID) {
+
+        console.error(
+            "❌ CLIENT_ID não foi encontrado."
+        );
+
+        throw new Error(
+            "CLIENT_ID não configurado."
+        );
+    }
+
+    const comandos = [];
+
+    for (
+        const [nome, comando]
+        of client.commands
+    ) {
+
+        try {
+
+            const dados =
+                comando.data.toJSON();
+
+            /*
+             * Só adiciona os valores padrão
+             * quando o comando não definiu
+             * seus próprios contexts.
+             *
+             * Assim comandos como /sorteio
+             * podem continuar limitados a servidores.
+             */
+
+            if (
+                !dados.integration_types
+            ) {
+
+                dados.integration_types = [
+                    0,
+                    1
+                ];
+            }
+
+            if (
+                !dados.contexts
+            ) {
+
+                dados.contexts = [
+                    0,
+                    1,
+                    2
+                ];
+            }
+
+            comandos.push(dados);
+
+            console.log(
+                `📦 Preparado para registro: /${nome}`
+            );
+
+        } catch (erro) {
+
+            console.error(
+                `❌ Erro ao preparar /${nome}:`,
+                erro
+            );
+        }
+    }
+
+    // =================================================
+    // 🔎 VERIFICAR DUPLICADOS
+    // =================================================
+
+    const nomesComandos =
+        comandos.map(
+            comando => comando.name
+        );
+
+    const duplicados =
+        nomesComandos.filter(
+            (nome, index) =>
+                nomesComandos.indexOf(nome) !== index
+        );
+
+    if (duplicados.length > 0) {
+
+        throw new Error(
+            `Comandos duplicados encontrados: ${[
+                ...new Set(duplicados)
+            ].join(", ")}`
+        );
+    }
+
+    // =================================================
+    // 🌐 REGISTRO GLOBAL
+    // =================================================
+
+    const rest =
+        new REST({
+            version: "10"
+        }).setToken(TOKEN);
+
+    console.log("");
+    console.log(
+        `🔄 Registrando ${comandos.length} comandos Slash...`
+    );
+
+    console.log(
+        `🤖 CLIENT_ID: ${CLIENT_ID}`
+    );
+
+    try {
+
+        await rest.put(
+            Routes.applicationCommands(
+                CLIENT_ID
+            ),
+            {
+                body: comandos
+            }
+        );
+
+        console.log("");
+        console.log(
+            "✅ Comandos Slash globais registrados com sucesso!"
+        );
+
+        console.log(
+            `📋 Total registrado: ${comandos.length}`
+        );
+
+    } catch (erro) {
+
+        console.error("");
+        console.error(
+            "❌ Erro ao registrar os comandos Slash:"
+        );
+
+        console.error(erro);
+
+        throw erro;
     }
 }
 
@@ -719,10 +895,6 @@ client.on(
             interaction.isAnySelectMenu()
         ) {
 
-            // =================================================
-            // 🎉 MENUS DO SORTEIO
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "sorteio_"
@@ -770,10 +942,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // 🎫 MENUS DO TICKET
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "ticket_"
@@ -820,10 +988,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // 🎮 MENU DO PPT DUO
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -877,15 +1041,11 @@ client.on(
 
         // =================================================
         // 🔘 BOTÕES
-        // =================================================
+        // =====================================================
 
         if (
             interaction.isButton()
         ) {
-
-            // =================================================
-            // 🔕 DESATIVAR NOTIFICAÇÃO DO DAILY
-            // =================================================
 
             if (
                 interaction.customId ===
@@ -934,15 +1094,10 @@ client.on(
                     console.error(
                         "❌ O comando daily-notificar não foi carregado."
                     );
-
                 }
 
                 return;
             }
-
-            // =================================================
-            // 🔔 DAILY
-            // =================================================
 
             if (
                 interaction.customId ===
@@ -990,10 +1145,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // ❓ AJUDA
-            // =================================================
-
             if (
                 interaction.customId ===
                 "ajuda_comandos"
@@ -1039,10 +1190,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // 📝 EMBED
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -1091,10 +1238,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // 🎫 TICKETS
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "ticket_"
@@ -1141,10 +1284,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // 🎟️ PARTICIPAR DO SORTEIO
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -1193,10 +1332,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // 🎉 SORTEIO
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "sorteio_"
@@ -1244,10 +1379,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // 🎮 PPT DUO
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "pptduo_"
@@ -1294,10 +1425,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // 🪨📄✂️ PEDRA PAPEL TESOURA
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -1357,10 +1484,6 @@ client.on(
             interaction.isModalSubmit()
         ) {
 
-            // =================================================
-            // 📝 EMBED
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "embed_modal_"
@@ -1408,10 +1531,6 @@ client.on(
                 return;
             }
 
-            // =================================================
-            // 🎫 TICKETS
-            // =================================================
-
             if (
                 interaction.customId.startsWith(
                     "ticket_"
@@ -1458,10 +1577,6 @@ client.on(
 
                 return;
             }
-
-            // =================================================
-            // 🎉 SORTEIO
-            // =================================================
 
             if (
                 interaction.customId.startsWith(
@@ -1600,7 +1715,7 @@ client.on(
 );
 
 // =====================================================
-// 💾 BANCO + LOGIN DO DISCORD
+// 💾 BANCO + REGISTRO + LOGIN DO DISCORD
 // =====================================================
 
 async function iniciar() {
@@ -1620,6 +1735,20 @@ async function iniciar() {
         console.log(
             "💾 Banco de dados inicializado!"
         );
+
+        // =================================================
+        // 🌐 REGISTRAR SLASH COMMANDS
+        // =================================================
+
+        console.log(
+            "🌐 Atualizando comandos Slash..."
+        );
+
+        await registrarComandos();
+
+        // =================================================
+        // 🔑 LOGIN
+        // =================================================
 
         console.log(
             "🔑 Tentando conectar ao Discord..."
