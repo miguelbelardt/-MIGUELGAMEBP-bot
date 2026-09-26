@@ -34,6 +34,7 @@ module.exports = {
         conexao.destroy();
 
         const embed = new EmbedBuilder()
+            .setColor(0x5865F2)
             .setTitle("🔇 BOT SAIU DA CALL")
             .setDescription("✅ Saí do canal de voz com sucesso!");
 
@@ -66,6 +67,7 @@ module.exports = {
             conexao.destroy();
 
             const embed = new EmbedBuilder()
+                .setColor(0x5865F2)
                 .setTitle("🔇 BOT SAIU DA CALL")
                 .setDescription("✅ Saí do canal de voz com sucesso!");
 
