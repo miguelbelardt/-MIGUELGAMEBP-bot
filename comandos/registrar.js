@@ -8,7 +8,8 @@ const {
     TextInputBuilder,
     TextInputStyle,
     StringSelectMenuBuilder,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    MessageFlags
 } = require("discord.js");
 
 const crypto = require("crypto");
@@ -73,6 +74,12 @@ const ESTILOS_BOTOES = {
 };
 
 // =====================================================
+// 🔐 FLAGS
+// =====================================================
+
+const EPHEMERAL = MessageFlags.Ephemeral;
+
+// =====================================================
 // 🔐 PERMISSÃO
 // =====================================================
 
@@ -91,8 +98,9 @@ function podeConfigurar(interaction) {
 // =====================================================
 
 function pertenceAoServidor(interaction, guildId) {
-    return (
+    return Boolean(
         interaction.guild &&
+        guildId &&
         String(interaction.guild.id) === String(guildId)
     );
 }
@@ -118,9 +126,15 @@ async function buscarPaginas(guildId) {
 }
 
 async function buscarPagina(guildId, numeroPagina) {
+    const numero = Number(numeroPagina);
+
+    if (!Number.isInteger(numero) || numero < 1) {
+        return null;
+    }
+
     return await getRegistroPagina(
         guildId,
-        Number(numeroPagina)
+        numero
     );
 }
 
@@ -201,20 +215,25 @@ function criarEmbedPagina(pagina) {
     }
 
     if (pagina.rodape) {
+        const textoRodape =
+            String(pagina.rodape).substring(0, 2048);
+
         if (pagina.rodape_icone) {
             try {
                 embed.setFooter({
-                    text: String(pagina.rodape).substring(0, 2048),
-                    iconURL: String(pagina.rodape_icone)
+                    text: textoRodape,
+                    iconURL: String(
+                        pagina.rodape_icone
+                    )
                 });
             } catch {
                 embed.setFooter({
-                    text: String(pagina.rodape).substring(0, 2048)
+                    text: textoRodape
                 });
             }
         } else {
             embed.setFooter({
-                text: String(pagina.rodape).substring(0, 2048)
+                text: textoRodape
             });
         }
     }
@@ -262,7 +281,7 @@ async function criarComponentesPagina(
                 button.setEmoji(
                     String(botao.emoji)
                 );
-            } catch (erro) {
+            } catch {
                 console.warn(
                     `⚠️ Emoji inválido no botão ${botao.id}.`
                 );
@@ -288,35 +307,45 @@ async function criarComponentesPagina(
     const paginas = await buscarPaginas(guildId);
 
     if (paginas.length > 1) {
-        const navegacao = new ActionRowBuilder();
+        const navegacao =
+            new ActionRowBuilder();
 
-        const anterior = new ButtonBuilder()
-            .setCustomId(
-                `registro_pagina_${guildId}_${Math.max(
-                    1,
-                    Number(numeroPagina) - 1
-                )}`
-            )
-            .setLabel("Anterior")
-            .setEmoji("◀️")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(
-                Number(numeroPagina) <= 1
-            );
+        const paginaAtual =
+            Number(numeroPagina);
 
-        const proxima = new ButtonBuilder()
-            .setCustomId(
-                `registro_pagina_${guildId}_${Math.min(
-                    paginas.length,
-                    Number(numeroPagina) + 1
-                )}`
-            )
-            .setLabel("Próxima")
-            .setEmoji("▶️")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(
-                Number(numeroPagina) >= paginas.length
-            );
+        const anterior =
+            new ButtonBuilder()
+                .setCustomId(
+                    `registro_pagina_${guildId}_${Math.max(
+                        1,
+                        paginaAtual - 1
+                    )}`
+                )
+                .setLabel("Anterior")
+                .setEmoji("◀️")
+                .setStyle(
+                    ButtonStyle.Secondary
+                )
+                .setDisabled(
+                    paginaAtual <= 1
+                );
+
+        const proxima =
+            new ButtonBuilder()
+                .setCustomId(
+                    `registro_pagina_${guildId}_${Math.min(
+                        paginas.length,
+                        paginaAtual + 1
+                    )}`
+                )
+                .setLabel("Próxima")
+                .setEmoji("▶️")
+                .setStyle(
+                    ButtonStyle.Secondary
+                )
+                .setDisabled(
+                    paginaAtual >= paginas.length
+                );
 
         navegacao.addComponents(
             anterior,
@@ -347,9 +376,10 @@ async function atualizarMensagemRegistro(
     }
 
     try {
-        const canal = await guild.channels.fetch(
-            config.canal_id
-        );
+        const canal =
+            await guild.channels.fetch(
+                config.canal_id
+            );
 
         if (
             !canal ||
@@ -358,22 +388,25 @@ async function atualizarMensagemRegistro(
             return false;
         }
 
-        const mensagem = await canal.messages.fetch(
-            config.mensagem_id
-        );
+        const mensagem =
+            await canal.messages.fetch(
+                config.mensagem_id
+            );
 
-        const pagina = await buscarPagina(
-            guild.id,
-            numeroPagina
-        );
+        const pagina =
+            await buscarPagina(
+                guild.id,
+                numeroPagina
+            );
 
         if (!pagina) {
             return false;
         }
 
-        const embed = criarEmbedPagina(
-            pagina
-        );
+        const embed =
+            criarEmbedPagina(
+                pagina
+            );
 
         const components =
             await criarComponentesPagina(
@@ -388,6 +421,7 @@ async function atualizarMensagemRegistro(
         });
 
         return true;
+
     } catch (erro) {
         console.error(
             "❌ Erro ao atualizar mensagem do registro:",
@@ -407,9 +441,10 @@ async function atualizarPublicacaoSeExistir(
     guildId,
     numeroPagina = 1
 ) {
-    const config = await buscarConfiguracao(
-        guildId
-    );
+    const config =
+        await buscarConfiguracao(
+            guildId
+        );
 
     if (
         !config ||
@@ -555,7 +590,7 @@ async function mostrarPainel(interaction) {
             rowBotoes,
             rowExtra
         ],
-        ephemeral: true
+        flags: EPHEMERAL
     });
 }
 
@@ -577,7 +612,7 @@ async function mostrarConfiguracaoPagina(
         return interaction.reply({
             content:
                 "❌ Essa interação não pertence a este servidor.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -591,7 +626,7 @@ async function mostrarConfiguracaoPagina(
         return interaction.reply({
             content:
                 "❌ Essa página não existe.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -721,12 +756,15 @@ async function abrirModalTexto(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -740,7 +778,7 @@ async function abrirModalTexto(
         return interaction.reply({
             content:
                 "❌ Página não encontrada.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -809,12 +847,15 @@ async function abrirModalRodape(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -828,7 +869,7 @@ async function abrirModalRodape(
         return interaction.reply({
             content:
                 "❌ Página não encontrada.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -903,12 +944,15 @@ async function abrirModalBotao(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -922,7 +966,7 @@ async function abrirModalBotao(
         return interaction.reply({
             content:
                 "❌ Página não encontrada.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -937,7 +981,7 @@ async function abrirModalBotao(
         return interaction.reply({
             content:
                 `❌ Cada página pode ter no máximo ${MAX_BOTOES} botões.`,
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1029,12 +1073,15 @@ async function mostrarBotoes(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1048,7 +1095,7 @@ async function mostrarBotoes(
         return interaction.reply({
             content:
                 "❌ Página não encontrada.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1094,7 +1141,12 @@ async function mostrarBotoes(
     const linhaEditar =
         new ActionRowBuilder();
 
-    for (const botao of botoes.slice(0, MAX_BOTOES)) {
+    for (
+        const botao of botoes.slice(
+            0,
+            MAX_BOTOES
+        )
+    ) {
         linhaEditar.addComponents(
             new ButtonBuilder()
                 .setCustomId(
@@ -1102,7 +1154,8 @@ async function mostrarBotoes(
                 )
                 .setLabel(
                     `✏️ ${String(
-                        botao.texto || "Botão"
+                        botao.texto ||
+                        "Botão"
                     ).substring(0, 70)}`
                 )
                 .setStyle(
@@ -1111,8 +1164,12 @@ async function mostrarBotoes(
         );
     }
 
-    if (linhaEditar.components.length) {
-        components.push(linhaEditar);
+    if (
+        linhaEditar.components.length
+    ) {
+        components.push(
+            linhaEditar
+        );
     }
 
     // =================================================
@@ -1122,7 +1179,12 @@ async function mostrarBotoes(
     const linhaExcluir =
         new ActionRowBuilder();
 
-    for (const botao of botoes.slice(0, MAX_BOTOES)) {
+    for (
+        const botao of botoes.slice(
+            0,
+            MAX_BOTOES
+        )
+    ) {
         linhaExcluir.addComponents(
             new ButtonBuilder()
                 .setCustomId(
@@ -1130,7 +1192,8 @@ async function mostrarBotoes(
                 )
                 .setLabel(
                     `🗑️ ${String(
-                        botao.texto || "Botão"
+                        botao.texto ||
+                        "Botão"
                     ).substring(0, 70)}`
                 )
                 .setStyle(
@@ -1139,8 +1202,12 @@ async function mostrarBotoes(
         );
     }
 
-    if (linhaExcluir.components.length) {
-        components.push(linhaExcluir);
+    if (
+        linhaExcluir.components.length
+    ) {
+        components.push(
+            linhaExcluir
+        );
     }
 
     // =================================================
@@ -1180,25 +1247,49 @@ async function abrirModalEditarBotao(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
+    const pagina =
+        await buscarPagina(
+            guildId,
+            numeroPagina
+        );
+
+    if (!pagina) {
+        return interaction.reply({
+            content:
+                "❌ Página não encontrada.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const botoes =
+        await buscarBotoes(
+            pagina.id
+        );
+
     const botao =
-        await getRegistroBotaoPorId(
-            botaoId
+        botoes.find(
+            item =>
+                String(item.id) ===
+                String(botaoId)
         );
 
     if (!botao) {
         return interaction.reply({
             content:
-                "❌ Esse botão não existe.",
-            ephemeral: true
+                "❌ Esse botão não existe nesta página.",
+            flags: EPHEMERAL
         });
     }
 
@@ -1362,12 +1453,15 @@ async function publicarRegistro(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1393,7 +1487,7 @@ async function publicarRegistro(
         return interaction.reply({
             content:
                 "❌ O registro não possui uma página.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1429,7 +1523,7 @@ async function publicarRegistro(
             return interaction.reply({
                 content:
                     "✅ Mensagem do registro atualizada com sucesso!",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
     }
@@ -1445,7 +1539,7 @@ async function publicarRegistro(
         return interaction.reply({
             content:
                 "❌ Não é possível publicar o registro neste canal.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1491,7 +1585,7 @@ async function publicarRegistro(
     await interaction.reply({
         content:
             "✅ Sistema de registro publicado com sucesso!",
-        ephemeral: true
+        flags: EPHEMERAL
     });
 }
 
@@ -1505,12 +1599,15 @@ async function adicionarPagina(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para configurar o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1529,7 +1626,7 @@ async function adicionarPagina(
         return interaction.reply({
             content:
                 `❌ O limite máximo é de ${MAX_PAGINAS} páginas.`,
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1583,7 +1680,7 @@ async function adicionarPagina(
     await interaction.reply({
         content:
             `✅ Página ${numero} criada!`,
-        ephemeral: true
+        flags: EPHEMERAL
     });
 }
 
@@ -1597,12 +1694,15 @@ async function excluirRegistro(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(interaction, guildId)
+        !pertenceAoServidor(
+            interaction,
+            guildId
+        )
     ) {
         return interaction.reply({
             content:
                 "❌ Você não tem permissão para excluir o registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1615,7 +1715,7 @@ async function excluirRegistro(
         return interaction.reply({
             content:
                 "❌ Nenhum sistema de registro encontrado.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1633,10 +1733,15 @@ async function excluirRegistro(
                     config.canal_id
                 );
 
-            if (canal && canal.isTextBased()) {
+            if (
+                canal &&
+                canal.isTextBased()
+            ) {
                 const mensagem =
                     await canal.messages
-                        .fetch(config.mensagem_id)
+                        .fetch(
+                            config.mensagem_id
+                        )
                         .catch(
                             () => null
                         );
@@ -1705,7 +1810,7 @@ async function excluirRegistro(
     await interaction.reply({
         content:
             "🗑️ Sistema de registro excluído com sucesso.",
-        ephemeral: true
+        flags: EPHEMERAL
     });
 }
 
@@ -1744,7 +1849,7 @@ async function processarBotaoRegistro(
         return interaction.reply({
             content:
                 "❌ Esse botão não está mais disponível.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1755,7 +1860,7 @@ async function processarBotaoRegistro(
         return interaction.reply({
             content:
                 "❌ Esse botão não pertence a este servidor.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1773,7 +1878,7 @@ async function processarBotaoRegistro(
         return interaction.reply({
             content:
                 "ℹ️ Você já fez este registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1786,20 +1891,21 @@ async function processarBotaoRegistro(
     if (botao.cargo_id) {
         const cargo =
             interaction.guild.roles.cache.get(
-                botao.cargo_id
+                String(botao.cargo_id)
             );
 
         if (!cargo) {
             return interaction.reply({
                 content:
                     "❌ O cargo configurado para este botão não existe mais.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
         const membro =
-            await interaction.guild.members
-                .fetch(interaction.user.id);
+            await interaction.guild.members.fetch(
+                interaction.user.id
+            );
 
         const botMember =
             interaction.guild.members.me;
@@ -1808,7 +1914,7 @@ async function processarBotaoRegistro(
             return interaction.reply({
                 content:
                     "❌ Não consegui verificar as permissões do bot.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -1820,7 +1926,7 @@ async function processarBotaoRegistro(
             return interaction.reply({
                 content:
                     "❌ Eu não tenho a permissão **Gerenciar Cargos**.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -1832,7 +1938,7 @@ async function processarBotaoRegistro(
             return interaction.reply({
                 content:
                     "❌ Não consigo adicionar esse cargo porque ele está acima ou no mesmo nível do meu maior cargo.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -1843,6 +1949,7 @@ async function processarBotaoRegistro(
 
             cargoRecebido =
                 cargo.id;
+
         } catch (erro) {
             console.error(
                 "❌ Erro ao dar cargo do registro:",
@@ -1852,7 +1959,7 @@ async function processarBotaoRegistro(
             return interaction.reply({
                 content:
                     "❌ Não consegui adicionar o cargo configurado para este botão.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
     }
@@ -1869,14 +1976,13 @@ async function processarBotaoRegistro(
             botao.id,
             cargoRecebido
         );
+
     } catch (erro) {
         console.error(
             "❌ Erro ao salvar usuário registrado:",
             erro
         );
 
-        // Se outro clique registrou antes,
-        // não considera como erro grave.
         const agoraRegistrado =
             await usuarioJaRegistrado(
                 interaction.guild.id,
@@ -1889,14 +1995,14 @@ async function processarBotaoRegistro(
             return interaction.reply({
                 content:
                     "ℹ️ Você já fez este registro.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
         return interaction.reply({
             content:
                 "❌ Ocorreu um erro ao salvar seu registro.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -1905,7 +2011,7 @@ async function processarBotaoRegistro(
             cargoRecebido
                 ? "✅ Registro concluído! Seu cargo foi adicionado."
                 : "✅ Registro concluído com sucesso!",
-        ephemeral: true
+        flags: EPHEMERAL
     });
 }
 
@@ -2083,6 +2189,14 @@ async function handleInteraction(interaction) {
             const partes =
                 customId.split("_");
 
+            if (partes.length < 4) {
+                return interaction.reply({
+                    content:
+                        "❌ Botão de navegação inválido.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const guildId =
                 partes[2];
 
@@ -2098,7 +2212,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Essa interação não pertence a este servidor.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2106,6 +2220,14 @@ async function handleInteraction(interaction) {
                 await buscarPaginas(
                     guildId
                 );
+
+            if (!paginas.length) {
+                return interaction.reply({
+                    content:
+                        "❌ Nenhuma página encontrada.",
+                    flags: EPHEMERAL
+                });
+            }
 
             const paginaSegura =
                 Math.max(
@@ -2126,7 +2248,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Página não encontrada.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2149,7 +2271,7 @@ async function handleInteraction(interaction) {
         }
 
         // =================================================
-        // 🔐 A PARTIR DAQUI SÃO INTERAÇÕES ADMINISTRATIVAS
+        // 🔐 INTERAÇÕES ADMINISTRATIVAS
         // =================================================
 
         const idsAdministrativos = [
@@ -2173,7 +2295,9 @@ async function handleInteraction(interaction) {
         const ehAdministrativo =
             idsAdministrativos.some(
                 prefixo =>
-                    customId.startsWith(prefixo)
+                    customId.startsWith(
+                        prefixo
+                    )
             );
 
         if (
@@ -2183,7 +2307,7 @@ async function handleInteraction(interaction) {
             return interaction.reply({
                 content:
                     "❌ Você precisa da permissão **Gerenciar Servidor** para configurar o sistema de registro.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
         }
 
@@ -2281,7 +2405,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Essa interação não pertence a este servidor.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2310,6 +2434,14 @@ async function handleInteraction(interaction) {
             const partes =
                 customId.split("_");
 
+            if (partes.length < 5) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
+
             return await abrirModalTexto(
                 interaction,
                 partes[3],
@@ -2329,6 +2461,14 @@ async function handleInteraction(interaction) {
         ) {
             const partes =
                 customId.split("_");
+
+            if (partes.length < 5) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
 
             return await abrirModalRodape(
                 interaction,
@@ -2350,6 +2490,14 @@ async function handleInteraction(interaction) {
             const partes =
                 customId.split("_");
 
+            if (partes.length < 5) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
+
             return await abrirModalBotao(
                 interaction,
                 partes[3],
@@ -2370,6 +2518,14 @@ async function handleInteraction(interaction) {
             const partes =
                 customId.split("_");
 
+            if (partes.length < 4) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
+
             return await mostrarBotoes(
                 interaction,
                 partes[2],
@@ -2389,6 +2545,14 @@ async function handleInteraction(interaction) {
         ) {
             const partes =
                 customId.split("_");
+
+            if (partes.length < 6) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
 
             return await abrirModalEditarBotao(
                 interaction,
@@ -2411,6 +2575,14 @@ async function handleInteraction(interaction) {
             const partes =
                 customId.split("_");
 
+            if (partes.length < 6) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const guildId =
                 partes[3];
 
@@ -2429,20 +2601,41 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Essa interação não pertence a este servidor.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa página não existe.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const botoes =
+                await buscarBotoes(
+                    pagina.id
+                );
+
             const botao =
-                await getRegistroBotaoPorId(
-                    botaoId
+                botoes.find(
+                    item =>
+                        String(item.id) ===
+                        String(botaoId)
                 );
 
             if (!botao) {
                 return interaction.reply({
                     content:
-                        "❌ Esse botão não existe.",
-                    ephemeral: true
+                        "❌ Esse botão não existe nesta página.",
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2476,6 +2669,14 @@ async function handleInteraction(interaction) {
             const partes =
                 customId.split("_");
 
+            if (partes.length < 5) {
+                return interaction.reply({
+                    content:
+                        "❌ Interação inválida.",
+                    flags: EPHEMERAL
+                });
+            }
+
             return await mostrarConfiguracaoPagina(
                 interaction,
                 partes[3],
@@ -2508,7 +2709,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Essa interação não pertence a este servidor.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2537,6 +2738,19 @@ async function handleInteraction(interaction) {
             const numeroPagina =
                 Number(partes[4]);
 
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const pagina =
                 await buscarPagina(
                     guildId,
@@ -2547,19 +2761,19 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Página não encontrada.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
             const titulo =
                 interaction.fields.getTextInputValue(
                     "titulo"
-                );
+                ).trim();
 
             const descricao =
                 interaction.fields.getTextInputValue(
                     "descricao"
-                );
+                ).trim();
 
             await atualizarRegistroPagina(
                 pagina.id,
@@ -2581,7 +2795,7 @@ async function handleInteraction(interaction) {
             await interaction.reply({
                 content:
                     "✅ Título e descrição atualizados!",
-                ephemeral: true
+                flags: EPHEMERAL
             });
 
             return;
@@ -2606,6 +2820,19 @@ async function handleInteraction(interaction) {
             const numeroPagina =
                 Number(partes[4]);
 
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const pagina =
                 await buscarPagina(
                     guildId,
@@ -2616,19 +2843,19 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Página não encontrada.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
             const rodape =
                 interaction.fields.getTextInputValue(
                     "rodape"
-                );
+                ).trim();
 
             const icone =
                 interaction.fields.getTextInputValue(
                     "rodape_icone"
-                );
+                ).trim();
 
             await atualizarRegistroPagina(
                 pagina.id,
@@ -2650,7 +2877,7 @@ async function handleInteraction(interaction) {
             await interaction.reply({
                 content:
                     "✅ Rodapé atualizado!",
-                ephemeral: true
+                flags: EPHEMERAL
             });
 
             return;
@@ -2675,6 +2902,19 @@ async function handleInteraction(interaction) {
             const numeroPagina =
                 Number(partes[4]);
 
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const pagina =
                 await buscarPagina(
                     guildId,
@@ -2685,7 +2925,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ Página não encontrada.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2700,7 +2940,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         `❌ O limite é de ${MAX_BOTOES} botões por página.`,
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2713,7 +2953,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ O texto do botão não pode ficar vazio.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2758,7 +2998,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         cargoResultado.erro,
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2766,7 +3006,7 @@ async function handleInteraction(interaction) {
             // 🔑 CUSTOM ID ÚNICO
             // =========================================
 
-            const customId =
+            const customIdBotao =
                 `registro_botao_${guildId}_${Date.now()}_${crypto
                     .randomBytes(5)
                     .toString("hex")}`;
@@ -2781,7 +3021,7 @@ async function handleInteraction(interaction) {
                     cargo_id:
                         cargoResultado.id,
                     custom_id:
-                        customId,
+                        customIdBotao,
                     ordem:
                         botoes.length + 1
                 }
@@ -2798,7 +3038,7 @@ async function handleInteraction(interaction) {
                     cargoResultado.id
                         ? `✅ Botão criado e configurado para dar <@&${cargoResultado.id}>.`
                         : "✅ Botão criado sem cargo.",
-                ephemeral: true
+                flags: EPHEMERAL
             });
 
             return;
@@ -2826,16 +3066,50 @@ async function handleInteraction(interaction) {
             const numeroPagina =
                 Number(partes[6]);
 
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Página não encontrada.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const botoes =
+                await buscarBotoes(
+                    pagina.id
+                );
+
             const botao =
-                await getRegistroBotaoPorId(
-                    botaoId
+                botoes.find(
+                    item =>
+                        String(item.id) ===
+                        String(botaoId)
                 );
 
             if (!botao) {
                 return interaction.reply({
                     content:
-                        "❌ Esse botão não existe.",
-                    ephemeral: true
+                        "❌ Esse botão não existe nesta página.",
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2848,7 +3122,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         "❌ O texto do botão não pode ficar vazio.",
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2893,7 +3167,7 @@ async function handleInteraction(interaction) {
                 return interaction.reply({
                     content:
                         cargoResultado.erro,
-                    ephemeral: true
+                    flags: EPHEMERAL
                 });
             }
 
@@ -2918,7 +3192,7 @@ async function handleInteraction(interaction) {
             await interaction.reply({
                 content:
                     "✅ Botão atualizado!",
-                ephemeral: true
+                flags: EPHEMERAL
             });
 
             return;
@@ -2939,7 +3213,7 @@ async function handleInteraction(interaction) {
             return interaction.followUp({
                 content:
                     "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
-                ephemeral: true
+                flags: EPHEMERAL
             }).catch(
                 () => {}
             );
@@ -2948,7 +3222,7 @@ async function handleInteraction(interaction) {
         return interaction.reply({
             content:
                 "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
-            ephemeral: true
+            flags: EPHEMERAL
         }).catch(
             () => {}
         );
@@ -2978,7 +3252,7 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "❌ Este comando só pode ser usado em um servidor.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -2986,7 +3260,7 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor** para usar este comando.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 
@@ -2994,6 +3268,7 @@ async function execute(interaction) {
         await mostrarPainel(
             interaction
         );
+
     } catch (erro) {
         console.error(
             "❌ Erro ao executar /registrar:",
@@ -3010,7 +3285,7 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "❌ Não foi possível abrir o sistema de registro. Verifique o console do bot.",
-            ephemeral: true
+            flags: EPHEMERAL
         });
     }
 }
