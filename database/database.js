@@ -27,26 +27,73 @@ const mysqlPool = mysql.createPool({
 // Aqui convertemos automaticamente para:
 // ?, ?, ?
 //
+// IMPORTANTE:
+// PostgreSQL permite reutilizar o mesmo placeholder:
+//
+// $1, $1
+//
+// No MySQL, depois da conversão:
+//
+// ?, ?
+//
+// precisa receber o valor duas vezes.
+//
+// Por isso o conversor abaixo também monta
+// automaticamente a lista de parâmetros na mesma
+// ordem em que os ? aparecem.
+//
 // Também devolvemos:
 // resultado.rows
 //
 // para manter o restante do bot compatível.
 // =====================================================
 
-function converterPlaceholders(sql) {
-    return sql.replace(/\$(\d+)/g, "?");
+function converterPlaceholders(
+    sql,
+    parametros = []
+) {
+
+    const novosParametros = [];
+
+    const sqlMySQL =
+        sql.replace(
+            /\$(\d+)/g,
+            (_, numero) => {
+
+                const indice =
+                    Number(numero) - 1;
+
+                novosParametros.push(
+                    parametros[indice]
+                );
+
+                return "?";
+            }
+        );
+
+    return {
+        sqlMySQL,
+        novosParametros
+    };
 }
 
 const pool = {
-    async query(sql, parametros = []) {
 
-        const sqlMySQL =
-            converterPlaceholders(sql);
+    async query(
+        sql,
+        parametros = []
+    ) {
+
+        const convertido =
+            converterPlaceholders(
+                sql,
+                parametros
+            );
 
         const [resultado] =
             await mysqlPool.query(
-                sqlMySQL,
-                parametros
+                convertido.sqlMySQL,
+                convertido.novosParametros
             );
 
         if (Array.isArray(resultado)) {
@@ -621,17 +668,6 @@ async function inicializarBanco() {
 
     // ================================
     // 📝 SISTEMA DE REGISTRO
-    // ================================
-    //
-    // Cada servidor possui uma configuração.
-    //
-    // O sistema suporta até 6 páginas.
-    //
-    // Cada página pode possuir vários
-    // botões.
-    //
-    // Cada botão pode ou não entregar
-    // um cargo.
     // ================================
 
     await mysqlPool.query(`
@@ -2201,10 +2237,6 @@ async function excluirEmbedBanco(
 
 // =====================================================
 // 📝 SISTEMA DE REGISTRO
-// =====================================================
-
-// =====================================================
-// ⚙️ CONFIGURAÇÃO DO REGISTRO
 // =====================================================
 
 async function getRegistroConfig(
