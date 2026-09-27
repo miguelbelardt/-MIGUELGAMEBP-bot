@@ -1445,20 +1445,17 @@ async function finalizarSorteio(
     }
 }
 
-async function verificarSorteios(
-    client
-) {
+async function verificarSorteios(client) {
     try {
-        const resultado =
-            await pool.query(
-                `
-                SELECT *
-                FROM sorteios
-                WHERE encerrado = FALSE
-                  AND encerra_em <= ?
-                `,
-                [Date.now()]
-            );
+        const resultado = await pool.query(
+            `
+            SELECT *
+            FROM sorteios
+            WHERE encerrado = FALSE
+              AND encerra_em <= ?
+            `,
+            [Date.now()]
+        );
 
         for (
             const sorteio
