@@ -22,30 +22,82 @@ const sessoes = new Map();
 // 🗄️ BANCO
 // ================================
 
-async function prepararBanco() {
+async function garantirColunaSorteios(
+    nomeColuna,
+    definicao
+) {
+    const resultado = await pool.query(
+        `
+        SELECT COUNT(*) AS total
+        FROM information_schema.COLUMNS
+        WHERE
+            TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'sorteios'
+            AND COLUMN_NAME = ?
+        `,
+        [nomeColuna]
+    );
+
+    const colunaExiste =
+        Number(resultado.rows[0]?.total) > 0;
+
+    if (colunaExiste) {
+        return;
+    }
+
     try {
         await pool.query(`
             ALTER TABLE sorteios
-            ADD COLUMN IF NOT EXISTS criador_id VARCHAR(30)
+            ADD COLUMN ${nomeColuna} ${definicao}
         `);
 
-        await pool.query(`
-            ALTER TABLE sorteios
-            ADD COLUMN IF NOT EXISTS mensagem_id VARCHAR(30)
-        `);
+        console.log(
+            `💾 Coluna ${nomeColuna} criada com sucesso.`
+        );
 
-        await pool.query(`
-            ALTER TABLE sorteios
-            ADD COLUMN IF NOT EXISTS mostrar_participantes
-            BOOLEAN NOT NULL DEFAULT FALSE
-        `);
+    } catch (erro) {
+        // Caso duas inicializações tentem criar
+        // a coluna ao mesmo tempo.
+        if (
+            erro?.code === "ER_DUP_FIELDNAME" ||
+            erro?.errno === 1060
+        ) {
+            console.log(
+                `💾 Coluna ${nomeColuna} já existia.`
+            );
+            return;
+        }
 
-        await pool.query(`
-            ALTER TABLE sorteios
-            ADD COLUMN IF NOT EXISTS encerrado_em BIGINT
-        `);
+        throw erro;
+    }
+}
 
-        console.log("💾 Banco de sorteios preparado.");
+async function prepararBanco() {
+    try {
+        await garantirColunaSorteios(
+            "criador_id",
+            "VARCHAR(30)"
+        );
+
+        await garantirColunaSorteios(
+            "mensagem_id",
+            "VARCHAR(30)"
+        );
+
+        await garantirColunaSorteios(
+            "mostrar_participantes",
+            "BOOLEAN NOT NULL DEFAULT FALSE"
+        );
+
+        await garantirColunaSorteios(
+            "encerrado_em",
+            "BIGINT"
+        );
+
+        console.log(
+            "💾 Banco de sorteios preparado."
+        );
+
     } catch (erro) {
         console.error(
             "❌ Erro ao preparar banco de sorteios:",
@@ -1289,8 +1341,6 @@ async function finalizarSorteio(
             ]
         );
 
-        // Atualiza o objeto local para que
-        // a mensagem seja renderizada como encerrada.
         sorteio.encerrado = true;
         sorteio.vencedores_ids =
             JSON.stringify(vencedores);
@@ -1530,10 +1580,6 @@ module.exports = {
         interaction
     ) {
 
-        // ================================
-        // 🏠 SOMENTE SERVIDORES
-        // ================================
-
         if (!interaction.inGuild()) {
             return interaction.reply({
                 content:
@@ -1602,10 +1648,6 @@ module.exports = {
         const userId =
             interaction.user.id;
 
-        // ================================
-        // 🚪 SAIR DO SORTEIO
-        // ================================
-
         if (
             customId.startsWith(
                 "sorteio_sair_"
@@ -1622,10 +1664,6 @@ module.exports = {
                 id
             );
         }
-
-        // ================================
-        // 👥 VER PARTICIPANTES
-        // ================================
 
         if (
             customId.startsWith(
@@ -1651,10 +1689,6 @@ module.exports = {
                 id
             );
         }
-
-        // ================================
-        // 🔐 IDENTIFICAR DONO DO PAINEL
-        // ================================
 
         const partes =
             customId.split("_");
@@ -1705,10 +1739,6 @@ module.exports = {
                 ephemeral: true
             });
         }
-
-        // ================================
-        // ⏹️ ENCERRAR SORTEIO
-        // ================================
 
         if (
             tipo ===
@@ -1769,10 +1799,6 @@ module.exports = {
                 });
             }
         }
-
-        // ================================
-        // ⚙️ CONFIGURAR
-        // ================================
 
         if (
             tipo ===
@@ -1883,10 +1909,6 @@ module.exports = {
             );
         }
 
-        // ================================
-        // 📅 DATA
-        // ================================
-
         if (
             tipo ===
             "sorteio_data"
@@ -1973,10 +1995,6 @@ module.exports = {
             );
         }
 
-        // ================================
-        // 👥 PARTICIPANTES
-        // ================================
-
         if (
             tipo ===
             "sorteio_participantes"
@@ -2015,10 +2033,6 @@ module.exports = {
                     )
             });
         }
-
-        // ================================
-        // 📢 CANAL
-        // ================================
 
         if (
             tipo ===
@@ -2071,10 +2085,6 @@ module.exports = {
                 ]
             });
         }
-
-        // ================================
-        // 🏆 VENCEDORES
-        // ================================
 
         if (
             tipo ===
@@ -2157,10 +2167,6 @@ module.exports = {
             });
         }
 
-        // ================================
-        // 👀 PREVIEW
-        // ================================
-
         if (
             tipo ===
             "sorteio_preview"
@@ -2181,10 +2187,6 @@ module.exports = {
                 ephemeral: true
             });
         }
-
-        // ================================
-        // 🚀 ENVIAR / ✏️ EDITAR
-        // ================================
 
         if (
             tipo ===
@@ -2271,10 +2273,6 @@ module.exports = {
 
             try {
 
-                // ================================
-                // ✏️ EDITANDO SORTEIO EXISTENTE
-                // ================================
-
                 if (
                     config.sorteioId
                 ) {
@@ -2324,10 +2322,6 @@ module.exports = {
                             )
                     });
                 }
-
-                // ================================
-                // 🎉 CRIANDO NOVO
-                // ================================
 
                 const canal =
                     await interaction.guild.channels
@@ -2456,10 +2450,6 @@ module.exports = {
             }
         }
 
-        // ================================
-        // ⚙️ CONFIGURAÇÃO
-        // ================================
-
         if (
             interaction.customId ===
             "sorteio_modal_config"
@@ -2532,10 +2522,6 @@ module.exports = {
 
             return;
         }
-
-        // ================================
-        // 📅 DATA
-        // ================================
 
         if (
             interaction.customId ===
@@ -2663,10 +2649,6 @@ module.exports = {
             });
         }
 
-        // ================================
-        // 📢 CANAL
-        // ================================
-
         if (
             customId.startsWith(
                 "sorteio_selecionar_canal_"
@@ -2710,10 +2692,6 @@ module.exports = {
                     )
             });
         }
-
-        // ================================
-        // 🏆 VENCEDORES
-        // ================================
 
         if (
             customId.startsWith(
