@@ -654,8 +654,7 @@ async function inicializarBanco() {
             painel_titulo VARCHAR(256)
                 DEFAULT '📝 Registro',
 
-            painel_descricao TEXT
-                DEFAULT 'Clique no botão abaixo para começar seu registro.',
+            painel_descricao TEXT,
 
             painel_imagem TEXT,
 
