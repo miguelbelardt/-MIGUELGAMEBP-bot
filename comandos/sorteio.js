@@ -1452,7 +1452,7 @@ async function verificarSorteios(client) {
             SELECT *
             FROM sorteios
             WHERE encerrado = FALSE
-              AND encerra_em <= ?
+              AND encerra_em <= $1
             `,
             [Date.now()]
         );
