@@ -12,7 +12,21 @@ const {
 } = require("discord.js");
 
 const {
-    pool
+    pool,
+    getRegistroConfig,
+    salvarRegistroConfig,
+    salvarMensagemRegistro,
+    criarRegistroPagina,
+    getRegistroPagina,
+    getRegistroPaginas,
+    atualizarRegistroPagina,
+    criarRegistroBotao,
+    getRegistroBotaoPorId,
+    getRegistroBotoes,
+    atualizarRegistroBotao,
+    excluirRegistroBotao,
+    usuarioJaRegistrado,
+    registrarUsuario
 } = require("../database/database");
 
 // =====================================================
@@ -35,18 +49,19 @@ const {
 // - Dar um cargo
 // - Não dar cargo
 //
-// Também é salvo:
-// - Quem criou o registro
-// - Quem já fez o registro
-// - Qual botão foi utilizado
+// O sistema também salva:
+// - Canal da mensagem
+// - ID da mensagem
+// - Usuários registrados
+// - Botão utilizado
+// - Cargo recebido
 // =====================================================
 
 const MAX_PAGINAS = 6;
 const MAX_BOTOES = 5;
 
-
 // =====================================================
-// 🎨 ESTILOS DOS BOTÕES
+// 🎨 ESTILOS
 // =====================================================
 
 const ESTILOS_BOTOES = {
@@ -56,253 +71,147 @@ const ESTILOS_BOTOES = {
     DANGER: ButtonStyle.Danger
 };
 
+// =====================================================
+// 🔐 VERIFICAR PERMISSÃO
+// =====================================================
+
+function podeConfigurar(interaction) {
+    return (
+        interaction.guild &&
+        interaction.memberPermissions &&
+        interaction.memberPermissions.has(
+            PermissionFlagsBits.ManageGuild
+        )
+    );
+}
 
 // =====================================================
-// 🔎 BUSCAR REGISTRO DO SERVIDOR
+// 🔎 CONFIGURAÇÃO
 // =====================================================
 
-async function buscarRegistro(
+async function buscarConfiguracao(guildId) {
+    return await getRegistroConfig(guildId);
+}
+
+// =====================================================
+// 📄 PÁGINAS
+// =====================================================
+
+async function buscarPaginas(guildId) {
+    return await getRegistroPaginas(guildId);
+}
+
+async function buscarPagina(guildId, numero) {
+    return await getRegistroPagina(
+        guildId,
+        numero
+    );
+}
+
+// =====================================================
+// 🔘 BOTÕES
+// =====================================================
+
+async function buscarBotoes(paginaId) {
+    return await getRegistroBotoes(
+        paginaId
+    );
+}
+
+// =====================================================
+// 🆕 CRIAR CONFIGURAÇÃO
+// =====================================================
+
+async function garantirConfiguracao(
     guildId
 ) {
-
-    const resultado =
-        await pool.query(
-            `
-            SELECT *
-            FROM registros
-            WHERE guild_id = $1
-            LIMIT 1
-            `,
-            [
-                guildId
-            ]
-        );
-
-    return (
-        resultado.rows[0] ||
-        null
-    );
-}
-
-
-// =====================================================
-// 🔎 BUSCAR PÁGINAS
-// =====================================================
-
-async function buscarPaginas(
-    registroId
-) {
-
-    const resultado =
-        await pool.query(
-            `
-            SELECT *
-            FROM registro_paginas
-            WHERE registro_id = $1
-            ORDER BY pagina ASC
-            `,
-            [
-                registroId
-            ]
-        );
-
-    return resultado.rows;
-}
-
-
-// =====================================================
-// 🔎 BUSCAR BOTÕES
-// =====================================================
-
-async function buscarBotoes(
-    paginaId
-) {
-
-    const resultado =
-        await pool.query(
-            `
-            SELECT *
-            FROM registro_botoes
-            WHERE pagina_id = $1
-            ORDER BY ordem ASC
-            `,
-            [
-                paginaId
-            ]
-        );
-
-    return resultado.rows;
-}
-
-
-// =====================================================
-// 📄 BUSCAR PÁGINA
-// =====================================================
-
-async function buscarPagina(
-    registroId,
-    numero
-) {
-
-    const resultado =
-        await pool.query(
-            `
-            SELECT *
-            FROM registro_paginas
-            WHERE
-                registro_id = $1
-                AND pagina = $2
-            LIMIT 1
-            `,
-            [
-                registroId,
-                numero
-            ]
-        );
-
-    return (
-        resultado.rows[0] ||
-        null
-    );
-}
-
-
-// =====================================================
-// 🧱 CRIAR REGISTRO
-// =====================================================
-
-async function criarRegistro(
-    guildId,
-    usuarioId
-) {
-
-    const existente =
-        await buscarRegistro(
+    let config =
+        await buscarConfiguracao(
             guildId
         );
 
-    if (existente) {
-        return existente;
+    if (config) {
+        return config;
     }
 
-    const criadoEm =
-        Date.now();
-
-    await pool.query(
-        `
-        INSERT INTO registros (
-            guild_id,
-            canal_id,
-            mensagem_id,
-            criado_por,
-            criado_em
-        )
-        VALUES (
-            $1,
-            NULL,
-            NULL,
-            $2,
-            $3
-        )
-        `,
-        [
-            guildId,
-            usuarioId,
-            criadoEm
-        ]
+    await salvarRegistroConfig(
+        guildId,
+        null,
+        null,
+        1,
+        false
     );
 
-    const registro =
-        await buscarRegistro(
+    config =
+        await buscarConfiguracao(
             guildId
         );
+
+    if (!config) {
+        throw new Error(
+            "Não foi possível criar a configuração do sistema de registro."
+        );
+    }
 
     // ============================================
     // 📄 CRIAR PRIMEIRA PÁGINA
     // ============================================
 
-    await pool.query(
-        `
-        INSERT INTO registro_paginas (
-            registro_id,
-            pagina,
-            titulo,
-            descricao,
-            rodape,
-            rodape_icone
-        )
-        VALUES (
-            $1,
-            1,
-            $2,
-            $3,
-            NULL,
-            NULL
-        )
-        `,
-        [
-            registro.id,
-            "Registro",
-            "Configure esta página do sistema de registro."
-        ]
-    );
+    const paginas =
+        await buscarPaginas(
+            guildId
+        );
 
-    return registro;
+    if (!paginas.length) {
+        await criarRegistroPagina(
+            guildId,
+            1,
+            {
+                titulo: "Registro",
+                descricao:
+                    "Configure esta página do sistema de registro.",
+                rodape: null,
+                rodape_icone: null
+            }
+        );
+    }
+
+    return config;
 }
 
-
 // =====================================================
-// 🧾 EMBED DA PÁGINA
+// 🎨 EMBED DA PÁGINA
 // =====================================================
 
 function criarEmbedPagina(
     pagina
 ) {
-
     const embed =
         new EmbedBuilder()
-            .setColor(
-                0x5865F2
-            );
+            .setColor(0x5865F2);
 
-    if (
-        pagina.titulo
-    ) {
-
+    if (pagina.titulo) {
         embed.setTitle(
             pagina.titulo
         );
     }
 
-    if (
-        pagina.descricao
-    ) {
-
+    if (pagina.descricao) {
         embed.setDescription(
             pagina.descricao
         );
     }
 
-    if (
-        pagina.rodape
-    ) {
-
-        if (
-            pagina.rodape_icone
-        ) {
-
+    if (pagina.rodape) {
+        if (pagina.rodape_icone) {
             embed.setFooter({
-                text:
-                    pagina.rodape,
+                text: pagina.rodape,
                 iconURL:
                     pagina.rodape_icone
             });
-
         } else {
-
             embed.setFooter({
-                text:
-                    pagina.rodape
+                text: pagina.rodape
             });
         }
     }
@@ -310,58 +219,57 @@ function criarEmbedPagina(
     return embed;
 }
 
-
 // =====================================================
-// 🔘 CRIAR BOTÕES DA PÁGINA
+// 🔘 COMPONENTES DA PÁGINA
 // =====================================================
 
 async function criarComponentesPagina(
     pagina,
-    registro,
+    guildId,
     numeroPagina
 ) {
-
     const botoes =
         await buscarBotoes(
             pagina.id
         );
 
     const rows = [];
-
     let row =
         new ActionRowBuilder();
 
     for (
-        let i = 0;
-        i < botoes.length;
-        i++
+        const botao of botoes
     ) {
-
-        const botao =
-            botoes[i];
-
         const button =
             new ButtonBuilder()
                 .setCustomId(
-                    `registro_botao_${registro.id}_${botao.id}`
+                    botao.custom_id ||
+                    `registro_botao_${botao.id}`
                 )
                 .setLabel(
                     botao.texto
                 )
                 .setStyle(
                     ESTILOS_BOTOES[
-                        botao.estilo
+                        String(
+                            botao.estilo ||
+                            "PRIMARY"
+                        ).toUpperCase()
                     ] ||
                     ButtonStyle.Primary
                 );
 
-        if (
-            botao.emoji
-        ) {
-
-            button.setEmoji(
-                botao.emoji
-            );
+        if (botao.emoji) {
+            try {
+                button.setEmoji(
+                    botao.emoji
+                );
+            } catch (erro) {
+                console.warn(
+                    "⚠️ Emoji inválido no botão:",
+                    botao.id
+                );
+            }
         }
 
         row.addComponents(
@@ -371,11 +279,7 @@ async function criarComponentesPagina(
         if (
             row.components.length >= 5
         ) {
-
-            rows.push(
-                row
-            );
-
+            rows.push(row);
             row =
                 new ActionRowBuilder();
         }
@@ -384,39 +288,33 @@ async function criarComponentesPagina(
     if (
         row.components.length > 0
     ) {
-
-        rows.push(
-            row
-        );
+        rows.push(row);
     }
 
     // ============================================
-    // 📄 NAVEGAÇÃO ENTRE PÁGINAS
+    // 📄 NAVEGAÇÃO
     // ============================================
 
     const paginas =
         await buscarPaginas(
-            registro.id
+            guildId
         );
 
     if (
         paginas.length > 1
     ) {
-
         const navegacao =
             new ActionRowBuilder();
 
         const anterior =
             new ButtonBuilder()
                 .setCustomId(
-                    `registro_pagina_${registro.id}_${numeroPagina - 1}`
+                    `registro_pagina_${guildId}_${numeroPagina - 1}`
                 )
                 .setLabel(
                     "Anterior"
                 )
-                .setEmoji(
-                    "◀️"
-                )
+                .setEmoji("◀️")
                 .setStyle(
                     ButtonStyle.Secondary
                 )
@@ -427,14 +325,12 @@ async function criarComponentesPagina(
         const proxima =
             new ButtonBuilder()
                 .setCustomId(
-                    `registro_pagina_${registro.id}_${numeroPagina + 1}`
+                    `registro_pagina_${guildId}_${numeroPagina + 1}`
                 )
                 .setLabel(
                     "Próxima"
                 )
-                .setEmoji(
-                    "▶️"
-                )
+                .setEmoji("▶️")
                 .setStyle(
                     ButtonStyle.Secondary
                 )
@@ -455,29 +351,27 @@ async function criarComponentesPagina(
     return rows;
 }
 
-
 // =====================================================
-// 📤 ATUALIZAR MENSAGEM DO REGISTRO
+// 📤 ATUALIZAR MENSAGEM PUBLICADA
 // =====================================================
 
 async function atualizarMensagemRegistro(
     guild,
-    registro,
+    config,
     numeroPagina = 1
 ) {
-
     if (
-        !registro.canal_id ||
-        !registro.mensagem_id
+        !config ||
+        !config.canal_id ||
+        !config.mensagem_id
     ) {
         return false;
     }
 
     try {
-
         const canal =
             await guild.channels.fetch(
-                registro.canal_id
+                config.canal_id
             );
 
         if (
@@ -489,12 +383,12 @@ async function atualizarMensagemRegistro(
 
         const mensagem =
             await canal.messages.fetch(
-                registro.mensagem_id
+                config.mensagem_id
             );
 
         const pagina =
             await buscarPagina(
-                registro.id,
+                guild.id,
                 numeroPagina
             );
 
@@ -510,21 +404,17 @@ async function atualizarMensagemRegistro(
         const components =
             await criarComponentesPagina(
                 pagina,
-                registro,
+                guild.id,
                 numeroPagina
             );
 
         await mensagem.edit({
-            embeds: [
-                embed
-            ],
+            embeds: [embed],
             components
         });
 
         return true;
-
     } catch (erro) {
-
         console.error(
             "❌ Erro ao atualizar mensagem do registro:",
             erro
@@ -534,24 +424,26 @@ async function atualizarMensagemRegistro(
     }
 }
 
-
 // =====================================================
-// ⚙️ PAINEL PRINCIPAL
+// 📝 PAINEL PRINCIPAL
 // =====================================================
 
 async function mostrarPainel(
     interaction
 ) {
-
-    const registro =
-        await criarRegistro(
-            interaction.guild.id,
-            interaction.user.id
+    const config =
+        await garantirConfiguracao(
+            interaction.guild.id
         );
 
     const paginas =
         await buscarPaginas(
-            registro.id
+            interaction.guild.id
+        );
+
+    const configurado =
+        Boolean(
+            config.configurado
         );
 
     const embed =
@@ -564,18 +456,30 @@ async function mostrarPainel(
                     "Configure o sistema de registro do servidor.",
                     "",
                     `📄 Páginas: **${paginas.length}/${MAX_PAGINAS}**`,
+                    `📢 Status: **${
+                        configurado
+                            ? "Configurado"
+                            : "Não publicado"
+                    }**`,
+                    `📺 Canal: ${
+                        config.canal_id
+                            ? `<#${config.canal_id}>`
+                            : "Não definido"
+                    }`,
                     "",
-                    "Use os botões abaixo para configurar cada página, criar botões e publicar o registro."
+                    "Selecione uma página abaixo para editar."
                 ].join("\n")
             )
             .setColor(
-                0x5865F2
+                configurado
+                    ? 0x57F287
+                    : 0x5865F2
             );
 
     const menu =
         new StringSelectMenuBuilder()
             .setCustomId(
-                `registro_selecionar_pagina_${registro.id}`
+                `registro_selecionar_pagina_${interaction.guild.id}`
             )
             .setPlaceholder(
                 "📄 Escolha uma página"
@@ -584,15 +488,17 @@ async function mostrarPainel(
     for (
         const pagina of paginas
     ) {
-
         menu.addOptions({
             label:
                 `Página ${pagina.pagina}`,
-
             description:
-                pagina.titulo ||
-                "Sem título",
-
+                (
+                    pagina.titulo ||
+                    "Sem título"
+                ).substring(
+                    0,
+                    100
+                ),
             value:
                 String(
                     pagina.pagina
@@ -609,34 +515,30 @@ async function mostrarPainel(
     const rowBotoes =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_adicionar_pagina_${registro.id}`
+                        `registro_adicionar_pagina_${interaction.guild.id}`
                     )
                     .setLabel(
                         "Adicionar página"
                     )
-                    .setEmoji(
-                        "➕"
-                    )
+                    .setEmoji("➕")
                     .setStyle(
                         ButtonStyle.Success
                     )
                     .setDisabled(
-                        paginas.length >= MAX_PAGINAS
+                        paginas.length >=
+                            MAX_PAGINAS
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_publicar_${registro.id}`
+                        `registro_publicar_${interaction.guild.id}`
                     )
                     .setLabel(
-                        "Publicar"
+                        "Publicar / Atualizar"
                     )
-                    .setEmoji(
-                        "📢"
-                    )
+                    .setEmoji("📢")
                     .setStyle(
                         ButtonStyle.Primary
                     )
@@ -645,26 +547,21 @@ async function mostrarPainel(
     const rowExtra =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_excluir_${registro.id}`
+                        `registro_excluir_${interaction.guild.id}`
                     )
                     .setLabel(
-                        "Excluir registro"
+                        "Excluir configuração"
                     )
-                    .setEmoji(
-                        "🗑️"
-                    )
+                    .setEmoji("🗑️")
                     .setStyle(
                         ButtonStyle.Danger
                     )
             );
 
     await interaction.reply({
-        embeds: [
-            embed
-        ],
+        embeds: [embed],
         components: [
             rowMenu,
             rowBotoes,
@@ -674,25 +571,22 @@ async function mostrarPainel(
     });
 }
 
-
 // =====================================================
 // 📄 PAINEL DA PÁGINA
 // =====================================================
 
 async function mostrarConfiguracaoPagina(
     interaction,
-    registroId,
+    guildId,
     numeroPagina
 ) {
-
     const pagina =
         await buscarPagina(
-            registroId,
+            guildId,
             numeroPagina
         );
 
     if (!pagina) {
-
         return interaction.reply({
             content:
                 "❌ Essa página não existe.",
@@ -712,10 +606,22 @@ async function mostrarConfiguracaoPagina(
             )
             .setDescription(
                 [
-                    `**Título:** ${pagina.titulo || "Não definido"}`,
-                    `**Descrição:** ${pagina.descricao || "Não definida"}`,
-                    `**Rodapé:** ${pagina.rodape || "Não definido"}`,
-                    `**Ícone do rodapé:** ${pagina.rodape_icone || "Não definido"}`,
+                    `**Título:** ${
+                        pagina.titulo ||
+                        "Não definido"
+                    }`,
+                    `**Descrição:** ${
+                        pagina.descricao ||
+                        "Não definida"
+                    }`,
+                    `**Rodapé:** ${
+                        pagina.rodape ||
+                        "Não definido"
+                    }`,
+                    `**Ícone do rodapé:** ${
+                        pagina.rodape_icone ||
+                        "Não definido"
+                    }`,
                     "",
                     `🔘 Botões: **${botoes.length}/${MAX_BOTOES}**`
                 ].join("\n")
@@ -727,31 +633,26 @@ async function mostrarConfiguracaoPagina(
     const row1 =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_editar_texto_${registroId}_${numeroPagina}`
+                        `registro_editar_texto_${guildId}_${numeroPagina}`
                     )
                     .setLabel(
                         "Título / Descrição"
                     )
-                    .setEmoji(
-                        "📝"
-                    )
+                    .setEmoji("📝")
                     .setStyle(
                         ButtonStyle.Primary
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_editar_rodape_${registroId}_${numeroPagina}`
+                        `registro_editar_rodape_${guildId}_${numeroPagina}`
                     )
                     .setLabel(
                         "Rodapé"
                     )
-                    .setEmoji(
-                        "🔻"
-                    )
+                    .setEmoji("🔻")
                     .setStyle(
                         ButtonStyle.Secondary
                     )
@@ -760,34 +661,30 @@ async function mostrarConfiguracaoPagina(
     const row2 =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_adicionar_botao_${registroId}_${numeroPagina}`
+                        `registro_adicionar_botao_${guildId}_${numeroPagina}`
                     )
                     .setLabel(
                         "Adicionar botão"
                     )
-                    .setEmoji(
-                        "🔘"
-                    )
+                    .setEmoji("🔘")
                     .setStyle(
                         ButtonStyle.Success
                     )
                     .setDisabled(
-                        botoes.length >= MAX_BOTOES
+                        botoes.length >=
+                            MAX_BOTOES
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_botoes_${registroId}_${numeroPagina}`
+                        `registro_botoes_${guildId}_${numeroPagina}`
                     )
                     .setLabel(
                         "Editar botões"
                     )
-                    .setEmoji(
-                        "⚙️"
-                    )
+                    .setEmoji("⚙️")
                     .setStyle(
                         ButtonStyle.Primary
                     )
@@ -796,26 +693,21 @@ async function mostrarConfiguracaoPagina(
     const row3 =
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_voltar_${registroId}`
+                        `registro_voltar_${guildId}`
                     )
                     .setLabel(
                         "Voltar"
                     )
-                    .setEmoji(
-                        "◀️"
-                    )
+                    .setEmoji("◀️")
                     .setStyle(
                         ButtonStyle.Secondary
                     )
             );
 
     await interaction.update({
-        embeds: [
-            embed
-        ],
+        embeds: [embed],
         components: [
             row1,
             row2,
@@ -824,31 +716,33 @@ async function mostrarConfiguracaoPagina(
     });
 }
 
-
 // =====================================================
 // 📝 MODAL TÍTULO / DESCRIÇÃO
 // =====================================================
 
 async function abrirModalTexto(
     interaction,
-    registroId,
+    guildId,
     numeroPagina
 ) {
-
     const pagina =
         await buscarPagina(
-            registroId,
+            guildId,
             numeroPagina
         );
 
     if (!pagina) {
-        return;
+        return interaction.reply({
+            content:
+                "❌ Página não encontrada.",
+            ephemeral: true
+        });
     }
 
     const modal =
         new ModalBuilder()
             .setCustomId(
-                `registro_modal_texto_${registroId}_${numeroPagina}`
+                `registro_modal_texto_${guildId}_${numeroPagina}`
             )
             .setTitle(
                 `Editar página ${numeroPagina}`
@@ -856,57 +750,36 @@ async function abrirModalTexto(
 
     const titulo =
         new TextInputBuilder()
-            .setCustomId(
-                "titulo"
-            )
-            .setLabel(
-                "Título"
-            )
+            .setCustomId("titulo")
+            .setLabel("Título")
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
-            .setMaxLength(
-                256
-            )
+            .setRequired(false)
+            .setMaxLength(256)
             .setValue(
                 pagina.titulo || ""
             );
 
     const descricao =
         new TextInputBuilder()
-            .setCustomId(
-                "descricao"
-            )
-            .setLabel(
-                "Descrição"
-            )
+            .setCustomId("descricao")
+            .setLabel("Descrição")
             .setStyle(
                 TextInputStyle.Paragraph
             )
-            .setRequired(
-                false
-            )
-            .setMaxLength(
-                4000
-            )
+            .setRequired(false)
+            .setMaxLength(4000)
             .setValue(
                 pagina.descricao || ""
             );
 
     modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(titulo),
 
         new ActionRowBuilder()
-            .addComponents(
-                titulo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                descricao
-            )
+            .addComponents(descricao)
     );
 
     await interaction.showModal(
@@ -914,31 +787,33 @@ async function abrirModalTexto(
     );
 }
 
-
 // =====================================================
 // 🔻 MODAL RODAPÉ
 // =====================================================
 
 async function abrirModalRodape(
     interaction,
-    registroId,
+    guildId,
     numeroPagina
 ) {
-
     const pagina =
         await buscarPagina(
-            registroId,
+            guildId,
             numeroPagina
         );
 
     if (!pagina) {
-        return;
+        return interaction.reply({
+            content:
+                "❌ Página não encontrada.",
+            ephemeral: true
+        });
     }
 
     const modal =
         new ModalBuilder()
             .setCustomId(
-                `registro_modal_rodape_${registroId}_${numeroPagina}`
+                `registro_modal_rodape_${guildId}_${numeroPagina}`
             )
             .setTitle(
                 `Rodapé — Página ${numeroPagina}`
@@ -946,21 +821,15 @@ async function abrirModalRodape(
 
     const rodape =
         new TextInputBuilder()
-            .setCustomId(
-                "rodape"
-            )
+            .setCustomId("rodape")
             .setLabel(
                 "Texto do rodapé"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
-            .setMaxLength(
-                2048
-            )
+            .setRequired(false)
+            .setMaxLength(2048)
             .setValue(
                 pagina.rodape || ""
             );
@@ -976,24 +845,17 @@ async function abrirModalRodape(
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
+            .setRequired(false)
             .setValue(
                 pagina.rodape_icone || ""
             );
 
     modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(rodape),
 
         new ActionRowBuilder()
-            .addComponents(
-                rodape
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                icone
-            )
+            .addComponents(icone)
     );
 
     await interaction.showModal(
@@ -1001,25 +863,27 @@ async function abrirModalRodape(
     );
 }
 
-
 // =====================================================
 // 🔘 MODAL NOVO BOTÃO
 // =====================================================
 
 async function abrirModalBotao(
     interaction,
-    registroId,
+    guildId,
     numeroPagina
 ) {
-
     const pagina =
         await buscarPagina(
-            registroId,
+            guildId,
             numeroPagina
         );
 
     if (!pagina) {
-        return;
+        return interaction.reply({
+            content:
+                "❌ Página não encontrada.",
+            ephemeral: true
+        });
     }
 
     const botoes =
@@ -1028,9 +892,9 @@ async function abrirModalBotao(
         );
 
     if (
-        botoes.length >= MAX_BOTOES
+        botoes.length >=
+        MAX_BOTOES
     ) {
-
         return interaction.reply({
             content:
                 `❌ Cada página pode ter no máximo ${MAX_BOTOES} botões.`,
@@ -1041,7 +905,7 @@ async function abrirModalBotao(
     const modal =
         new ModalBuilder()
             .setCustomId(
-                `registro_modal_botao_${registroId}_${numeroPagina}`
+                `registro_modal_botao_${guildId}_${numeroPagina}`
             )
             .setTitle(
                 `Novo botão — Página ${numeroPagina}`
@@ -1049,100 +913,65 @@ async function abrirModalBotao(
 
     const texto =
         new TextInputBuilder()
-            .setCustomId(
-                "texto"
-            )
+            .setCustomId("texto")
             .setLabel(
                 "Texto do botão"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                true
-            )
-            .setMaxLength(
-                80
-            );
+            .setRequired(true)
+            .setMaxLength(80);
 
     const emoji =
         new TextInputBuilder()
-            .setCustomId(
-                "emoji"
-            )
+            .setCustomId("emoji")
             .setLabel(
                 "Emoji (opcional)"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
-            .setMaxLength(
-                100
-            );
+            .setRequired(false)
+            .setMaxLength(100);
 
     const cargo =
         new TextInputBuilder()
-            .setCustomId(
-                "cargo"
-            )
+            .setCustomId("cargo")
             .setLabel(
                 "ID do cargo (opcional)"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
-            .setMaxLength(
-                30
-            );
+            .setRequired(false)
+            .setMaxLength(30);
 
     const estilo =
         new TextInputBuilder()
-            .setCustomId(
-                "estilo"
-            )
+            .setCustomId("estilo")
             .setLabel(
-                "Estilo: PRIMARY, SECONDARY, SUCCESS ou DANGER"
+                "PRIMARY / SECONDARY / SUCCESS / DANGER"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
-            .setValue(
-                "PRIMARY"
-            )
-            .setMaxLength(
-                20
-            );
+            .setRequired(false)
+            .setValue("PRIMARY")
+            .setMaxLength(20);
 
     modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(texto),
 
         new ActionRowBuilder()
-            .addComponents(
-                texto
-            ),
+            .addComponents(emoji),
 
         new ActionRowBuilder()
-            .addComponents(
-                emoji
-            ),
+            .addComponents(cargo),
 
         new ActionRowBuilder()
-            .addComponents(
-                cargo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                estilo
-            )
+            .addComponents(estilo)
     );
 
     await interaction.showModal(
@@ -1150,25 +979,27 @@ async function abrirModalBotao(
     );
 }
 
-
 // =====================================================
 // ⚙️ EDITAR BOTÕES
 // =====================================================
 
 async function mostrarBotoes(
     interaction,
-    registroId,
+    guildId,
     numeroPagina
 ) {
-
     const pagina =
         await buscarPagina(
-            registroId,
+            guildId,
             numeroPagina
         );
 
     if (!pagina) {
-        return;
+        return interaction.reply({
+            content:
+                "❌ Página não encontrada.",
+            ephemeral: true
+        });
     }
 
     const botoes =
@@ -1183,18 +1014,23 @@ async function mostrarBotoes(
             )
             .setDescription(
                 botoes.length
-                    ? botoes.map(
-                        (botao, index) =>
-                            [
-                                `**${index + 1}. ${botao.texto}**`,
-                                `🎭 Cargo: ${
-                                    botao.cargo_id
-                                        ? `<@&${botao.cargo_id}>`
-                                        : "Nenhum"
-                                }`,
-                                `🎨 Estilo: ${botao.estilo}`
-                            ].join("\n")
-                    ).join("\n\n")
+                    ? botoes
+                        .map(
+                            (botao, index) =>
+                                [
+                                    `**${index + 1}. ${botao.texto}**`,
+                                    `🎭 Cargo: ${
+                                        botao.cargo_id
+                                            ? `<@&${botao.cargo_id}>`
+                                            : "Nenhum"
+                                    }`,
+                                    `🎨 Estilo: ${
+                                        botao.estilo ||
+                                        "PRIMARY"
+                                    }`
+                                ].join("\n")
+                        )
+                        .join("\n\n")
                     : "Nenhum botão configurado."
             )
             .setColor(
@@ -1206,20 +1042,19 @@ async function mostrarBotoes(
     for (
         const botao of botoes
     ) {
-
         components.push(
             new ActionRowBuilder()
                 .addComponents(
-
                     new ButtonBuilder()
                         .setCustomId(
-                            `registro_editar_botao_${registroId}_${botao.id}_${numeroPagina}`
+                            `registro_editar_botao_${guildId}_${botao.id}_${numeroPagina}`
                         )
                         .setLabel(
-                            `Editar: ${botao.texto}`.substring(
-                                0,
-                                80
-                            )
+                            `Editar: ${botao.texto}`
+                                .substring(
+                                    0,
+                                    80
+                                )
                         )
                         .setStyle(
                             ButtonStyle.Primary
@@ -1227,14 +1062,10 @@ async function mostrarBotoes(
 
                     new ButtonBuilder()
                         .setCustomId(
-                            `registro_excluir_botao_${registroId}_${botao.id}_${numeroPagina}`
+                            `registro_excluir_botao_${guildId}_${botao.id}_${numeroPagina}`
                         )
-                        .setLabel(
-                            "Excluir"
-                        )
-                        .setEmoji(
-                            "🗑️"
-                        )
+                        .setLabel("Excluir")
+                        .setEmoji("🗑️")
                         .setStyle(
                             ButtonStyle.Danger
                         )
@@ -1245,17 +1076,12 @@ async function mostrarBotoes(
     components.push(
         new ActionRowBuilder()
             .addComponents(
-
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_voltar_pagina_${registroId}_${numeroPagina}`
+                        `registro_voltar_pagina_${guildId}_${numeroPagina}`
                     )
-                    .setLabel(
-                        "Voltar"
-                    )
-                    .setEmoji(
-                        "◀️"
-                    )
+                    .setLabel("Voltar")
+                    .setEmoji("◀️")
                     .setStyle(
                         ButtonStyle.Secondary
                     )
@@ -1263,13 +1089,10 @@ async function mostrarBotoes(
     );
 
     await interaction.update({
-        embeds: [
-            embed
-        ],
+        embeds: [embed],
         components
     });
 }
-
 
 // =====================================================
 // ✏️ MODAL EDITAR BOTÃO
@@ -1277,29 +1100,16 @@ async function mostrarBotoes(
 
 async function abrirModalEditarBotao(
     interaction,
-    registroId,
+    guildId,
     botaoId,
     numeroPagina
 ) {
-
-    const resultado =
-        await pool.query(
-            `
-            SELECT *
-            FROM registro_botoes
-            WHERE id = $1
-            LIMIT 1
-            `,
-            [
-                botaoId
-            ]
+    const botao =
+        await getRegistroBotaoPorId(
+            botaoId
         );
 
-    const botao =
-        resultado.rows[0];
-
     if (!botao) {
-
         return interaction.reply({
             content:
                 "❌ Esse botão não existe.",
@@ -1310,7 +1120,7 @@ async function abrirModalEditarBotao(
     const modal =
         new ModalBuilder()
             .setCustomId(
-                `registro_modal_editar_botao_${registroId}_${botaoId}_${numeroPagina}`
+                `registro_modal_editar_botao_${guildId}_${botaoId}_${numeroPagina}`
             )
             .setTitle(
                 "Editar botão"
@@ -1318,100 +1128,72 @@ async function abrirModalEditarBotao(
 
     const texto =
         new TextInputBuilder()
-            .setCustomId(
-                "texto"
-            )
-            .setLabel(
-                "Texto"
-            )
+            .setCustomId("texto")
+            .setLabel("Texto")
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                true
-            )
-            .setMaxLength(
-                80
-            )
+            .setRequired(true)
+            .setMaxLength(80)
             .setValue(
                 botao.texto || ""
             );
 
     const emoji =
         new TextInputBuilder()
-            .setCustomId(
-                "emoji"
-            )
-            .setLabel(
-                "Emoji"
-            )
+            .setCustomId("emoji")
+            .setLabel("Emoji")
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
+            .setRequired(false)
+            .setMaxLength(100)
             .setValue(
                 botao.emoji || ""
             );
 
     const cargo =
         new TextInputBuilder()
-            .setCustomId(
-                "cargo"
-            )
+            .setCustomId("cargo")
             .setLabel(
                 "ID do cargo — deixe vazio para nenhum"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
+            .setRequired(false)
+            .setMaxLength(30)
             .setValue(
                 botao.cargo_id || ""
             );
 
     const estilo =
         new TextInputBuilder()
-            .setCustomId(
-                "estilo"
-            )
+            .setCustomId("estilo")
             .setLabel(
                 "PRIMARY / SECONDARY / SUCCESS / DANGER"
             )
             .setStyle(
                 TextInputStyle.Short
             )
-            .setRequired(
-                false
-            )
+            .setRequired(false)
             .setValue(
-                botao.estilo || "PRIMARY"
+                botao.estilo ||
+                "PRIMARY"
             );
 
     modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(texto),
 
         new ActionRowBuilder()
-            .addComponents(
-                texto
-            ),
+            .addComponents(emoji),
 
         new ActionRowBuilder()
-            .addComponents(
-                emoji
-            ),
+            .addComponents(cargo),
 
         new ActionRowBuilder()
-            .addComponents(
-                cargo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                estilo
-            )
+            .addComponents(estilo)
     );
 
     await interaction.showModal(
@@ -1419,48 +1201,71 @@ async function abrirModalEditarBotao(
     );
 }
 
-
 // =====================================================
-// 📢 PUBLICAR REGISTRO
+// 📢 PUBLICAR / ATUALIZAR
 // =====================================================
 
 async function publicarRegistro(
     interaction,
-    registroId
+    guildId
 ) {
-
-    const registro =
-        await buscarRegistro(
-            interaction.guild.id
+    let config =
+        await buscarConfiguracao(
+            guildId
         );
 
-    if (
-        !registro ||
-        Number(registro.id) !==
-            Number(registroId)
-    ) {
+    if (!config) {
+        await garantirConfiguracao(
+            guildId
+        );
 
-        return interaction.reply({
-            content:
-                "❌ Registro não encontrado.",
-            ephemeral: true
-        });
+        config =
+            await buscarConfiguracao(
+                guildId
+            );
     }
 
     const pagina =
         await buscarPagina(
-            registro.id,
+            guildId,
             1
         );
 
     if (!pagina) {
-
         return interaction.reply({
             content:
                 "❌ O registro não possui uma página.",
             ephemeral: true
         });
     }
+
+    // ============================================
+    // 🔄 SE JÁ EXISTIR MENSAGEM, ATUALIZA
+    // ============================================
+
+    if (
+        config.canal_id &&
+        config.mensagem_id
+    ) {
+        const atualizado =
+            await atualizarMensagemRegistro(
+                interaction.guild,
+                config,
+                1
+            );
+
+        if (atualizado) {
+            return interaction.reply({
+                content:
+                    "✅ Mensagem do registro atualizada com sucesso!",
+                ephemeral: true
+            });
+        }
+    }
+
+    // ============================================
+    // 📢 PUBLICAR NOVA MENSAGEM
+    // ============================================
 
     const embed =
         criarEmbedPagina(
@@ -1470,41 +1275,42 @@ async function publicarRegistro(
     const components =
         await criarComponentesPagina(
             pagina,
-            registro,
+            guildId,
             1
         );
 
     const mensagem =
         await interaction.channel.send({
-            embeds: [
-                embed
-            ],
+            embeds: [embed],
             components
         });
 
-    await pool.query(
-        `
-        UPDATE registros
-        SET
-            canal_id = $1,
-            mensagem_id = $2
-        WHERE
-            id = $3
-        `,
-        [
-            interaction.channel.id,
-            mensagem.id,
-            registro.id
-        ]
+    await salvarRegistroConfig(
+        guildId,
+        interaction.channel.id,
+        mensagem.id,
+        Math.max(
+            1,
+            (
+                await buscarPaginas(
+                    guildId
+                )
+            ).length
+        ),
+        true
+    );
+
+    await salvarMensagemRegistro(
+        guildId,
+        mensagem.id
     );
 
     await interaction.reply({
         content:
-            "✅ Registro publicado com sucesso!",
+            "✅ Sistema de registro publicado com sucesso!",
         ephemeral: true
     });
 }
-
 
 // =====================================================
 // 🆕 ADICIONAR PÁGINA
@@ -1512,18 +1318,17 @@ async function publicarRegistro(
 
 async function adicionarPagina(
     interaction,
-    registroId
+    guildId
 ) {
-
     const paginas =
         await buscarPaginas(
-            registroId
+            guildId
         );
 
     if (
-        paginas.length >= MAX_PAGINAS
+        paginas.length >=
+        MAX_PAGINAS
     ) {
-
         return interaction.reply({
             content:
                 `❌ O limite máximo é de ${MAX_PAGINAS} páginas.`,
@@ -1534,31 +1339,17 @@ async function adicionarPagina(
     const numero =
         paginas.length + 1;
 
-    await pool.query(
-        `
-        INSERT INTO registro_paginas (
-            registro_id,
-            pagina,
-            titulo,
-            descricao,
-            rodape,
-            rodape_icone
-        )
-        VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            NULL,
-            NULL
-        )
-        `,
-        [
-            registroId,
-            numero,
-            `Página ${numero}`,
-            "Configure esta página."
-        ]
+    await criarRegistroPagina(
+        guildId,
+        numero,
+        {
+            titulo:
+                `Página ${numero}`,
+            descricao:
+                "Configure esta página.",
+            rodape: null,
+            rodape_icone: null
+        }
     );
 
     await interaction.reply({
@@ -1568,132 +1359,136 @@ async function adicionarPagina(
     });
 }
 
-
 // =====================================================
-// 🗑️ EXCLUIR REGISTRO
+// 🗑️ EXCLUIR CONFIGURAÇÃO
 // =====================================================
 
 async function excluirRegistro(
     interaction,
-    registroId
+    guildId
 ) {
-
-    const registro =
-        await buscarRegistro(
-            interaction.guild.id
+    const config =
+        await buscarConfiguracao(
+            guildId
         );
 
-    if (
-        !registro ||
-        Number(registro.id) !==
-            Number(registroId)
-    ) {
+    if (!config) {
         return interaction.reply({
             content:
-                "❌ Registro não encontrado.",
+                "❌ Nenhum sistema de registro encontrado.",
             ephemeral: true
         });
     }
 
+    // ============================================
+    // 🗑️ APAGAR MENSAGEM PUBLICADA
+    // ============================================
+
     if (
-        registro.canal_id &&
-        registro.mensagem_id
+        config.canal_id &&
+        config.mensagem_id
     ) {
-
         try {
-
             const canal =
                 await interaction.guild.channels.fetch(
-                    registro.canal_id
+                    config.canal_id
                 );
 
-            if (
-                canal
-            ) {
-
+            if (canal) {
                 const mensagem =
                     await canal.messages.fetch(
-                        registro.mensagem_id
+                        config.mensagem_id
                     ).catch(
                         () => null
                     );
 
-                if (
-                    mensagem
-                ) {
-
+                if (mensagem) {
                     await mensagem.delete()
                         .catch(
                             () => {}
                         );
                 }
             }
-
         } catch {}
     }
 
+    // ============================================
+    // 🗑️ APAGAR DADOS
+    // ============================================
+
     await pool.query(
         `
-        DELETE FROM registros
-        WHERE
-            id = $1
-            AND guild_id = $2
+        DELETE FROM registro_usuarios
+        WHERE guild_id = $1
         `,
-        [
-            registroId,
-            interaction.guild.id
-        ]
+        [guildId]
+    );
+
+    await pool.query(
+        `
+        DELETE FROM registro_botoes
+        WHERE pagina_id IN (
+            SELECT id
+            FROM registro_paginas
+            WHERE guild_id = $1
+        )
+        `,
+        [guildId]
+    );
+
+    await pool.query(
+        `
+        DELETE FROM registro_paginas
+        WHERE guild_id = $1
+        `,
+        [guildId]
+    );
+
+    await pool.query(
+        `
+        DELETE FROM registro_config
+        WHERE guild_id = $1
+        `,
+        [guildId]
     );
 
     await interaction.reply({
         content:
-            "🗑️ Registro excluído com sucesso.",
+            "🗑️ Sistema de registro excluído com sucesso.",
         ephemeral: true
     });
 }
 
-
 // =====================================================
-// 🎯 CLIQUE EM BOTÃO DO REGISTRO
+// 🎯 PROCESSAR BOTÃO DE REGISTRO
 // =====================================================
 
 async function processarBotaoRegistro(
-    interaction,
-    registroId,
-    botaoId
+    interaction
 ) {
+    const customId =
+        interaction.customId;
 
     const resultado =
         await pool.query(
             `
             SELECT
                 b.*,
-                r.guild_id
+                p.guild_id,
+                p.pagina
             FROM registro_botoes b
-
             INNER JOIN registro_paginas p
                 ON p.id = b.pagina_id
-
-            INNER JOIN registros r
-                ON r.id = p.registro_id
-
-            WHERE
-                b.id = $1
-                AND r.id = $2
-
+            WHERE b.custom_id = $1
             LIMIT 1
             `,
-            [
-                botaoId,
-                registroId
-            ]
+            [customId]
         );
 
     const botao =
         resultado.rows[0];
 
     if (!botao) {
-
         return interaction.reply({
             content:
                 "❌ Esse botão não está mais disponível.",
@@ -1701,30 +1496,28 @@ async function processarBotaoRegistro(
         });
     }
 
+    if (
+        String(botao.guild_id) !==
+        String(interaction.guild.id)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Esse botão não pertence a este servidor.",
+            ephemeral: true
+        });
+    }
+
     // ============================================
-    // 👤 VERIFICAR SE JÁ ESTÁ REGISTRADO
+    // 👤 VERIFICAR REGISTRO
     // ============================================
 
-    const registrado =
-        await pool.query(
-            `
-            SELECT *
-            FROM registro_membros
-            WHERE
-                registro_id = $1
-                AND user_id = $2
-            LIMIT 1
-            `,
-            [
-                registroId,
-                interaction.user.id
-            ]
+    const jaRegistrado =
+        await usuarioJaRegistrado(
+            interaction.guild.id,
+            interaction.user.id
         );
 
-    if (
-        registrado.rows.length > 0
-    ) {
-
+    if (jaRegistrado) {
         return interaction.reply({
             content:
                 "ℹ️ Você já fez este registro.",
@@ -1733,80 +1526,79 @@ async function processarBotaoRegistro(
     }
 
     // ============================================
-    // 🎭 DAR CARGO, SE CONFIGURADO
+    // 🎭 DAR CARGO
     // ============================================
 
-    if (
-        botao.cargo_id
-    ) {
+    let cargoRecebido = null;
 
+    if (botao.cargo_id) {
         const cargo =
             interaction.guild.roles.cache.get(
                 botao.cargo_id
             );
 
-        if (
-            cargo
-        ) {
+        if (!cargo) {
+            return interaction.reply({
+                content:
+                    "❌ O cargo configurado para este botão não existe mais.",
+                ephemeral: true
+            });
+        }
 
-            try {
+        try {
+            await interaction.member.roles.add(
+                cargo
+            );
 
-                await interaction.member.roles.add(
-                    cargo
-                );
+            cargoRecebido =
+                cargo.id;
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao dar cargo do registro:",
+                erro
+            );
 
-            } catch (erro) {
-
-                console.error(
-                    "❌ Erro ao dar cargo do registro:",
-                    erro
-                );
-
-                return interaction.reply({
-                    content:
-                        "❌ Não consegui adicionar o cargo configurado para este botão.",
-                    ephemeral: true
-                });
-            }
+            return interaction.reply({
+                content:
+                    "❌ Não consegui adicionar o cargo configurado para este botão. Verifique as permissões e a posição do cargo do bot.",
+                ephemeral: true
+            });
         }
     }
 
     // ============================================
-    // 💾 SALVAR REGISTRO DO MEMBRO
+    // 💾 SALVAR USUÁRIO
     // ============================================
 
-    await pool.query(
-        `
-        INSERT INTO registro_membros (
-            registro_id,
-            user_id,
-            botao_id,
-            registrado_em
-        )
-        VALUES (
-            $1,
-            $2,
-            $3,
-            $4
-        )
-        `,
-        [
-            registroId,
+    try {
+        await registrarUsuario(
+            interaction.guild.id,
             interaction.user.id,
-            botaoId,
-            Date.now()
-        ]
-    );
+            botao.pagina_id,
+            botao.id,
+            cargoRecebido
+        );
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao salvar usuário registrado:",
+            erro
+        );
+
+        return interaction.reply({
+            content:
+                "❌ Ocorreu um erro ao salvar seu registro.",
+            ephemeral: true
+        });
+    }
 
     await interaction.reply({
         content:
-            botao.cargo_id
+            cargoRecebido
                 ? "✅ Registro concluído! Seu cargo foi adicionado."
                 : "✅ Registro concluído com sucesso!",
         ephemeral: true
     });
 }
-
 
 // =====================================================
 // 🖱️ INTERAÇÕES
@@ -1815,904 +1607,986 @@ async function processarBotaoRegistro(
 async function handleInteraction(
     interaction
 ) {
+    try {
+        if (
+            !interaction.guild
+        ) {
+            return;
+        }
 
-    // =================================================
-    // 🔘 BOTÃO DE REGISTRO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_botao_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        const registroId =
-            partes[2];
-
-        const botaoId =
-            partes[3];
-
-        return processarBotaoRegistro(
-            interaction,
-            registroId,
-            botaoId
-        );
-    }
-
-
-    // =================================================
-    // 📄 NAVEGAÇÃO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_pagina_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        const registroId =
-            partes[2];
-
-        const numeroPagina =
-            Number(
-                partes[3]
-            );
-
-        const registro =
-            await buscarRegistro(
-                interaction.guild.id
-            );
-
-        const pagina =
-            await buscarPagina(
-                registroId,
-                numeroPagina
-            );
+        // =================================================
+        // 🔘 BOTÃO DE REGISTRO
+        // =================================================
 
         if (
-            !registro ||
-            !pagina
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_botao_"
+            )
         ) {
-            return interaction.reply({
-                content:
-                    "❌ Página não encontrada.",
-                ephemeral: true
+            return processarBotaoRegistro(
+                interaction
+            );
+        }
+
+        // =================================================
+        // 📄 NAVEGAÇÃO ENTRE PÁGINAS
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_pagina_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            const guildId =
+                partes[2];
+
+            const numeroPagina =
+                Number(
+                    partes[3]
+                );
+
+            if (
+                String(guildId) !==
+                String(interaction.guild.id)
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    ephemeral: true
+                });
+            }
+
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Página não encontrada.",
+                    ephemeral: true
+                });
+            }
+
+            const embed =
+                criarEmbedPagina(
+                    pagina
+                );
+
+            const components =
+                await criarComponentesPagina(
+                    pagina,
+                    guildId,
+                    numeroPagina
+                );
+
+            return interaction.update({
+                embeds: [embed],
+                components
             });
         }
 
-        const embed =
-            criarEmbedPagina(
-                pagina
-            );
+        // =================================================
+        // ➕ ADICIONAR PÁGINA
+        // =================================================
 
-        const components =
-            await criarComponentesPagina(
-                pagina,
-                registro,
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_adicionar_pagina_"
+            )
+        ) {
+            const guildId =
+                interaction.customId.replace(
+                    "registro_adicionar_pagina_",
+                    ""
+                );
+
+            return adicionarPagina(
+                interaction,
+                guildId
+            );
+        }
+
+        // =================================================
+        // 📢 PUBLICAR
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_publicar_"
+            )
+        ) {
+            const guildId =
+                interaction.customId.replace(
+                    "registro_publicar_",
+                    ""
+                );
+
+            return publicarRegistro(
+                interaction,
+                guildId
+            );
+        }
+
+        // =================================================
+        // 🗑️ EXCLUIR
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_excluir_"
+            )
+        ) {
+            const guildId =
+                interaction.customId.replace(
+                    "registro_excluir_",
+                    ""
+                );
+
+            return excluirRegistro(
+                interaction,
+                guildId
+            );
+        }
+
+        // =================================================
+        // 📋 SELECIONAR PÁGINA
+        // =================================================
+
+        if (
+            interaction.isStringSelectMenu() &&
+            interaction.customId.startsWith(
+                "registro_selecionar_pagina_"
+            )
+        ) {
+            const guildId =
+                interaction.customId.replace(
+                    "registro_selecionar_pagina_",
+                    ""
+                );
+
+            const numeroPagina =
+                Number(
+                    interaction.values[0]
+                );
+
+            return mostrarConfiguracaoPagina(
+                interaction,
+                guildId,
                 numeroPagina
             );
+        }
 
-        return interaction.update({
-            embeds: [
-                embed
-            ],
-            components
-        });
-    }
+        // =================================================
+        // 📝 EDITAR TEXTO
+        // =================================================
 
-
-    // =================================================
-    // ➕ ADICIONAR PÁGINA
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_adicionar_pagina_"
-        )
-    ) {
-
-        const registroId =
-            interaction.customId.replace(
-                "registro_adicionar_pagina_",
-                ""
-            );
-
-        return adicionarPagina(
-            interaction,
-            registroId
-        );
-    }
-
-
-    // =================================================
-    // 📢 PUBLICAR
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_publicar_"
-        )
-    ) {
-
-        const registroId =
-            interaction.customId.replace(
-                "registro_publicar_",
-                ""
-            );
-
-        return publicarRegistro(
-            interaction,
-            registroId
-        );
-    }
-
-
-    // =================================================
-    // 🗑️ EXCLUIR REGISTRO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_excluir_"
-        )
-    ) {
-
-        const registroId =
-            interaction.customId.replace(
-                "registro_excluir_",
-                ""
-            );
-
-        return excluirRegistro(
-            interaction,
-            registroId
-        );
-    }
-
-
-    // =================================================
-    // 📋 SELECIONAR PÁGINA
-    // =================================================
-
-    if (
-        interaction.isStringSelectMenu() &&
-        interaction.customId.startsWith(
-            "registro_selecionar_pagina_"
-        )
-    ) {
-
-        const registroId =
-            interaction.customId.replace(
-                "registro_selecionar_pagina_",
-                ""
-            );
-
-        const numeroPagina =
-            Number(
-                interaction.values[0]
-            );
-
-        return mostrarConfiguracaoPagina(
-            interaction,
-            registroId,
-            numeroPagina
-        );
-    }
-
-
-    // =================================================
-    // 📝 EDITAR TEXTO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_editar_texto_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        return abrirModalTexto(
-            interaction,
-            partes[3],
-            Number(
-                partes[4]
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_editar_texto_"
             )
-        );
-    }
+        ) {
+            const partes =
+                interaction.customId.split("_");
 
-
-    // =================================================
-    // 🔻 EDITAR RODAPÉ
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_editar_rodape_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        return abrirModalRodape(
-            interaction,
-            partes[3],
-            Number(
-                partes[4]
-            )
-        );
-    }
-
-
-    // =================================================
-    // ➕ ADICIONAR BOTÃO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_adicionar_botao_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        return abrirModalBotao(
-            interaction,
-            partes[3],
-            Number(
-                partes[4]
-            )
-        );
-    }
-
-
-    // =================================================
-    // ⚙️ EDITAR BOTÕES
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_botoes_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        return mostrarBotoes(
-            interaction,
-            partes[2],
-            Number(
-                partes[3]
-            )
-        );
-    }
-
-
-    // =================================================
-    // ✏️ EDITAR BOTÃO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_editar_botao_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        return abrirModalEditarBotao(
-            interaction,
-            partes[3],
-            partes[4],
-            Number(
-                partes[5]
-            )
-        );
-    }
-
-
-    // =================================================
-    // 🗑️ EXCLUIR BOTÃO
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_excluir_botao_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        const registroId =
-            partes[3];
-
-        const botaoId =
-            partes[4];
-
-        const numeroPagina =
-            Number(
-                partes[5]
+            return abrirModalTexto(
+                interaction,
+                partes[3],
+                Number(
+                    partes[4]
+                )
             );
+        }
 
-        await pool.query(
-            `
-            DELETE FROM registro_botoes
-            WHERE id = $1
-            `,
-            [
+        // =================================================
+        // 🔻 EDITAR RODAPÉ
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_editar_rodape_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            return abrirModalRodape(
+                interaction,
+                partes[3],
+                Number(
+                    partes[4]
+                )
+            );
+        }
+
+        // =================================================
+        // ➕ ADICIONAR BOTÃO
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_adicionar_botao_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            return abrirModalBotao(
+                interaction,
+                partes[3],
+                Number(
+                    partes[4]
+                )
+            );
+        }
+
+        // =================================================
+        // ⚙️ EDITAR BOTÕES
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_botoes_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            return mostrarBotoes(
+                interaction,
+                partes[2],
+                Number(
+                    partes[3]
+                )
+            );
+        }
+
+        // =================================================
+        // ✏️ EDITAR BOTÃO
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_editar_botao_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            return abrirModalEditarBotao(
+                interaction,
+                partes[3],
+                partes[4],
+                Number(
+                    partes[5]
+                )
+            );
+        }
+
+        // =================================================
+        // 🗑️ EXCLUIR BOTÃO
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_excluir_botao_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            const guildId =
+                partes[3];
+
+            const botaoId =
+                partes[4];
+
+            const numeroPagina =
+                Number(
+                    partes[5]
+                );
+
+            const botao =
+                await getRegistroBotaoPorId(
+                    botaoId
+                );
+
+            if (!botao) {
+                return interaction.reply({
+                    content:
+                        "❌ Esse botão não existe.",
+                    ephemeral: true
+                });
+            }
+
+            await excluirRegistroBotao(
                 botaoId
-            ]
-        );
-
-        return mostrarBotoes(
-            interaction,
-            registroId,
-            numeroPagina
-        );
-    }
-
-
-    // =================================================
-    // ◀️ VOLTAR PARA PÁGINA
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_voltar_pagina_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        return mostrarConfiguracaoPagina(
-            interaction,
-            partes[3],
-            Number(
-                partes[4]
-            )
-        );
-    }
-
-
-    // =================================================
-    // ◀️ VOLTAR PARA PAINEL
-    // =================================================
-
-    if (
-        interaction.isButton() &&
-        interaction.customId.startsWith(
-            "registro_voltar_"
-        )
-    ) {
-
-        const registroId =
-            interaction.customId.replace(
-                "registro_voltar_",
-                ""
             );
 
-        const registro =
-            await buscarRegistro(
-                interaction.guild.id
+            return mostrarBotoes(
+                interaction,
+                guildId,
+                numeroPagina
             );
-
-        if (
-            !registro ||
-            Number(registro.id) !==
-                Number(registroId)
-        ) {
-
-            return interaction.reply({
-                content:
-                    "❌ Registro não encontrado.",
-                ephemeral: true
-            });
         }
 
-        const paginas =
-            await buscarPaginas(
-                registro.id
-            );
+        // =================================================
+        // ◀️ VOLTAR PARA PÁGINA
+        // =================================================
 
-        const embed =
-            new EmbedBuilder()
-                .setTitle(
-                    "📝 Sistema de Registro"
-                )
-                .setDescription(
-                    [
-                        `📄 Páginas: **${paginas.length}/${MAX_PAGINAS}**`,
-                        "",
-                        "Selecione uma página para editar."
-                    ].join("\n")
-                )
-                .setColor(
-                    0x5865F2
-                );
-
-        const menu =
-            new StringSelectMenuBuilder()
-                .setCustomId(
-                    `registro_selecionar_pagina_${registro.id}`
-                )
-                .setPlaceholder(
-                    "📄 Escolha uma página"
-                );
-
-        for (
-            const pagina of paginas
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_voltar_pagina_"
+            )
         ) {
+            const partes =
+                interaction.customId.split("_");
 
-            menu.addOptions({
-                label:
-                    `Página ${pagina.pagina}`,
+            return mostrarConfiguracaoPagina(
+                interaction,
+                partes[3],
+                Number(
+                    partes[4]
+                )
+            );
+        }
 
-                description:
-                    pagina.titulo ||
-                    "Sem título",
+        // =================================================
+        // ◀️ VOLTAR PARA PAINEL
+        // =================================================
 
-                value:
-                    String(
-                        pagina.pagina
+        if (
+            interaction.isButton() &&
+            interaction.customId.startsWith(
+                "registro_voltar_"
+            )
+        ) {
+            const guildId =
+                interaction.customId.replace(
+                    "registro_voltar_",
+                    ""
+                );
+
+            const paginas =
+                await buscarPaginas(
+                    guildId
+                );
+
+            const config =
+                await buscarConfiguracao(
+                    guildId
+                );
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "📝 Sistema de Registro"
                     )
-            });
-        }
+                    .setDescription(
+                        [
+                            `📄 Páginas: **${paginas.length}/${MAX_PAGINAS}**`,
+                            `📢 Status: **${
+                                config &&
+                                config.configurado
+                                    ? "Configurado"
+                                    : "Não publicado"
+                            }**`,
+                            "",
+                            "Selecione uma página para editar."
+                        ].join("\n")
+                    )
+                    .setColor(
+                        0x5865F2
+                    );
 
-        const row =
-            new ActionRowBuilder()
-                .addComponents(
-                    menu
-                );
+            const menu =
+                new StringSelectMenuBuilder()
+                    .setCustomId(
+                        `registro_selecionar_pagina_${guildId}`
+                    )
+                    .setPlaceholder(
+                        "📄 Escolha uma página"
+                    );
 
-        const botoes =
-            new ActionRowBuilder()
-                .addComponents(
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `registro_adicionar_pagina_${registro.id}`
-                        )
-                        .setLabel(
-                            "Adicionar página"
-                        )
-                        .setEmoji(
-                            "➕"
-                        )
-                        .setStyle(
-                            ButtonStyle.Success
-                        )
-                        .setDisabled(
-                            paginas.length >=
-                                MAX_PAGINAS
+            for (
+                const pagina of paginas
+            ) {
+                menu.addOptions({
+                    label:
+                        `Página ${pagina.pagina}`,
+                    description:
+                        (
+                            pagina.titulo ||
+                            "Sem título"
+                        ).substring(
+                            0,
+                            100
                         ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `registro_publicar_${registro.id}`
+                    value:
+                        String(
+                            pagina.pagina
                         )
-                        .setLabel(
-                            "Publicar"
-                        )
-                        .setEmoji(
-                            "📢"
-                        )
-                        .setStyle(
-                            ButtonStyle.Primary
-                        )
-                );
+                });
+            }
 
-        return interaction.update({
-            embeds: [
-                embed
-            ],
-            components: [
-                row,
-                botoes
-            ]
-        });
-    }
+            const rowMenu =
+                new ActionRowBuilder()
+                    .addComponents(
+                        menu
+                    );
 
+            const rowBotoes =
+                new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(
+                                `registro_adicionar_pagina_${guildId}`
+                            )
+                            .setLabel(
+                                "Adicionar página"
+                            )
+                            .setEmoji("➕")
+                            .setStyle(
+                                ButtonStyle.Success
+                            )
+                            .setDisabled(
+                                paginas.length >=
+                                    MAX_PAGINAS
+                            ),
 
-    // =================================================
-    // 📝 MODAL TEXTO
-    // =================================================
+                        new ButtonBuilder()
+                            .setCustomId(
+                                `registro_publicar_${guildId}`
+                            )
+                            .setLabel(
+                                "Publicar / Atualizar"
+                            )
+                            .setEmoji("📢")
+                            .setStyle(
+                                ButtonStyle.Primary
+                            )
+                    );
 
-    if (
-        interaction.isModalSubmit() &&
-        interaction.customId.startsWith(
-            "registro_modal_texto_"
-        )
-    ) {
+            const rowExcluir =
+                new ActionRowBuilder()
+                    .addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(
+                                `registro_excluir_${guildId}`
+                            )
+                            .setLabel(
+                                "Excluir configuração"
+                            )
+                            .setEmoji("🗑️")
+                            .setStyle(
+                                ButtonStyle.Danger
+                            )
+                    );
 
-        const partes =
-            interaction.customId.split("_");
-
-        const registroId =
-            partes[3];
-
-        const numeroPagina =
-            Number(
-                partes[4]
-            );
-
-        const titulo =
-            interaction.fields.getTextInputValue(
-                "titulo"
-            );
-
-        const descricao =
-            interaction.fields.getTextInputValue(
-                "descricao"
-            );
-
-        await pool.query(
-            `
-            UPDATE registro_paginas
-            SET
-                titulo = $1,
-                descricao = $2
-            WHERE
-                registro_id = $3
-                AND pagina = $4
-            `,
-            [
-                titulo || null,
-                descricao || null,
-                registroId,
-                numeroPagina
-            ]
-        );
-
-        await interaction.reply({
-            content:
-                "✅ Título e descrição atualizados!",
-            ephemeral: true
-        });
-
-        return;
-    }
-
-
-    // =================================================
-    // 🔻 MODAL RODAPÉ
-    // =================================================
-
-    if (
-        interaction.isModalSubmit() &&
-        interaction.customId.startsWith(
-            "registro_modal_rodape_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        const registroId =
-            partes[3];
-
-        const numeroPagina =
-            Number(
-                partes[4]
-            );
-
-        const rodape =
-            interaction.fields.getTextInputValue(
-                "rodape"
-            );
-
-        const icone =
-            interaction.fields.getTextInputValue(
-                "rodape_icone"
-            );
-
-        await pool.query(
-            `
-            UPDATE registro_paginas
-            SET
-                rodape = $1,
-                rodape_icone = $2
-            WHERE
-                registro_id = $3
-                AND pagina = $4
-            `,
-            [
-                rodape || null,
-                icone || null,
-                registroId,
-                numeroPagina
-            ]
-        );
-
-        await interaction.reply({
-            content:
-                "✅ Rodapé atualizado!",
-            ephemeral: true
-        });
-
-        return;
-    }
-
-
-    // =================================================
-    // 🔘 MODAL NOVO BOTÃO
-    // =================================================
-
-    if (
-        interaction.isModalSubmit() &&
-        interaction.customId.startsWith(
-            "registro_modal_botao_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        const registroId =
-            partes[3];
-
-        const numeroPagina =
-            Number(
-                partes[4]
-            );
-
-        const pagina =
-            await buscarPagina(
-                registroId,
-                numeroPagina
-            );
-
-        if (!pagina) {
-
-            return interaction.reply({
-                content:
-                    "❌ Página não encontrada.",
-                ephemeral: true
+            return interaction.update({
+                embeds: [embed],
+                components: [
+                    rowMenu,
+                    rowBotoes,
+                    rowExcluir
+                ]
             });
         }
 
-        const botoes =
-            await buscarBotoes(
-                pagina.id
-            );
+        // =================================================
+        // 📝 MODAL TEXTO
+        // =================================================
 
         if (
-            botoes.length >= MAX_BOTOES
-        ) {
-
-            return interaction.reply({
-                content:
-                    `❌ O limite é de ${MAX_BOTOES} botões por página.`,
-                ephemeral: true
-            });
-        }
-
-        const texto =
-            interaction.fields.getTextInputValue(
-                "texto"
-            );
-
-        const emoji =
-            interaction.fields.getTextInputValue(
-                "emoji"
-            );
-
-        const cargo =
-            interaction.fields.getTextInputValue(
-                "cargo"
-            );
-
-        let estilo =
-            interaction.fields.getTextInputValue(
-                "estilo"
-            );
-
-        estilo =
-            estilo
-                .toUpperCase()
-                .trim();
-
-        if (
-            !ESTILOS_BOTOES[estilo]
-        ) {
-
-            estilo =
-                "PRIMARY";
-        }
-
-        let cargoId =
-            null;
-
-        if (
-            cargo &&
-            /^\d{15,25}$/.test(
-                cargo.trim()
+            interaction.isModalSubmit() &&
+            interaction.customId.startsWith(
+                "registro_modal_texto_"
             )
         ) {
+            const partes =
+                interaction.customId.split("_");
 
-            const cargoDiscord =
-                interaction.guild.roles.cache.get(
-                    cargo.trim()
+            const guildId =
+                partes[3];
+
+            const numeroPagina =
+                Number(
+                    partes[4]
+                );
+
+            const titulo =
+                interaction.fields.getTextInputValue(
+                    "titulo"
+                );
+
+            const descricao =
+                interaction.fields.getTextInputValue(
+                    "descricao"
+                );
+
+            await atualizarRegistroPagina(
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                ).then(
+                    pagina =>
+                        pagina.id
+                ),
+                guildId,
+                {
+                    titulo:
+                        titulo || null,
+                    descricao:
+                        descricao || null
+                }
+            );
+
+            const config =
+                await buscarConfiguracao(
+                    guildId
                 );
 
             if (
-                cargoDiscord
+                config &&
+                config.canal_id &&
+                config.mensagem_id
             ) {
-
-                cargoId =
-                    cargo.trim();
+                await atualizarMensagemRegistro(
+                    interaction.guild,
+                    config,
+                    numeroPagina
+                );
             }
+
+            await interaction.reply({
+                content:
+                    "✅ Título e descrição atualizados!",
+                ephemeral: true
+            });
+
+            return;
         }
 
-        await pool.query(
-            `
-            INSERT INTO registro_botoes (
-                pagina_id,
-                ordem,
-                texto,
-                emoji,
-                estilo,
-                cargo_id
+        // =================================================
+        // 🔻 MODAL RODAPÉ
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            interaction.customId.startsWith(
+                "registro_modal_rodape_"
             )
-            VALUES (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6
-            )
-            `,
-            [
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            const guildId =
+                partes[3];
+
+            const numeroPagina =
+                Number(
+                    partes[4]
+                );
+
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Página não encontrada.",
+                    ephemeral: true
+                });
+            }
+
+            const rodape =
+                interaction.fields.getTextInputValue(
+                    "rodape"
+                );
+
+            const icone =
+                interaction.fields.getTextInputValue(
+                    "rodape_icone"
+                );
+
+            await atualizarRegistroPagina(
                 pagina.id,
-                botoes.length + 1,
-                texto,
-                emoji || null,
-                estilo,
-                cargoId
-            ]
-        );
-
-        await interaction.reply({
-            content:
-                cargoId
-                    ? `✅ Botão criado e configurado para dar <@&${cargoId}>.`
-                    : "✅ Botão criado sem cargo.",
-            ephemeral: true
-        });
-
-        return;
-    }
-
-
-    // =================================================
-    // ✏️ MODAL EDITAR BOTÃO
-    // =================================================
-
-    if (
-        interaction.isModalSubmit() &&
-        interaction.customId.startsWith(
-            "registro_modal_editar_botao_"
-        )
-    ) {
-
-        const partes =
-            interaction.customId.split("_");
-
-        const botaoId =
-            partes[4];
-
-        const texto =
-            interaction.fields.getTextInputValue(
-                "texto"
+                guildId,
+                {
+                    rodape:
+                        rodape || null,
+                    rodape_icone:
+                        icone || null
+                }
             );
 
-        const emoji =
-            interaction.fields.getTextInputValue(
-                "emoji"
-            );
-
-        const cargo =
-            interaction.fields.getTextInputValue(
-                "cargo"
-            );
-
-        let estilo =
-            interaction.fields.getTextInputValue(
-                "estilo"
-            );
-
-        estilo =
-            estilo
-                .toUpperCase()
-                .trim();
-
-        if (
-            !ESTILOS_BOTOES[estilo]
-        ) {
-
-            estilo =
-                "PRIMARY";
-        }
-
-        let cargoId =
-            null;
-
-        if (
-            cargo &&
-            /^\d{15,25}$/.test(
-                cargo.trim()
-            )
-        ) {
-
-            const cargoDiscord =
-                interaction.guild.roles.cache.get(
-                    cargo.trim()
+            const config =
+                await buscarConfiguracao(
+                    guildId
                 );
 
             if (
-                cargoDiscord
+                config &&
+                config.canal_id &&
+                config.mensagem_id
             ) {
-
-                cargoId =
-                    cargo.trim();
+                await atualizarMensagemRegistro(
+                    interaction.guild,
+                    config,
+                    numeroPagina
+                );
             }
+
+            await interaction.reply({
+                content:
+                    "✅ Rodapé atualizado!",
+                ephemeral: true
+            });
+
+            return;
         }
 
-        await pool.query(
-            `
-            UPDATE registro_botoes
-            SET
-                texto = $1,
-                emoji = $2,
-                estilo = $3,
-                cargo_id = $4
-            WHERE
-                id = $5
-            `,
-            [
-                texto,
-                emoji || null,
-                estilo,
-                cargoId,
-                botaoId
-            ]
+        // =================================================
+        // 🔘 MODAL NOVO BOTÃO
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            interaction.customId.startsWith(
+                "registro_modal_botao_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            const guildId =
+                partes[3];
+
+            const numeroPagina =
+                Number(
+                    partes[4]
+                );
+
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Página não encontrada.",
+                    ephemeral: true
+                });
+            }
+
+            const botoes =
+                await buscarBotoes(
+                    pagina.id
+                );
+
+            if (
+                botoes.length >=
+                MAX_BOTOES
+            ) {
+                return interaction.reply({
+                    content:
+                        `❌ O limite é de ${MAX_BOTOES} botões por página.`,
+                    ephemeral: true
+                });
+            }
+
+            const texto =
+                interaction.fields.getTextInputValue(
+                    "texto"
+                );
+
+            const emoji =
+                interaction.fields.getTextInputValue(
+                    "emoji"
+                );
+
+            const cargo =
+                interaction.fields.getTextInputValue(
+                    "cargo"
+                );
+
+            let estilo =
+                interaction.fields.getTextInputValue(
+                    "estilo"
+                );
+
+            estilo =
+                String(
+                    estilo || "PRIMARY"
+                )
+                    .toUpperCase()
+                    .trim();
+
+            if (
+                !ESTILOS_BOTOES[
+                    estilo
+                ]
+            ) {
+                estilo =
+                    "PRIMARY";
+            }
+
+            let cargoId = null;
+
+            if (
+                cargo &&
+                /^\d{15,25}$/.test(
+                    cargo.trim()
+                )
+            ) {
+                const cargoDiscord =
+                    interaction.guild.roles.cache.get(
+                        cargo.trim()
+                    );
+
+                if (
+                    cargoDiscord
+                ) {
+                    cargoId =
+                        cargo.trim();
+                }
+            }
+
+            // ========================================
+            // 🔑 CUSTOM ID ÚNICO
+            // ========================================
+
+            const customId =
+                `registro_botao_${guildId}_${Date.now()}_${Math.floor(
+                    Math.random() * 100000
+                )}`;
+
+            await criarRegistroBotao(
+                pagina.id,
+                {
+                    texto,
+                    emoji:
+                        emoji || null,
+                    estilo,
+                    cargo_id:
+                        cargoId,
+                    custom_id:
+                        customId,
+                    ordem:
+                        botoes.length + 1
+                }
+            );
+
+            const config =
+                await buscarConfiguracao(
+                    guildId
+                );
+
+            if (
+                config &&
+                config.canal_id &&
+                config.mensagem_id
+            ) {
+                await atualizarMensagemRegistro(
+                    interaction.guild,
+                    config,
+                    numeroPagina
+                );
+            }
+
+            await interaction.reply({
+                content:
+                    cargoId
+                        ? `✅ Botão criado e configurado para dar <@&${cargoId}>.`
+                        : "✅ Botão criado sem cargo.",
+                ephemeral: true
+            });
+
+            return;
+        }
+
+        // =================================================
+        // ✏️ MODAL EDITAR BOTÃO
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            interaction.customId.startsWith(
+                "registro_modal_editar_botao_"
+            )
+        ) {
+            const partes =
+                interaction.customId.split("_");
+
+            const guildId =
+                partes[4];
+
+            const botaoId =
+                partes[5];
+
+            const numeroPagina =
+                Number(
+                    partes[6]
+                );
+
+            const botao =
+                await getRegistroBotaoPorId(
+                    botaoId
+                );
+
+            if (!botao) {
+                return interaction.reply({
+                    content:
+                        "❌ Esse botão não existe.",
+                    ephemeral: true
+                });
+            }
+
+            const texto =
+                interaction.fields.getTextInputValue(
+                    "texto"
+                );
+
+            const emoji =
+                interaction.fields.getTextInputValue(
+                    "emoji"
+                );
+
+            const cargo =
+                interaction.fields.getTextInputValue(
+                    "cargo"
+                );
+
+            let estilo =
+                interaction.fields.getTextInputValue(
+                    "estilo"
+                );
+
+            estilo =
+                String(
+                    estilo || "PRIMARY"
+                )
+                    .toUpperCase()
+                    .trim();
+
+            if (
+                !ESTILOS_BOTOES[
+                    estilo
+                ]
+            ) {
+                estilo =
+                    "PRIMARY";
+            }
+
+            let cargoId = null;
+
+            if (
+                cargo &&
+                /^\d{15,25}$/.test(
+                    cargo.trim()
+                )
+            ) {
+                const cargoDiscord =
+                    interaction.guild.roles.cache.get(
+                        cargo.trim()
+                    );
+
+                if (
+                    cargoDiscord
+                ) {
+                    cargoId =
+                        cargo.trim();
+                }
+            }
+
+            await atualizarRegistroBotao(
+                botaoId,
+                {
+                    texto,
+                    emoji:
+                        emoji || null,
+                    estilo,
+                    cargo_id:
+                        cargoId
+                }
+            );
+
+            const config =
+                await buscarConfiguracao(
+                    guildId
+                );
+
+            if (
+                config &&
+                config.canal_id &&
+                config.mensagem_id
+            ) {
+                await atualizarMensagemRegistro(
+                    interaction.guild,
+                    config,
+                    numeroPagina
+                );
+            }
+
+            await interaction.reply({
+                content:
+                    "✅ Botão atualizado!",
+                ephemeral: true
+            });
+
+            return;
+        }
+
+    } catch (erro) {
+        console.error(
+            "❌ Erro no sistema /registrar:",
+            erro
         );
 
-        await interaction.reply({
-            content:
-                "✅ Botão atualizado!",
-            ephemeral: true
-        });
+        if (
+            interaction.replied ||
+            interaction.deferred
+        ) {
+            return interaction.followUp({
+                content:
+                    "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
+                ephemeral: true
+            }).catch(
+                () => {}
+            );
+        }
 
-        return;
+        return interaction.reply({
+            content:
+                "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
+            ephemeral: true
+        }).catch(
+            () => {}
+        );
     }
 }
-
 
 // =====================================================
 // 📦 COMANDO
@@ -2730,7 +2604,6 @@ const data =
             PermissionFlagsBits.ManageGuild
         );
 
-
 // =====================================================
 // ▶️ EXECUTAR
 // =====================================================
@@ -2738,11 +2611,9 @@ const data =
 async function execute(
     interaction
 ) {
-
     if (
         !interaction.guild
     ) {
-
         return interaction.reply({
             content:
                 "❌ Este comando só pode ser usado em um servidor.",
@@ -2751,11 +2622,10 @@ async function execute(
     }
 
     if (
-        !interaction.memberPermissions.has(
-            PermissionFlagsBits.ManageGuild
+        !podeConfigurar(
+            interaction
         )
     ) {
-
         return interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor** para usar este comando.",
@@ -2763,11 +2633,30 @@ async function execute(
         });
     }
 
-    await mostrarPainel(
-        interaction
-    );
-}
+    try {
+        await mostrarPainel(
+            interaction
+        );
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao executar /registrar:",
+            erro
+        );
 
+        if (
+            interaction.replied ||
+            interaction.deferred
+        ) {
+            return;
+        }
+
+        return interaction.reply({
+            content:
+                "❌ Não foi possível abrir o sistema de registro. Verifique o console do bot.",
+            ephemeral: true
+        });
+    }
+}
 
 // =====================================================
 // 📦 EXPORTAÇÕES
