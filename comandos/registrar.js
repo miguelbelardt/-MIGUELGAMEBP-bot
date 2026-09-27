@@ -26,7 +26,6 @@ const {
     getRegistroPaginas,
     atualizarRegistroPagina,
     criarRegistroBotao,
-    getRegistroBotaoPorId,
     getRegistroBotoes,
     atualizarRegistroBotao,
     excluirRegistroBotao,
@@ -34,16 +33,8 @@ const {
     registrarUsuario
 } = require("../database/database");
 
-// =====================================================
-// 📝 SISTEMA DE REGISTRO
-// =====================================================
-
 const MAX_PAGINAS = 6;
 const MAX_BOTOES = 5;
-
-// =====================================================
-// 🎨 ESTILOS
-// =====================================================
 
 const ESTILOS_BOTOES = {
     PRIMARY: ButtonStyle.Primary,
@@ -51,10 +42,6 @@ const ESTILOS_BOTOES = {
     SUCCESS: ButtonStyle.Success,
     DANGER: ButtonStyle.Danger
 };
-
-// =====================================================
-// 🔐 FLAGS
-// =====================================================
 
 const EPHEMERAL = MessageFlags.Ephemeral;
 
@@ -897,7 +884,7 @@ async function mostrarSelecaoCanal(
 }
 
 // =====================================================
-// 📄 PAINEL DA PÁGINA
+// 📄 CONFIGURAÇÃO DA PÁGINA
 // =====================================================
 
 async function mostrarConfiguracaoPagina(
@@ -1648,10 +1635,6 @@ async function publicarRegistro(
         });
     }
 
-    // =================================================
-    // 🔄 ATUALIZAR EXISTENTE
-    // =================================================
-
     if (config.mensagem_id) {
         const atualizado =
             await atualizarMensagemRegistro(
@@ -1680,10 +1663,6 @@ async function publicarRegistro(
             });
         }
     }
-
-    // =================================================
-    // 📢 NOVA PUBLICAÇÃO
-    // =================================================
 
     const embed =
         criarEmbedPainelInicial(config);
@@ -2147,7 +2126,7 @@ async function processarBotaoRegistro(
 }
 
 // =====================================================
-// 🧰 PAINEL PRINCIPAL NOVAMENTE
+// 🧰 PAINEL PRINCIPAL
 // =====================================================
 
 async function atualizarPainelPrincipal(
@@ -2333,11 +2312,18 @@ async function handleInteraction(interaction) {
         // =================================================
         // 🔘 BOTÃO DE REGISTRO
         // =================================================
+        // IMPORTANTE:
+        // registro_botao_painel_ também começa com
+        // registro_botao_, então ele precisa ser excluído
+        // daqui para não ser tratado como botão de registro.
 
         if (
             interaction.isButton() &&
             customId.startsWith(
                 "registro_botao_"
+            ) &&
+            !customId.startsWith(
+                "registro_botao_painel_"
             )
         ) {
             return await processarBotaoRegistro(
@@ -3109,6 +3095,19 @@ async function handleInteraction(interaction) {
                     ""
                 );
 
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const texto =
                 interaction.fields
                     .getTextInputValue(
@@ -3167,6 +3166,19 @@ async function handleInteraction(interaction) {
 
             const numeroPagina =
                 Number(partes[4]);
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
 
             const pagina =
                 await buscarPagina(
@@ -3236,6 +3248,19 @@ async function handleInteraction(interaction) {
             const numeroPagina =
                 Number(partes[4]);
 
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
             const pagina =
                 await buscarPagina(
                     guildId,
@@ -3261,6 +3286,17 @@ async function handleInteraction(interaction) {
                         "rodape_icone"
                     )
                     .trim();
+
+            if (
+                icone &&
+                !urlValida(icone)
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ A URL do ícone do rodapé é inválida.",
+                    flags: EPHEMERAL
+                });
+            }
 
             await atualizarRegistroPagina(
                 pagina.id,
@@ -3295,6 +3331,9 @@ async function handleInteraction(interaction) {
             interaction.isModalSubmit() &&
             customId.startsWith(
                 "registro_modal_botao_"
+            ) &&
+            !customId.startsWith(
+                "registro_modal_botao_painel_"
             )
         ) {
             const partes =
@@ -3305,6 +3344,19 @@ async function handleInteraction(interaction) {
 
             const numeroPagina =
                 Number(partes[4]);
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
 
             const pagina =
                 await buscarPagina(
@@ -3406,6 +3458,11 @@ async function handleInteraction(interaction) {
                 }
             );
 
+            await atualizarPublicacaoSeExistir(
+                interaction,
+                guildId
+            );
+
             await interaction.reply({
                 content:
                     cargoResultado.id
@@ -3438,6 +3495,19 @@ async function handleInteraction(interaction) {
 
             const numeroPagina =
                 Number(partes[6]);
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
 
             const pagina =
                 await buscarPagina(
@@ -3537,6 +3607,11 @@ async function handleInteraction(interaction) {
                 }
             );
 
+            await atualizarPublicacaoSeExistir(
+                interaction,
+                guildId
+            );
+
             await interaction.reply({
                 content:
                     "✅ Botão atualizado!",
@@ -3610,7 +3685,6 @@ async function execute(interaction) {
 
     try {
         await mostrarPainel(interaction);
-
     } catch (erro) {
         console.error(
             "❌ Erro ao executar /registrar:",
