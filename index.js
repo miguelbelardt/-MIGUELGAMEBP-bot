@@ -1618,19 +1618,11 @@ client.on(
 
         try {
 
-            // =========================================
-            // 🛑 GARANTIR QUE É UM SERVIDOR
-            // =========================================
-
             if (
                 !newState.guild
             ) {
                 return;
             }
-
-            // =========================================
-            // 🆔 MEMBRO
-            // =========================================
 
             const membro =
                 newState.member ||
@@ -1645,10 +1637,6 @@ client.on(
 
             const usuario =
                 `<@${membro.id}>`;
-
-            // =========================================
-            // 🎙️ ENTROU EM UM CANAL DE VOZ
-            // =========================================
 
             if (
                 !oldState.channelId &&
@@ -1698,10 +1686,6 @@ client.on(
                 return;
             }
 
-            // =========================================
-            // 🔴 SAIU DE UM CANAL DE VOZ
-            // =========================================
-
             if (
                 oldState.channelId &&
                 !newState.channelId
@@ -1749,10 +1733,6 @@ client.on(
 
                 return;
             }
-
-            // =========================================
-            // 🔄 MUDOU DE CANAL
-            // =========================================
 
             if (
                 oldState.channelId &&
@@ -2561,6 +2541,125 @@ client.on(
                 "desconhecida"
             }`
         );
+
+        // =================================================
+        // 📝 SISTEMA DE REGISTRO
+        // =================================================
+        // Todas as interações do sistema de registro
+        // começam com "reg_".
+        //
+        // Isso inclui:
+        // - botões administrativos
+        // - botões de registro dos usuários
+        // - navegação entre páginas
+        // - menus de seleção
+        // - modais
+        //
+        // O comando registrar.js é responsável por
+        // processar essas interações.
+        // =================================================
+
+        if (
+            interaction.customId &&
+            interaction.customId.startsWith(
+                "reg_"
+            )
+        ) {
+
+            const comandoRegistrar =
+                client.commands.get(
+                    "registrar"
+                );
+
+            if (
+                comandoRegistrar &&
+                typeof comandoRegistrar.handleInteraction ===
+                    "function"
+            ) {
+
+                try {
+
+                    await comandoRegistrar.handleInteraction(
+                        interaction
+                    );
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ Erro no sistema de registro:",
+                        erro
+                    );
+
+                    try {
+
+                        if (
+                            !interaction.replied &&
+                            !interaction.deferred
+                        ) {
+
+                            await interaction.reply({
+                                content:
+                                    "❌ Deu erro ao executar o sistema de registro.",
+
+                                ephemeral:
+                                    true
+                            });
+
+                        } else {
+
+                            await interaction.followUp({
+                                content:
+                                    "❌ Deu erro ao executar o sistema de registro.",
+
+                                ephemeral:
+                                    true
+                            });
+                        }
+
+                    } catch (
+                        erroResposta
+                    ) {
+
+                        console.error(
+                            "❌ Não foi possível responder ao erro do sistema de registro:",
+                            erroResposta
+                        );
+                    }
+                }
+
+            } else {
+
+                console.error(
+                    "❌ O comando registrar não foi carregado ou não possui handleInteraction()."
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ O sistema de registro não está disponível no momento.",
+
+                            ephemeral:
+                                true
+                        });
+                    }
+
+                } catch (erro) {
+
+                    console.error(
+                        "❌ Não foi possível responder à interação do registro:",
+                        erro
+                    );
+                }
+            }
+
+            return;
+        }
 
         // =================================================
         // 🔎 AUTOCOMPLETE
