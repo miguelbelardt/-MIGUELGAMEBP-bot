@@ -108,6 +108,14 @@ const TIPOS_LOG = {
             "Registra quando um membro é banido."
     },
 
+    moderacao_unban: {
+        nome: "🔓 Desbanimentos",
+        emoji: "🔓",
+        label: "Desbanimentos",
+        descricao:
+            "Registra quando um membro é desbanido."
+    },
+
     moderacao_kick: {
         nome: "👢 Expulsões",
         emoji: "👢",
@@ -117,11 +125,19 @@ const TIPOS_LOG = {
     },
 
     moderacao_timeout: {
-        nome: "🔇 Timeouts",
+        nome: "🔇 Timeout aplicado",
         emoji: "🔇",
-        label: "Timeouts",
+        label: "Timeout aplicado",
         descricao:
-            "Registra quando um membro recebe ou perde um timeout."
+            "Registra quando um membro recebe um timeout."
+    },
+
+    moderacao_timeout_removido: {
+        nome: "🔊 Timeout removido",
+        emoji: "🔊",
+        label: "Timeout removido",
+        descricao:
+            "Registra quando o timeout de um membro é removido."
     },
 
     moderacao_clear: {
@@ -194,8 +210,10 @@ const SUBTIPOS_MEMBROS = [
 
 const SUBTIPOS_MODERACAO = [
     "moderacao_ban",
+    "moderacao_unban",
     "moderacao_kick",
     "moderacao_timeout",
+    "moderacao_timeout_removido",
     "moderacao_clear"
 ];
 
@@ -226,8 +244,10 @@ const PAI_SUBTIPO = {
     membros_cargos: "membros",
 
     moderacao_ban: "moderacao",
+    moderacao_unban: "moderacao",
     moderacao_kick: "moderacao",
     moderacao_timeout: "moderacao",
+    moderacao_timeout_removido: "moderacao",
     moderacao_clear: "moderacao",
 
     voz_entrada: "voz",
@@ -635,13 +655,20 @@ async function mostrarModeracao(interaction) {
     try {
         const [
             ban,
+            unban,
             kick,
             timeout,
+            timeoutRemovido,
             clear
         ] = await Promise.all([
             buscarConfig(
                 interaction.guild.id,
                 "moderacao_ban"
+            ),
+
+            buscarConfig(
+                interaction.guild.id,
+                "moderacao_unban"
             ),
 
             buscarConfig(
@@ -652,6 +679,11 @@ async function mostrarModeracao(interaction) {
             buscarConfig(
                 interaction.guild.id,
                 "moderacao_timeout"
+            ),
+
+            buscarConfig(
+                interaction.guild.id,
+                "moderacao_timeout_removido"
             ),
 
             buscarConfig(
@@ -671,15 +703,27 @@ async function mostrarModeracao(interaction) {
                         : "🔴 Desativado"
                 }\n\n` +
 
+                `🔓 **Desbanimentos:** ${
+                    unban
+                        ? `🟢 Ativado → <#${unban.canal_id}>`
+                        : "🔴 Desativado"
+                }\n\n` +
+
                 `👢 **Expulsões:** ${
                     kick
                         ? `🟢 Ativado → <#${kick.canal_id}>`
                         : "🔴 Desativado"
                 }\n\n` +
 
-                `🔇 **Timeouts:** ${
+                `🔇 **Timeout aplicado:** ${
                     timeout
                         ? `🟢 Ativado → <#${timeout.canal_id}>`
+                        : "🔴 Desativado"
+                }\n\n` +
+
+                `🔊 **Timeout removido:** ${
+                    timeoutRemovido
+                        ? `🟢 Ativado → <#${timeoutRemovido.canal_id}>`
                         : "🔴 Desativado"
                 }\n\n` +
 
@@ -709,6 +753,18 @@ async function mostrarModeracao(interaction) {
 
                     new ButtonBuilder()
                         .setCustomId(
+                            "logs_moderacao_unban"
+                        )
+                        .setLabel("Desbanimentos")
+                        .setEmoji("🔓")
+                        .setStyle(
+                            unban
+                                ? ButtonStyle.Success
+                                : ButtonStyle.Secondary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
                             "logs_moderacao_kick"
                         )
                         .setLabel("Expulsões")
@@ -717,22 +773,34 @@ async function mostrarModeracao(interaction) {
                             kick
                                 ? ButtonStyle.Success
                                 : ButtonStyle.Secondary
-                        ),
+                        )
+                ),
 
+                new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
                         .setCustomId(
                             "logs_moderacao_timeout"
                         )
-                        .setLabel("Timeouts")
+                        .setLabel("Timeout aplicado")
                         .setEmoji("🔇")
                         .setStyle(
                             timeout
                                 ? ButtonStyle.Success
                                 : ButtonStyle.Secondary
-                        )
-                ),
+                        ),
 
-                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            "logs_moderacao_timeout_removido"
+                        )
+                        .setLabel("Timeout removido")
+                        .setEmoji("🔊")
+                        .setStyle(
+                            timeoutRemovido
+                                ? ButtonStyle.Success
+                                : ButtonStyle.Secondary
+                        ),
+
                     new ButtonBuilder()
                         .setCustomId(
                             "logs_moderacao_clear"
@@ -745,8 +813,10 @@ async function mostrarModeracao(interaction) {
                             clear
                                 ? ButtonStyle.Success
                                 : ButtonStyle.Secondary
-                        ),
+                        )
+                ),
 
+                new ActionRowBuilder().addComponents(
                     criarBotaoVoltar(
                         "logs_voltar"
                     )
@@ -1073,6 +1143,11 @@ async function mostrarStatus(
                 "moderacao_ban"
             );
 
+        const unban =
+            buscarCanal(
+                "moderacao_unban"
+            );
+
         const kick =
             buscarCanal(
                 "moderacao_kick"
@@ -1081,6 +1156,11 @@ async function mostrarStatus(
         const timeout =
             buscarCanal(
                 "moderacao_timeout"
+            );
+
+        const timeoutRemovido =
+            buscarCanal(
+                "moderacao_timeout_removido"
             );
 
         const clear =
@@ -1152,15 +1232,27 @@ async function mostrarStatus(
                     : "❌ Desativado"
             }\n` +
 
+            `🔓 Desbanimentos → ${
+                unban
+                    ? `<#${unban.canal_id}>`
+                    : "❌ Desativado"
+            }\n` +
+
             `👢 Expulsões → ${
                 kick
                     ? `<#${kick.canal_id}>`
                     : "❌ Desativado"
             }\n` +
 
-            `🔇 Timeouts → ${
+            `🔇 Timeout aplicado → ${
                 timeout
                     ? `<#${timeout.canal_id}>`
+                    : "❌ Desativado"
+            }\n` +
+
+            `🔊 Timeout removido → ${
+                timeoutRemovido
+                    ? `<#${timeoutRemovido.canal_id}>`
                     : "❌ Desativado"
             }\n` +
 
@@ -1844,6 +1936,16 @@ module.exports = {
 
                 if (
                     interaction.customId ===
+                    "logs_moderacao_unban"
+                ) {
+                    return mostrarConfiguracaoSubtipo(
+                        interaction,
+                        "moderacao_unban"
+                    );
+                }
+
+                if (
+                    interaction.customId ===
                     "logs_moderacao_kick"
                 ) {
                     return mostrarConfiguracaoSubtipo(
@@ -1859,6 +1961,16 @@ module.exports = {
                     return mostrarConfiguracaoSubtipo(
                         interaction,
                         "moderacao_timeout"
+                    );
+                }
+
+                if (
+                    interaction.customId ===
+                    "logs_moderacao_timeout_removido"
+                ) {
+                    return mostrarConfiguracaoSubtipo(
+                        interaction,
+                        "moderacao_timeout_removido"
                     );
                 }
 
