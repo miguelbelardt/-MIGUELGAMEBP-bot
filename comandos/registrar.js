@@ -2599,6 +2599,7 @@ async function handleInteraction(interaction) {
                     `✅ Canal selecionado: <#${canalId}>`,
                 embeds: [],
                 components: [
+                    components: [
                     new ActionRowBuilder()
                         .addComponents(
                             new ButtonBuilder()
@@ -2610,7 +2611,7 @@ async function handleInteraction(interaction) {
                                 .setStyle(
                                     ButtonStyle.Secondary
                                 )
-                        ]
+                        )
                 ]
             });
 
