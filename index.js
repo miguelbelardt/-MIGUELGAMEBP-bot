@@ -5,7 +5,8 @@ const {
     REST,
     Routes,
     EmbedBuilder,
-    AttachmentBuilder
+    AttachmentBuilder,
+    AuditLogEvent
 } = require("discord.js");
 
 const http = require("http");
@@ -96,7 +97,8 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildModeration
     ]
 });
 
@@ -923,6 +925,683 @@ client.on(
 
             console.error(
                 "❌ Erro no evento messageDeleteBulk:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// ✏️ EVENTO DE MENSAGEM EDITADA
+// =====================================================
+
+client.on(
+    "messageUpdate",
+    async (mensagemAntiga, mensagemNova) => {
+
+        try {
+
+            if (
+                !mensagemNova ||
+                !mensagemNova.guild
+            ) {
+                return;
+            }
+
+            if (
+                mensagemNova.author?.bot
+            ) {
+                return;
+            }
+
+            const conteudoAntigo =
+                mensagemAntiga?.content ||
+                "";
+
+            const conteudoNovo =
+                mensagemNova?.content ||
+                "";
+
+            if (
+                conteudoAntigo ===
+                conteudoNovo
+            ) {
+                return;
+            }
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "✏️ Mensagem editada"
+                    )
+                    .setDescription(
+                        `👤 **Autor:** <@${mensagemNova.author.id}>\n` +
+                        `📢 **Canal:** <#${mensagemNova.channel.id}>\n\n` +
+
+                        `📝 **Antes:**\n` +
+                        `> ${
+                            conteudoAntigo
+                                ? conteudoAntigo.substring(
+                                    0,
+                                    1800
+                                )
+                                : "[Conteúdo não disponível]"
+                        }\n\n` +
+
+                        `📝 **Depois:**\n` +
+                        `> ${
+                            conteudoNovo
+                                ? conteudoNovo.substring(
+                                    0,
+                                    1800
+                                )
+                                : "[Conteúdo não disponível]"
+                        }`
+                    )
+                    .setColor(
+                        0xFEE75C
+                    )
+                    .setTimestamp();
+
+            if (
+                mensagemNova.url
+            ) {
+
+                embed.setFooter({
+                    text:
+                        "🔗 Clique no título da mensagem para acessar"
+                });
+
+                embed.setTitle(
+                    "✏️ Mensagem editada"
+                );
+            }
+
+            await client.registrarLog(
+                mensagemNova.guild,
+                "mensagens_editadas",
+                embed
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento messageUpdate:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// 🔇 EVENTO DE TIMEOUT / ALTERAÇÃO DE MEMBRO
+// =====================================================
+
+client.on(
+    "guildMemberUpdate",
+    async (membroAntigo, membroNovo) => {
+
+        try {
+
+            if (
+                !membroNovo ||
+                !membroNovo.guild
+            ) {
+                return;
+            }
+
+            const timeoutAntigo =
+                membroAntigo.communicationDisabledUntilTimestamp;
+
+            const timeoutNovo =
+                membroNovo.communicationDisabledUntilTimestamp;
+
+            if (
+                timeoutAntigo ===
+                timeoutNovo
+            ) {
+                return;
+            }
+
+            const recebeuTimeout =
+                timeoutNovo &&
+                (
+                    !timeoutAntigo ||
+                    timeoutNovo >
+                        timeoutAntigo
+                );
+
+            const removeuTimeout =
+                !timeoutNovo &&
+                !!timeoutAntigo;
+
+            if (
+                !recebeuTimeout &&
+                !removeuTimeout
+            ) {
+                return;
+            }
+
+            let moderador =
+                null;
+
+            let motivo =
+                null;
+
+            try {
+
+                const registros =
+                    await membroNovo.guild.fetchAuditLogs({
+                        type:
+                            AuditLogEvent.MemberUpdate,
+                        limit:
+                            10
+                    });
+
+                const registro =
+                    registros.entries.find(
+                        entrada =>
+                            entrada.target?.id ===
+                                membroNovo.id &&
+                            Date.now() -
+                                entrada.createdTimestamp <
+                                10000
+                    );
+
+                if (
+                    registro
+                ) {
+
+                    moderador =
+                        registro.executor;
+
+                    motivo =
+                        registro.reason ||
+                        null;
+                }
+
+            } catch (erroAudit) {
+
+                console.warn(
+                    "⚠️ Não foi possível consultar o Audit Log do timeout:",
+                    erroAudit
+                );
+            }
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        recebeuTimeout
+                            ? "🔇 Membro recebeu timeout"
+                            : "🔊 Timeout removido"
+                    )
+                    .setDescription(
+                        `${recebeuTimeout
+                            ? "🔇"
+                            : "🔊"
+                        } ${
+                            membroNovo.user
+                        } ${
+                            recebeuTimeout
+                                ? "recebeu um timeout."
+                                : "teve o timeout removido."
+                        }`
+                    )
+                    .addFields(
+                        {
+                            name:
+                                "👤 Membro",
+
+                            value:
+                                `${membroNovo.user.tag}\n\`${membroNovo.id}\``
+                        },
+                        {
+                            name:
+                                "⏱️ Timeout",
+
+                            value:
+                                recebeuTimeout
+                                    ? `<t:${Math.floor(
+                                        timeoutNovo / 1000
+                                    )}:F>\n<t:${Math.floor(
+                                        timeoutNovo / 1000
+                                    )}:R>`
+                                    : "Removido"
+                        }
+                    )
+                    .setColor(
+                        recebeuTimeout
+                            ? 0xED4245
+                            : 0x57F287
+                    )
+                    .setTimestamp();
+
+            if (
+                moderador
+            ) {
+
+                embed.addFields({
+                    name:
+                        "🛡️ Moderador",
+
+                    value:
+                        `${moderador}\n\`${moderador.id}\``
+                });
+            }
+
+            if (
+                motivo
+            ) {
+
+                embed.addFields({
+                    name:
+                        "📝 Motivo",
+
+                    value:
+                        motivo.substring(
+                            0,
+                            1024
+                        )
+                });
+            }
+
+            await client.registrarLog(
+                membroNovo.guild,
+                recebeuTimeout
+                    ? "moderacao_timeout"
+                    : "moderacao_timeout_removido",
+                embed
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento guildMemberUpdate:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// 🔨 EVENTO DE BANIMENTO
+// =====================================================
+
+client.on(
+    "guildBanAdd",
+    async ban => {
+
+        try {
+
+            if (
+                !ban ||
+                !ban.guild ||
+                !ban.user
+            ) {
+                return;
+            }
+
+            let moderador =
+                null;
+
+            let motivo =
+                null;
+
+            try {
+
+                const registros =
+                    await ban.guild.fetchAuditLogs({
+                        type:
+                            AuditLogEvent.MemberBanAdd,
+                        limit:
+                            10
+                    });
+
+                const registro =
+                    registros.entries.find(
+                        entrada =>
+                            entrada.target?.id ===
+                                ban.user.id &&
+                            Date.now() -
+                                entrada.createdTimestamp <
+                                10000
+                    );
+
+                if (
+                    registro
+                ) {
+
+                    moderador =
+                        registro.executor;
+
+                    motivo =
+                        registro.reason ||
+                        null;
+                }
+
+            } catch (erroAudit) {
+
+                console.warn(
+                    "⚠️ Não foi possível consultar o Audit Log do banimento:",
+                    erroAudit
+                );
+            }
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "🔨 Membro banido"
+                    )
+                    .setDescription(
+                        `${ban.user} foi banido do servidor.`
+                    )
+                    .addFields({
+                        name:
+                            "👤 Membro",
+
+                        value:
+                            `${ban.user.tag}\n\`${ban.user.id}\``
+                    })
+                    .setColor(
+                        0xED4245
+                    )
+                    .setTimestamp();
+
+            if (
+                moderador
+            ) {
+
+                embed.addFields({
+                    name:
+                        "🛡️ Moderador",
+
+                    value:
+                        `${moderador}\n\`${moderador.id}\``
+                });
+            }
+
+            if (
+                motivo
+            ) {
+
+                embed.addFields({
+                    name:
+                        "📝 Motivo",
+
+                    value:
+                        motivo.substring(
+                            0,
+                            1024
+                        )
+                });
+            }
+
+            await client.registrarLog(
+                ban.guild,
+                "moderacao_ban",
+                embed
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento guildBanAdd:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// 🔓 EVENTO DE DESBANIMENTO
+// =====================================================
+
+client.on(
+    "guildBanRemove",
+    async ban => {
+
+        try {
+
+            if (
+                !ban ||
+                !ban.guild ||
+                !ban.user
+            ) {
+                return;
+            }
+
+            let moderador =
+                null;
+
+            let motivo =
+                null;
+
+            try {
+
+                const registros =
+                    await ban.guild.fetchAuditLogs({
+                        type:
+                            AuditLogEvent.MemberBanRemove,
+                        limit:
+                            10
+                    });
+
+                const registro =
+                    registros.entries.find(
+                        entrada =>
+                            entrada.target?.id ===
+                                ban.user.id &&
+                            Date.now() -
+                                entrada.createdTimestamp <
+                                10000
+                    );
+
+                if (
+                    registro
+                ) {
+
+                    moderador =
+                        registro.executor;
+
+                    motivo =
+                        registro.reason ||
+                        null;
+                }
+
+            } catch (erroAudit) {
+
+                console.warn(
+                    "⚠️ Não foi possível consultar o Audit Log do desbanimento:",
+                    erroAudit
+                );
+            }
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "🔓 Membro desbanido"
+                    )
+                    .setDescription(
+                        `${ban.user} foi desbanido do servidor.`
+                    )
+                    .addFields({
+                        name:
+                            "👤 Usuário",
+
+                        value:
+                            `${ban.user.tag}\n\`${ban.user.id}\``
+                    })
+                    .setColor(
+                        0x57F287
+                    )
+                    .setTimestamp();
+
+            if (
+                moderador
+            ) {
+
+                embed.addFields({
+                    name:
+                        "🛡️ Moderador",
+
+                    value:
+                        `${moderador}\n\`${moderador.id}\``
+                });
+            }
+
+            if (
+                motivo
+            ) {
+
+                embed.addFields({
+                    name:
+                        "📝 Motivo",
+
+                    value:
+                        motivo.substring(
+                            0,
+                            1024
+                        )
+                });
+            }
+
+            await client.registrarLog(
+                ban.guild,
+                "moderacao_unban",
+                embed
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento guildBanRemove:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
+// 👢 EVENTO DE SAÍDA / KICK
+// =====================================================
+
+client.on(
+    "guildMemberRemove",
+    async membro => {
+
+        try {
+
+            if (
+                !membro ||
+                !membro.guild
+            ) {
+                return;
+            }
+
+            let registroKick =
+                null;
+
+            try {
+
+                const registros =
+                    await membro.guild.fetchAuditLogs({
+                        type:
+                            AuditLogEvent.MemberKick,
+                        limit:
+                            10
+                    });
+
+                registroKick =
+                    registros.entries.find(
+                        entrada =>
+                            entrada.target?.id ===
+                                membro.id &&
+                            Date.now() -
+                                entrada.createdTimestamp <
+                                10000
+                    );
+
+            } catch (erroAudit) {
+
+                console.warn(
+                    "⚠️ Não foi possível consultar o Audit Log da expulsão:",
+                    erroAudit
+                );
+            }
+
+            if (
+                !registroKick
+            ) {
+                return;
+            }
+
+            const moderador =
+                registroKick.executor ||
+                null;
+
+            const motivo =
+                registroKick.reason ||
+                null;
+
+            const embed =
+                new EmbedBuilder()
+                    .setTitle(
+                        "👢 Membro expulso"
+                    )
+                    .setDescription(
+                        `${membro.user} foi expulso do servidor.`
+                    )
+                    .addFields({
+                        name:
+                            "👤 Membro",
+
+                        value:
+                            `${membro.user.tag}\n\`${membro.id}\``
+                    })
+                    .setColor(
+                        0xE67E22
+                    )
+                    .setTimestamp();
+
+            if (
+                moderador
+            ) {
+
+                embed.addFields({
+                    name:
+                        "🛡️ Moderador",
+
+                    value:
+                        `${moderador}\n\`${moderador.id}\``
+                });
+            }
+
+            if (
+                motivo
+            ) {
+
+                embed.addFields({
+                    name:
+                        "📝 Motivo",
+
+                    value:
+                        motivo.substring(
+                            0,
+                            1024
+                        )
+                });
+            }
+
+            await client.registrarLog(
+                membro.guild,
+                "moderacao_kick",
+                embed
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no evento guildMemberRemove:",
                 erro
             );
         }
