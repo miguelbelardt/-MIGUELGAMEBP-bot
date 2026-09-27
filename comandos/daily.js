@@ -42,7 +42,7 @@ const notificacoesAgendadas = new Map();
 // 🔥 SEQUÊNCIA DO DAILY
 // =====================================================
 
-// Evita executar o ALTER TABLE várias vezes.
+// Evita executar a verificação várias vezes.
 let sequenciaBancoPronta = false;
 let sequenciaBancoPromise = null;
 
@@ -56,22 +56,79 @@ async function garantirColunaSequencia() {
     }
 
     sequenciaBancoPromise = (async () => {
-        await pool.query(`
-            ALTER TABLE usuarios
-            ADD COLUMN IF NOT EXISTS
-            daily_sequencia BIGINT NOT NULL DEFAULT 0
-        `);
+
+        // =============================================
+        // 🔎 VERIFICAR SE A COLUNA JÁ EXISTE
+        // =============================================
+
+        const resultado =
+            await pool.query(`
+                SELECT COUNT(*) AS total
+                FROM information_schema.COLUMNS
+                WHERE
+                    TABLE_SCHEMA = DATABASE()
+                    AND TABLE_NAME = 'usuarios'
+                    AND COLUMN_NAME = 'daily_sequencia'
+            `);
+
+        const colunaExiste =
+            Number(
+                resultado.rows[0]?.total
+            ) > 0;
+
+        // =============================================
+        // ➕ CRIAR COLUNA CASO NÃO EXISTA
+        // =============================================
+
+        if (!colunaExiste) {
+
+            try {
+
+                await pool.query(`
+                    ALTER TABLE usuarios
+                    ADD COLUMN daily_sequencia BIGINT NOT NULL DEFAULT 0
+                `);
+
+                console.log(
+                    "🔥 Coluna daily_sequencia criada com sucesso."
+                );
+
+            } catch (erro) {
+
+                // Caso outro processo tenha criado
+                // a coluna ao mesmo tempo, não derruba o bot.
+                if (
+                    erro?.code === "ER_DUP_FIELDNAME" ||
+                    erro?.errno === 1060
+                ) {
+
+                    console.log(
+                        "🔥 Coluna daily_sequencia já existia."
+                    );
+
+                } else {
+
+                    throw erro;
+                }
+            }
+
+        } else {
+
+            console.log(
+                "🔥 Coluna daily_sequencia verificada com sucesso."
+            );
+        }
 
         sequenciaBancoPronta = true;
 
-        console.log(
-            "🔥 Coluna daily_sequencia verificada com sucesso."
-        );
     })();
 
     try {
+
         await sequenciaBancoPromise;
+
     } finally {
+
         sequenciaBancoPromise = null;
     }
 }
