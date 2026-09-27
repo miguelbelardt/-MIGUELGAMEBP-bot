@@ -20,75 +20,34 @@ const mysqlPool = mysql.createPool({
 // =====================================================
 // 🔄 COMPATIBILIDADE COM O CÓDIGO ANTIGO
 // =====================================================
-//
-// O projeto antigo usava PostgreSQL com:
-// $1, $2, $3...
-//
-// Aqui convertemos automaticamente para:
-// ?, ?, ?
-//
-// IMPORTANTE:
-// PostgreSQL permite reutilizar o mesmo placeholder:
-//
-// $1, $1
-//
-// No MySQL, depois da conversão:
-//
-// ?, ?
-//
-// precisa receber o valor duas vezes.
-//
-// O conversor abaixo faz isso automaticamente.
-//
-// Exemplo:
-//
-// SQL:
-// VALUES ($1, $2, $2)
-//
-// Parâmetros:
-// ["abc", "123"]
-//
-// Resultado:
-//
-// SQL:
-// VALUES (?, ?, ?)
-//
-// Parâmetros:
-// ["abc", "123", "123"]
-//
-// =====================================================
 
 function converterPlaceholders(
     sql,
     parametros = []
 ) {
-
     const novosParametros = [];
 
-    const sqlMySQL =
-        sql.replace(
-            /\$(\d+)/g,
-            (_, numero) => {
+    const sqlMySQL = sql.replace(
+        /\$(\d+)/g,
+        (_, numero) => {
+            const indice = Number(numero) - 1;
 
-                const indice =
-                    Number(numero) - 1;
-
-                if (
-                    indice < 0 ||
-                    indice >= parametros.length
-                ) {
-                    throw new Error(
-                        `❌ Parâmetro $${numero} não foi fornecido para a consulta SQL.`
-                    );
-                }
-
-                novosParametros.push(
-                    parametros[indice]
+            if (
+                indice < 0 ||
+                indice >= parametros.length
+            ) {
+                throw new Error(
+                    `❌ Parâmetro $${numero} não foi fornecido para a consulta SQL.`
                 );
-
-                return "?";
             }
-        );
+
+            novosParametros.push(
+                parametros[indice]
+            );
+
+            return "?";
+        }
+    );
 
     return {
         sqlMySQL,
@@ -97,12 +56,10 @@ function converterPlaceholders(
 }
 
 const pool = {
-
     async query(
         sql,
         parametros = []
     ) {
-
         const convertido =
             converterPlaceholders(
                 sql,
@@ -116,12 +73,10 @@ const pool = {
             );
 
         if (Array.isArray(resultado)) {
-
             return {
                 rows: resultado,
                 rowCount: resultado.length
             };
-
         }
 
         return {
@@ -146,7 +101,6 @@ async function colunaExiste(
     tabela,
     coluna
 ) {
-
     const [resultado] =
         await mysqlPool.query(
             `
@@ -173,7 +127,6 @@ async function adicionarColunaSeNaoExiste(
     coluna,
     definicao
 ) {
-
     const existe =
         await colunaExiste(
             tabela,
@@ -181,7 +134,6 @@ async function adicionarColunaSeNaoExiste(
         );
 
     if (!existe) {
-
         await mysqlPool.query(
             `
             ALTER TABLE \`${tabela}\`
@@ -465,10 +417,6 @@ async function inicializarBanco() {
         )
     `);
 
-    // ================================
-    // 🔧 MIGRAÇÕES DOS TICKETS
-    // ================================
-
     await adicionarColunaSeNaoExiste(
         "ticket_config",
         "categoria_id",
@@ -685,9 +633,9 @@ async function inicializarBanco() {
         WHERE atualizado_em = 0
     `, [agoraMs()]);
 
-    // ================================
+    // =================================================
     // 📝 SISTEMA DE REGISTRO
-    // ================================
+    // =================================================
 
     await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS registro_config (
@@ -702,6 +650,24 @@ async function inicializarBanco() {
             configurado BOOLEAN
                 NOT NULL DEFAULT FALSE,
 
+            -- 🎨 PAINEL INICIAL
+            painel_titulo VARCHAR(256)
+                DEFAULT '📝 Registro',
+
+            painel_descricao TEXT
+                DEFAULT 'Clique no botão abaixo para começar seu registro.',
+
+            painel_imagem TEXT,
+
+            painel_thumbnail TEXT,
+
+            painel_rodape VARCHAR(2048),
+
+            painel_rodape_icone TEXT,
+
+            painel_botao_texto VARCHAR(80)
+                NOT NULL DEFAULT 'Registrar',
+
             criado_em BIGINT NOT NULL DEFAULT (
                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
             ),
@@ -711,6 +677,129 @@ async function inicializarBanco() {
             )
         )
     `);
+
+    // =================================================
+    // 🔧 MIGRAÇÕES DO REGISTRO
+    // =================================================
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "canal_id",
+        "VARCHAR(30)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "mensagem_id",
+        "VARCHAR(30)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "paginas",
+        "INT NOT NULL DEFAULT 1"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "configurado",
+        "BOOLEAN NOT NULL DEFAULT FALSE"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_titulo",
+        "VARCHAR(256) DEFAULT '📝 Registro'"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_descricao",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_imagem",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_thumbnail",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_rodape",
+        "VARCHAR(2048)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_rodape_icone",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "painel_botao_texto",
+        "VARCHAR(80) NOT NULL DEFAULT 'Registrar'"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "criado_em",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "atualizado_em",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
+
+    await mysqlPool.query(`
+        UPDATE registro_config
+        SET painel_titulo = '📝 Registro'
+        WHERE painel_titulo IS NULL
+        OR painel_titulo = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE registro_config
+        SET painel_descricao =
+            'Clique no botão abaixo para começar seu registro.'
+        WHERE painel_descricao IS NULL
+        OR painel_descricao = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE registro_config
+        SET painel_botao_texto = 'Registrar'
+        WHERE painel_botao_texto IS NULL
+        OR painel_botao_texto = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE registro_config
+        SET paginas = 1
+        WHERE paginas IS NULL
+        OR paginas < 1
+    `);
+
+    await mysqlPool.query(`
+        UPDATE registro_config
+        SET criado_em = ?
+        WHERE criado_em = 0
+    `, [agoraMs()]);
+
+    await mysqlPool.query(`
+        UPDATE registro_config
+        SET atualizado_em = ?
+        WHERE atualizado_em = 0
+    `, [agoraMs()]);
 
     // ================================
     // 📄 PÁGINAS DO REGISTRO
@@ -2278,6 +2367,10 @@ async function getRegistroConfig(
     );
 }
 
+// =====================================================
+// 💾 SALVAR CONFIGURAÇÃO DO REGISTRO
+// =====================================================
+
 async function salvarRegistroConfig(
     guildId,
     canalId = null,
@@ -2339,6 +2432,10 @@ async function salvarRegistroConfig(
     );
 }
 
+// =====================================================
+// 📺 ATUALIZAR CANAL DO REGISTRO
+// =====================================================
+
 async function atualizarCanalRegistro(
     guildId,
     canalId
@@ -2380,6 +2477,10 @@ async function atualizarCanalRegistro(
     );
 }
 
+// =====================================================
+// 💬 SALVAR MENSAGEM DO REGISTRO
+// =====================================================
+
 async function salvarMensagemRegistro(
     guildId,
     mensagemId
@@ -2411,6 +2512,143 @@ async function salvarMensagemRegistro(
         `,
         [
             mensagemId,
+            agoraMs(),
+            guildId
+        ]
+    );
+
+    return getRegistroConfig(
+        guildId
+    );
+}
+
+// =====================================================
+// 🎨 SALVAR PAINEL INICIAL
+// =====================================================
+
+async function salvarPainelInicial(
+    guildId,
+    dados = {}
+) {
+
+    const config =
+        await getRegistroConfig(
+            guildId
+        );
+
+    if (!config) {
+
+        await salvarRegistroConfig(
+            guildId,
+            null,
+            null,
+            1,
+            false
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE registro_config
+        SET
+            painel_titulo = $1,
+            painel_descricao = $2,
+            painel_imagem = $3,
+            painel_thumbnail = $4,
+            painel_rodape = $5,
+            painel_rodape_icone = $6,
+            atualizado_em = $7
+        WHERE guild_id = $8
+        `,
+        [
+            dados.painel_titulo ??
+                dados.titulo ??
+                "📝 Registro",
+
+            dados.painel_descricao ??
+                dados.descricao ??
+                "Clique no botão abaixo para começar seu registro.",
+
+            dados.painel_imagem ??
+                dados.imagem ??
+                null,
+
+            dados.painel_thumbnail ??
+                dados.thumbnail ??
+                null,
+
+            dados.painel_rodape ??
+                dados.rodape ??
+                null,
+
+            dados.painel_rodape_icone ??
+                dados.rodape_icone ??
+                null,
+
+            agoraMs(),
+
+            guildId
+        ]
+    );
+
+    return getRegistroConfig(
+        guildId
+    );
+}
+
+// =====================================================
+// 🔘 SALVAR BOTÃO DO PAINEL INICIAL
+// =====================================================
+
+async function salvarBotaoPainelInicial(
+    guildId,
+    texto
+) {
+
+    const config =
+        await getRegistroConfig(
+            guildId
+        );
+
+    if (!config) {
+
+        await salvarRegistroConfig(
+            guildId,
+            null,
+            null,
+            1,
+            false
+        );
+    }
+
+    texto =
+        String(
+            texto ||
+            "Registrar"
+        ).trim();
+
+    if (!texto) {
+        texto = "Registrar";
+    }
+
+    if (texto.length > 80) {
+        texto =
+            texto.substring(
+                0,
+                80
+            );
+    }
+
+    await pool.query(
+        `
+        UPDATE registro_config
+        SET
+            painel_botao_texto = $1,
+            atualizado_em = $2
+        WHERE guild_id = $3
+        `,
+        [
+            texto,
             agoraMs(),
             guildId
         ]
@@ -3087,6 +3325,8 @@ module.exports = {
     salvarRegistroConfig,
     atualizarCanalRegistro,
     salvarMensagemRegistro,
+    salvarPainelInicial,
+    salvarBotaoPainelInicial,
 
     // 📄 Páginas
     criarRegistroPagina,
