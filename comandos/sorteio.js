@@ -26,20 +26,25 @@ async function garantirColunaSorteios(
     nomeColuna,
     definicao
 ) {
-    const resultado = await pool.query(
-        `
-        SELECT COUNT(*) AS total
-        FROM information_schema.COLUMNS
-        WHERE
-            TABLE_SCHEMA = DATABASE()
-            AND TABLE_NAME = 'sorteios'
-            AND COLUMN_NAME = ?
-        `,
-        [nomeColuna]
-    );
+    const resultado =
+        await pool.query(
+            `
+            SELECT COUNT(*) AS total
+            FROM information_schema.COLUMNS
+            WHERE
+                TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = 'sorteios'
+                AND COLUMN_NAME = $1
+            `,
+            [
+                nomeColuna
+            ]
+        );
 
     const colunaExiste =
-        Number(resultado.rows[0]?.total) > 0;
+        Number(
+            resultado.rows[0]?.total
+        ) > 0;
 
     if (colunaExiste) {
         return;
@@ -56,15 +61,15 @@ async function garantirColunaSorteios(
         );
 
     } catch (erro) {
-        // Caso duas inicializações tentem criar
-        // a coluna ao mesmo tempo.
         if (
-            erro?.code === "ER_DUP_FIELDNAME" ||
+            erro?.code ===
+                "ER_DUP_FIELDNAME" ||
             erro?.errno === 1060
         ) {
             console.log(
                 `💾 Coluna ${nomeColuna} já existia.`
             );
+
             return;
         }
 
@@ -110,7 +115,10 @@ async function prepararBanco() {
 // ⚙️ CONFIG
 // ================================
 
-function criarConfig(guildId, usuarioId) {
+function criarConfig(
+    guildId,
+    usuarioId
+) {
     return {
         guildId,
         usuarioId,
@@ -138,18 +146,33 @@ function criarConfig(guildId, usuarioId) {
     };
 }
 
-function normalizarCor(cor) {
-    if (!cor) return 0x5865F2;
-
-    const valor = String(cor)
-        .trim()
-        .replace("#", "");
-
-    if (!/^[0-9A-Fa-f]{6}$/.test(valor)) {
+function normalizarCor(
+    cor
+) {
+    if (!cor) {
         return 0x5865F2;
     }
 
-    return parseInt(valor, 16);
+    const valor =
+        String(cor)
+            .trim()
+            .replace(
+                "#",
+                ""
+            );
+
+    if (
+        !/^[0-9A-Fa-f]{6}$/.test(
+            valor
+        )
+    ) {
+        return 0x5865F2;
+    }
+
+    return parseInt(
+        valor,
+        16
+    );
 }
 
 // ================================
@@ -166,27 +189,49 @@ function criarPainelSorteio(
             .setCustomId(
                 `sorteio_data_${usuarioId}`
             )
-            .setLabel("Data e horário")
-            .setEmoji("📅")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(encerrado),
+            .setLabel(
+                "Data e horário"
+            )
+            .setEmoji(
+                "📅"
+            )
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+            .setDisabled(
+                encerrado
+            ),
 
         new ButtonBuilder()
             .setCustomId(
                 `sorteio_participantes_${usuarioId}`
             )
-            .setLabel("Participantes")
-            .setEmoji("👥")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(encerrado),
+            .setLabel(
+                "Participantes"
+            )
+            .setEmoji(
+                "👥"
+            )
+            .setStyle(
+                ButtonStyle.Secondary
+            )
+            .setDisabled(
+                encerrado
+            ),
 
         new ButtonBuilder()
             .setCustomId(
                 `sorteio_preview_${usuarioId}`
             )
-            .setLabel("Visualizar sorteio")
-            .setEmoji("👀")
-            .setStyle(ButtonStyle.Success),
+            .setLabel(
+                "Visualizar sorteio"
+            )
+            .setEmoji(
+                "👀"
+            )
+            .setStyle(
+                ButtonStyle.Success
+            ),
 
         new ButtonBuilder()
             .setCustomId(
@@ -202,8 +247,12 @@ function criarPainelSorteio(
                     ? "✏️"
                     : "🚀"
             )
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(encerrado)
+            .setStyle(
+                ButtonStyle.Primary
+            )
+            .setDisabled(
+                encerrado
+            )
     ];
 
     if (enviado) {
@@ -212,61 +261,103 @@ function criarPainelSorteio(
                 .setCustomId(
                     `sorteio_encerrar_${usuarioId}`
                 )
-                .setLabel("Encerrar sorteio")
-                .setEmoji("⏹️")
-                .setStyle(ButtonStyle.Danger)
-                .setDisabled(encerrado)
+                .setLabel(
+                    "Encerrar sorteio"
+                )
+                .setEmoji(
+                    "⏹️"
+                )
+                .setStyle(
+                    ButtonStyle.Danger
+                )
+                .setDisabled(
+                    encerrado
+                )
         );
     }
 
     return [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_config_${usuarioId}`
-                )
-                .setLabel("Configurar")
-                .setEmoji("⚙️")
-                .setStyle(ButtonStyle.Primary)
-                .setDisabled(encerrado),
+        new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(
+                        `sorteio_config_${usuarioId}`
+                    )
+                    .setLabel(
+                        "Configurar"
+                    )
+                    .setEmoji(
+                        "⚙️"
+                    )
+                    .setStyle(
+                        ButtonStyle.Primary
+                    )
+                    .setDisabled(
+                        encerrado
+                    ),
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_canal_${usuarioId}`
-                )
-                .setLabel("Escolher canal")
-                .setEmoji("📢")
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(enviado || encerrado),
+                new ButtonBuilder()
+                    .setCustomId(
+                        `sorteio_canal_${usuarioId}`
+                    )
+                    .setLabel(
+                        "Escolher canal"
+                    )
+                    .setEmoji(
+                        "📢"
+                    )
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    )
+                    .setDisabled(
+                        enviado ||
+                        encerrado
+                    ),
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `sorteio_vencedores_${usuarioId}`
-                )
-                .setLabel("Vencedores")
-                .setEmoji("🏆")
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(encerrado)
-        ),
+                new ButtonBuilder()
+                    .setCustomId(
+                        `sorteio_vencedores_${usuarioId}`
+                    )
+                    .setLabel(
+                        "Vencedores"
+                    )
+                    .setEmoji(
+                        "🏆"
+                    )
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    )
+                    .setDisabled(
+                        encerrado
+                    )
+            ),
 
-        new ActionRowBuilder().addComponents(
-            ...botoesSegundaLinha
-        )
+        new ActionRowBuilder()
+            .addComponents(
+                ...botoesSegundaLinha
+            )
     ];
 }
 
-function criarEmbedPainel(config) {
-    const encerrado = Boolean(
-        config.sorteioEncerrado
-    );
+function criarEmbedPainel(
+    config
+) {
+    const encerrado =
+        Boolean(
+            config.sorteioEncerrado
+        );
 
     return new EmbedBuilder()
         .setColor(
             encerrado
                 ? 0xED4245
-                : normalizarCor(config.cor)
+                : normalizarCor(
+                    config.cor
+                )
         )
-        .setTitle("🎉 Criador de Sorteio")
+        .setTitle(
+            "🎉 Criador de Sorteio"
+        )
         .setDescription(
             encerrado
                 ? "🔴 Este sorteio já foi encerrado."
@@ -291,15 +382,21 @@ function criarEmbedPainel(config) {
                 name: "🎨 Cor",
                 value:
                     `#${String(
-                        config.cor || "5865F2"
-                    ).replace("#", "")}`,
+                        config.cor ||
+                        "5865F2"
+                    ).replace(
+                        "#",
+                        ""
+                    )}`,
                 inline: true
             },
             {
                 name: "🏆 Vencedores",
-                value: String(
-                    config.vencedores || 1
-                ),
+                value:
+                    String(
+                        config.vencedores ||
+                        1
+                    ),
                 inline: true
             },
             {
@@ -351,7 +448,9 @@ function criarEmbedPreview(
             .setColor(
                 encerrado
                     ? 0xED4245
-                    : normalizarCor(config.cor)
+                    : normalizarCor(
+                        config.cor
+                    )
             )
             .setTitle(
                 `🎉 ${
@@ -372,9 +471,11 @@ function criarEmbedPreview(
             )
             .addFields({
                 name: "🏆 Vencedores",
-                value: String(
-                    config.vencedores || 1
-                ),
+                value:
+                    String(
+                        config.vencedores ||
+                        1
+                    ),
                 inline: true
             });
 
@@ -445,7 +546,9 @@ function criarBotoesSorteio(
                     ? ButtonStyle.Secondary
                     : ButtonStyle.Success
             )
-            .setDisabled(encerrado)
+            .setDisabled(
+                encerrado
+            )
     ];
 
     if (mostrarParticipantes) {
@@ -457,7 +560,9 @@ function criarBotoesSorteio(
                 .setLabel(
                     "Ver participantes"
                 )
-                .setEmoji("👥")
+                .setEmoji(
+                    "👥"
+                )
                 .setStyle(
                     ButtonStyle.Secondary
                 )
@@ -487,13 +592,17 @@ function criarBotoesPreview(
             .setLabel(
                 "Participar"
             )
-            .setEmoji("🎟️")
+            .setEmoji(
+                "🎟️"
+            )
             .setStyle(
                 ButtonStyle.Success
             )
     ];
 
-    if (config.mostrarParticipantes) {
+    if (
+        config.mostrarParticipantes
+    ) {
         botoes.push(
             new ButtonBuilder()
                 .setCustomId(
@@ -504,7 +613,9 @@ function criarBotoesPreview(
                 .setLabel(
                     "Ver participantes"
                 )
-                .setEmoji("👥")
+                .setEmoji(
+                    "👥"
+                )
                 .setStyle(
                     ButtonStyle.Secondary
                 )
@@ -527,7 +638,10 @@ function converterData(
     data,
     horario
 ) {
-    if (!data || !horario) {
+    if (
+        !data ||
+        !horario
+    ) {
         return null;
     }
 
@@ -540,9 +654,14 @@ function converterData(
         return null;
     }
 
-    const dia = Number(match[1]);
-    const mes = Number(match[2]);
-    const ano = Number(match[3]);
+    const dia =
+        Number(match[1]);
+
+    const mes =
+        Number(match[2]);
+
+    const ano =
+        Number(match[3]);
 
     if (
         mes < 1 ||
@@ -555,7 +674,10 @@ function converterData(
     const horarioNormalizado =
         String(horario)
             .trim()
-            .replace(".", ":");
+            .replace(
+                ".",
+                ":"
+            );
 
     const horarioMatch =
         horarioNormalizado.match(
@@ -567,10 +689,14 @@ function converterData(
     }
 
     const hora =
-        Number(horarioMatch[1]);
+        Number(
+            horarioMatch[1]
+        );
 
     const minuto =
-        Number(horarioMatch[2]);
+        Number(
+            horarioMatch[2]
+        );
 
     if (
         hora < 0 ||
@@ -590,7 +716,9 @@ function converterData(
             )
         ).getUTCDate();
 
-    if (dia > diasNoMes) {
+    if (
+        dia > diasNoMes
+    ) {
         return null;
     }
 
@@ -599,14 +727,22 @@ function converterData(
         `T${String(hora).padStart(2, "0")}:${String(minuto).padStart(2, "0")}:00-03:00`;
 
     const timestamp =
-        Date.parse(iso);
+        Date.parse(
+            iso
+        );
 
-    if (Number.isNaN(timestamp)) {
+    if (
+        Number.isNaN(
+            timestamp
+        )
+    ) {
         return null;
     }
 
     const verificado =
-        formatarData(timestamp);
+        formatarData(
+            timestamp
+        );
 
     const dataEsperada =
         `${String(dia).padStart(2, "0")}/${String(mes).padStart(2, "0")}/${ano}`;
@@ -646,6 +782,7 @@ function formatarData(
                     year: "numeric"
                 }
             ),
+
         horario:
             data.toLocaleTimeString(
                 "pt-BR",
@@ -762,7 +899,9 @@ async function criarSorteio(
     const quantidadeVencedores =
         Math.min(
             Math.max(
-                Number(config.vencedores) || 1,
+                Number(
+                    config.vencedores
+                ) || 1,
                 1
             ),
             20
@@ -785,7 +924,17 @@ async function criarSorteio(
                 mostrar_participantes
             )
             VALUES (
-                ?,?,?,?,?,?,?,?,?,?,?
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8,
+                $9,
+                $10,
+                $11
             )
             `,
             [
@@ -819,9 +968,11 @@ async function criarSorteio(
             `
             SELECT *
             FROM sorteios
-            WHERE id = ?
+            WHERE id = $1
             `,
-            [id]
+            [
+                id
+            ]
         );
 
     return (
@@ -838,9 +989,11 @@ async function buscarSorteio(
             `
             SELECT *
             FROM sorteios
-            WHERE id = ?
+            WHERE id = $1
             `,
-            [id]
+            [
+                id
+            ]
         );
 
     return (
@@ -857,10 +1010,12 @@ async function buscarParticipantes(
             `
             SELECT user_id
             FROM sorteio_participantes
-            WHERE sorteio_id = ?
+            WHERE sorteio_id = $1
             ORDER BY user_id
             `,
-            [id]
+            [
+                id
+            ]
         );
 
     return resultado.rows.map(
@@ -1029,12 +1184,20 @@ async function mostrarParticipantes(
 
         const lista =
             participantes
-                .slice(0, 50)
+                .slice(
+                    0,
+                    50
+                )
                 .map(
-                    (userId, index) =>
+                    (
+                        userId,
+                        index
+                    ) =>
                         `**${index + 1}.** <@${userId}>`
                 )
-                .join("\n");
+                .join(
+                    "\n"
+                );
 
         let texto =
             `👥 **Participantes (${participantes.length})**\n\n${lista}`;
@@ -1083,7 +1246,9 @@ async function participarSorteio(
 ) {
     try {
         const sorteio =
-            await buscarSorteio(id);
+            await buscarSorteio(
+                id
+            );
 
         if (!sorteio) {
             return {
@@ -1121,7 +1286,10 @@ async function participarSorteio(
                 `
                 INSERT IGNORE INTO sorteio_participantes
                 (sorteio_id, user_id)
-                VALUES (?, ?)
+                VALUES (
+                    $1,
+                    $2
+                )
                 `,
                 [
                     id,
@@ -1213,8 +1381,8 @@ async function sairDoSorteio(
             await pool.query(
                 `
                 DELETE FROM sorteio_participantes
-                WHERE sorteio_id = ?
-                  AND user_id = ?
+                WHERE sorteio_id = $1
+                  AND user_id = $2
                 `,
                 [
                     id,
@@ -1328,9 +1496,9 @@ async function finalizarSorteio(
             `
             UPDATE sorteios
             SET encerrado = TRUE,
-                vencedores_ids = ?,
-                encerrado_em = ?
-            WHERE id = ?
+                vencedores_ids = $1,
+                encerrado_em = $2
+            WHERE id = $3
             `,
             [
                 JSON.stringify(
@@ -1342,8 +1510,12 @@ async function finalizarSorteio(
         );
 
         sorteio.encerrado = true;
+
         sorteio.vencedores_ids =
-            JSON.stringify(vencedores);
+            JSON.stringify(
+                vencedores
+            );
+
         sorteio.encerrado_em =
             Date.now();
 
@@ -1378,7 +1550,6 @@ async function finalizarSorteio(
             `${dataEncerramento.data} às ${dataEncerramento.horario}`;
 
         if (!vencedores.length) {
-
             const embedSemVencedores =
                 new EmbedBuilder()
                     .setColor(
@@ -1393,7 +1564,8 @@ async function finalizarSorteio(
                         `O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
                     )
                     .addFields({
-                        name: "📅 Encerrado em",
+                        name:
+                            "📅 Encerrado em",
                         value:
                             dataHoraEncerramento
                     });
@@ -1411,7 +1583,9 @@ async function finalizarSorteio(
                     id =>
                         `<@${id}>`
                 )
-                .join(", ");
+                .join(
+                    ", "
+                );
 
         const embed =
             new EmbedBuilder()
@@ -1428,13 +1602,16 @@ async function finalizarSorteio(
                     `🏆 **Vencedores:**\n${mencoes}`
                 )
                 .addFields({
-                    name: "📅 Encerrado em",
+                    name:
+                        "📅 Encerrado em",
                     value:
                         dataHoraEncerramento
                 });
 
         await canal.send({
-            embeds: [embed]
+            embeds: [
+                embed
+            ]
         });
 
     } catch (erro) {
@@ -1445,17 +1622,22 @@ async function finalizarSorteio(
     }
 }
 
-async function verificarSorteios(client) {
+async function verificarSorteios(
+    client
+) {
     try {
-        const resultado = await pool.query(
-            `
-            SELECT *
-            FROM sorteios
-            WHERE encerrado = FALSE
-              AND encerra_em <= $1
-            `,
-            [Date.now()]
-        );
+        const resultado =
+            await pool.query(
+                `
+                SELECT *
+                FROM sorteios
+                WHERE encerrado = FALSE
+                  AND encerra_em <= $1
+                `,
+                [
+                    Date.now()
+                ]
+            );
 
         for (
             const sorteio
@@ -1558,7 +1740,9 @@ module.exports = {
 
     data:
         new SlashCommandBuilder()
-            .setName("sorteio")
+            .setName(
+                "sorteio"
+            )
             .setDescription(
                 "Cria um novo sorteio."
             )
@@ -1577,7 +1761,9 @@ module.exports = {
         interaction
     ) {
 
-        if (!interaction.inGuild()) {
+        if (
+            !interaction.inGuild()
+        ) {
             return interaction.reply({
                 content:
                     "❌ Este comando só pode ser usado em servidores.",
@@ -1673,7 +1859,9 @@ module.exports = {
                     ""
                 );
 
-            if (id === "preview") {
+            if (
+                id === "preview"
+            ) {
                 return interaction.reply({
                     content:
                         "👥 A prévia está com a opção de participantes ativada, mas o sorteio ainda não foi enviado.\n\n🎟️ Ainda não existem participantes.",
@@ -1688,7 +1876,9 @@ module.exports = {
         }
 
         const partes =
-            customId.split("_");
+            customId.split(
+                "_"
+            );
 
         const donoId =
             partes[
@@ -1708,8 +1898,13 @@ module.exports = {
 
         const tipo =
             partes
-                .slice(0, -1)
-                .join("_");
+                .slice(
+                    0,
+                    -1
+                )
+                .join(
+                    "_"
+                );
 
         if (
             idsComDono.includes(
@@ -1742,7 +1937,9 @@ module.exports = {
             "sorteio_encerrar"
         ) {
 
-            if (!config.sorteioId) {
+            if (
+                !config.sorteioId
+            ) {
                 return interaction.reply({
                     content:
                         "❌ O sorteio ainda não foi enviado.",
@@ -1802,7 +1999,9 @@ module.exports = {
             "sorteio_config"
         ) {
 
-            if (config.sorteioId) {
+            if (
+                config.sorteioId
+            ) {
                 const sorteio =
                     await verificarCriador(
                         interaction,
@@ -1911,7 +2110,9 @@ module.exports = {
             "sorteio_data"
         ) {
 
-            if (config.sorteioId) {
+            if (
+                config.sorteioId
+            ) {
                 const sorteio =
                     await verificarCriador(
                         interaction,
@@ -1997,7 +2198,9 @@ module.exports = {
             "sorteio_participantes"
         ) {
 
-            if (config.sorteioId) {
+            if (
+                config.sorteioId
+            ) {
                 const sorteio =
                     await verificarCriador(
                         interaction,
@@ -2088,7 +2291,9 @@ module.exports = {
             "sorteio_vencedores"
         ) {
 
-            if (config.sorteioId) {
+            if (
+                config.sorteioId
+            ) {
                 const sorteio =
                     await verificarCriador(
                         interaction,
@@ -2116,7 +2321,9 @@ module.exports = {
                                 : "vencedores"
                         }`,
                     value:
-                        String(i),
+                        String(
+                            i
+                        ),
                     emoji:
                         i === 1
                             ? "🥇"
@@ -2168,7 +2375,6 @@ module.exports = {
             tipo ===
             "sorteio_preview"
         ) {
-
             return interaction.reply({
                 content:
                     "👀 **Prévia do sorteio:**",
@@ -2190,7 +2396,9 @@ module.exports = {
             "sorteio_enviar"
         ) {
 
-            if (config.sorteioId) {
+            if (
+                config.sorteioId
+            ) {
                 const sorteio =
                     await verificarCriador(
                         interaction,
@@ -2269,23 +2477,21 @@ module.exports = {
                 quantidadeVencedores;
 
             try {
-
                 if (
                     config.sorteioId
                 ) {
-
                     await pool.query(
                         `
                         UPDATE sorteios
-                        SET titulo = ?,
-                            descricao = ?,
-                            cor = ?,
-                            imagem = ?,
-                            thumbnail = ?,
-                            encerra_em = ?,
-                            vencedores = ?,
-                            mostrar_participantes = ?
-                        WHERE id = ?
+                        SET titulo = $1,
+                            descricao = $2,
+                            cor = $3,
+                            imagem = $4,
+                            thumbnail = $5,
+                            encerra_em = $6,
+                            vencedores = $7,
+                            mostrar_participantes = $8
+                        WHERE id = $9
                         `,
                         [
                             config.titulo,
@@ -2361,8 +2567,8 @@ module.exports = {
                 await pool.query(
                     `
                     UPDATE sorteios
-                    SET mensagem_id = ?
-                    WHERE id = ?
+                    SET mensagem_id = $1
+                    WHERE id = $2
                     `,
                     [
                         mensagem.id,
@@ -2391,7 +2597,6 @@ module.exports = {
                 });
 
             } catch (erro) {
-
                 console.error(
                     "❌ Erro ao criar/enviar sorteio:",
                     erro
@@ -2413,7 +2618,6 @@ module.exports = {
     async handleModal(
         interaction
     ) {
-
         const config =
             sessoes.get(
                 interaction.user.id
@@ -2451,7 +2655,6 @@ module.exports = {
             interaction.customId ===
             "sorteio_modal_config"
         ) {
-
             config.titulo =
                 interaction.fields
                     .getTextInputValue(
@@ -2524,7 +2727,6 @@ module.exports = {
             interaction.customId ===
             "sorteio_modal_data"
         ) {
-
             const data =
                 interaction.fields
                     .getTextInputValue(
@@ -2571,8 +2773,12 @@ module.exports = {
 
             const [hora, minuto] =
                 horario
-                    .split(":")
-                    .map(Number);
+                    .split(
+                        ":"
+                    )
+                    .map(
+                        Number
+                    );
 
             if (
                 hora > 23 ||
@@ -2626,7 +2832,6 @@ module.exports = {
     async handleSelect(
         interaction
     ) {
-
         const customId =
             interaction.customId;
 
@@ -2651,7 +2856,6 @@ module.exports = {
                 "sorteio_selecionar_canal_"
             )
         ) {
-
             const donoId =
                 customId.replace(
                     "sorteio_selecionar_canal_",
@@ -2695,7 +2899,6 @@ module.exports = {
                 "sorteio_selecionar_vencedores_"
             )
         ) {
-
             const donoId =
                 customId.replace(
                     "sorteio_selecionar_vencedores_",
@@ -2753,7 +2956,6 @@ module.exports = {
     async handleParticipation(
         interaction
     ) {
-
         const id =
             interaction.customId.replace(
                 "sorteio_participar_",
@@ -2793,7 +2995,9 @@ module.exports = {
                                 .setLabel(
                                     "Sair do sorteio"
                                 )
-                                .setEmoji("🚪")
+                                .setEmoji(
+                                    "🚪"
+                                )
                                 .setStyle(
                                     ButtonStyle.Danger
                                 )
