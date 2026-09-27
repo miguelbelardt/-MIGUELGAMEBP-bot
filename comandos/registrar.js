@@ -37,36 +37,6 @@ const {
 // =====================================================
 // 📝 SISTEMA DE REGISTRO
 // =====================================================
-//
-// FLUXO:
-//
-// /registrar
-//     ↓
-// Painel administrativo
-//     ↓
-// Configurar painel inicial
-//     ↓
-// Selecionar canal
-//     ↓
-// Configurar páginas
-//     ↓
-// Publicar
-//     ↓
-// Canal público:
-//     [ PAINEL INICIAL ]
-//     [ 📝 Registrar ]
-//             ↓
-//     Usuário clica
-//             ↓
-//     Páginas aparecem SOMENTE para ele
-//             ↓
-//     Página 1 → Página 2 → Página 3...
-//             ↓
-//     Botão de registro
-//             ↓
-//     Registro concluído
-//
-// =====================================================
 
 const MAX_PAGINAS = 6;
 const MAX_BOTOES = 5;
@@ -110,8 +80,7 @@ function pertenceAoServidor(interaction, guildId) {
     return Boolean(
         interaction.guild &&
         guildId &&
-        String(interaction.guild.id) ===
-            String(guildId)
+        String(interaction.guild.id) === String(guildId)
     );
 }
 
@@ -128,25 +97,17 @@ async function buscarConfiguracao(guildId) {
 // =====================================================
 
 async function buscarPaginas(guildId) {
-    const paginas =
-        await getRegistroPaginas(guildId);
+    const paginas = await getRegistroPaginas(guildId);
 
     return Array.isArray(paginas)
         ? paginas
         : [];
 }
 
-async function buscarPagina(
-    guildId,
-    numeroPagina
-) {
-    const numero =
-        Number(numeroPagina);
+async function buscarPagina(guildId, numeroPagina) {
+    const numero = Number(numeroPagina);
 
-    if (
-        !Number.isInteger(numero) ||
-        numero < 1
-    ) {
+    if (!Number.isInteger(numero) || numero < 1) {
         return null;
     }
 
@@ -161,10 +122,7 @@ async function buscarPagina(
 // =====================================================
 
 async function buscarBotoes(paginaId) {
-    const botoes =
-        await getRegistroBotoes(
-            paginaId
-        );
+    const botoes = await getRegistroBotoes(paginaId);
 
     return Array.isArray(botoes)
         ? botoes
@@ -175,13 +133,8 @@ async function buscarBotoes(paginaId) {
 // 🆕 GARANTIR CONFIGURAÇÃO
 // =====================================================
 
-async function garantirConfiguracao(
-    guildId
-) {
-    let config =
-        await buscarConfiguracao(
-            guildId
-        );
+async function garantirConfiguracao(guildId) {
+    let config = await buscarConfiguracao(guildId);
 
     if (!config) {
         await salvarRegistroConfig(
@@ -192,10 +145,7 @@ async function garantirConfiguracao(
             false
         );
 
-        config =
-            await buscarConfiguracao(
-                guildId
-            );
+        config = await buscarConfiguracao(guildId);
     }
 
     if (!config) {
@@ -204,10 +154,7 @@ async function garantirConfiguracao(
         );
     }
 
-    const paginas =
-        await buscarPaginas(
-            guildId
-        );
+    const paginas = await buscarPaginas(guildId);
 
     if (!paginas.length) {
         await criarRegistroPagina(
@@ -236,16 +183,12 @@ function urlValida(valor) {
     }
 
     try {
-        const url =
-            new URL(
-                String(valor).trim()
-            );
+        const url = new URL(String(valor).trim());
 
         return (
             url.protocol === "http:" ||
             url.protocol === "https:"
         );
-
     } catch {
         return false;
     }
@@ -256,44 +199,32 @@ function urlValida(valor) {
 // =====================================================
 
 function criarEmbedPagina(pagina) {
-    const embed =
-        new EmbedBuilder()
-            .setColor(0x5865F2);
+    const embed = new EmbedBuilder()
+        .setColor(0x5865F2);
 
     if (pagina.titulo) {
         embed.setTitle(
-            String(
-                pagina.titulo
-            ).substring(0, 256)
+            String(pagina.titulo).substring(0, 256)
         );
     }
 
     if (pagina.descricao) {
         embed.setDescription(
-            String(
-                pagina.descricao
-            ).substring(0, 4096)
+            String(pagina.descricao).substring(0, 4096)
         );
     }
 
     if (pagina.rodape) {
         const textoRodape =
-            String(
-                pagina.rodape
-            ).substring(0, 2048);
+            String(pagina.rodape).substring(0, 2048);
 
         if (
             pagina.rodape_icone &&
-            urlValida(
-                pagina.rodape_icone
-            )
+            urlValida(pagina.rodape_icone)
         ) {
             embed.setFooter({
                 text: textoRodape,
-                iconURL:
-                    String(
-                        pagina.rodape_icone
-                    )
+                iconURL: String(pagina.rodape_icone)
             });
         } else {
             embed.setFooter({
@@ -309,12 +240,9 @@ function criarEmbedPagina(pagina) {
 // 🎨 PAINEL INICIAL
 // =====================================================
 
-function criarEmbedPainelInicial(
-    config
-) {
-    const embed =
-        new EmbedBuilder()
-            .setColor(0x5865F2);
+function criarEmbedPainelInicial(config) {
+    const embed = new EmbedBuilder()
+        .setColor(0x5865F2);
 
     const titulo =
         config?.painel_titulo ||
@@ -325,46 +253,35 @@ function criarEmbedPainelInicial(
         "Clique no botão abaixo para começar seu registro.";
 
     embed.setTitle(
-        String(titulo)
-            .substring(0, 256)
+        String(titulo).substring(0, 256)
     );
 
     embed.setDescription(
-        String(descricao)
-            .substring(0, 4096)
+        String(descricao).substring(0, 4096)
     );
 
     if (
         config?.painel_imagem &&
-        urlValida(
-            config.painel_imagem
-        )
+        urlValida(config.painel_imagem)
     ) {
         embed.setImage(
-            String(
-                config.painel_imagem
-            )
+            String(config.painel_imagem)
         );
     }
 
     if (
         config?.painel_thumbnail &&
-        urlValida(
-            config.painel_thumbnail
-        )
+        urlValida(config.painel_thumbnail)
     ) {
         embed.setThumbnail(
-            String(
-                config.painel_thumbnail
-            )
+            String(config.painel_thumbnail)
         );
     }
 
     if (config?.painel_rodape) {
         embed.setFooter({
-            text: String(
-                config.painel_rodape
-            ).substring(0, 2048)
+            text: String(config.painel_rodape)
+                .substring(0, 2048)
         });
     }
 
@@ -389,13 +306,10 @@ function criarComponentesPainelInicial(
                 `registro_iniciar_${guildId}`
             )
             .setLabel(
-                String(texto)
-                    .substring(0, 80)
+                String(texto).substring(0, 80)
             )
             .setEmoji("📝")
-            .setStyle(
-                ButtonStyle.Primary
-            );
+            .setStyle(ButtonStyle.Primary);
 
     return [
         new ActionRowBuilder()
@@ -412,26 +326,18 @@ async function criarComponentesPagina(
     guildId,
     numeroPagina
 ) {
-    const botoes =
-        await buscarBotoes(
-            pagina.id
-        );
+    const botoes = await buscarBotoes(pagina.id);
 
     const rows = [];
 
-    let row =
-        new ActionRowBuilder();
+    let row = new ActionRowBuilder();
 
     for (
-        const botao of botoes.slice(
-            0,
-            MAX_BOTOES
-        )
+        const botao of botoes.slice(0, MAX_BOTOES)
     ) {
         const estilo =
             String(
-                botao.estilo ||
-                "PRIMARY"
+                botao.estilo || "PRIMARY"
             ).toUpperCase();
 
         const button =
@@ -442,23 +348,18 @@ async function criarComponentesPagina(
                 )
                 .setLabel(
                     String(
-                        botao.texto ||
-                        "Registrar"
+                        botao.texto || "Registrar"
                     ).substring(0, 80)
                 )
                 .setStyle(
-                    ESTILOS_BOTOES[
-                        estilo
-                    ] ||
+                    ESTILOS_BOTOES[estilo] ||
                     ButtonStyle.Primary
                 );
 
         if (botao.emoji) {
             try {
                 button.setEmoji(
-                    String(
-                        botao.emoji
-                    )
+                    String(botao.emoji)
                 );
             } catch {
                 console.warn(
@@ -467,44 +368,26 @@ async function criarComponentesPagina(
             }
         }
 
-        row.addComponents(
-            button
-        );
+        row.addComponents(button);
 
-        if (
-            row.components.length >= 5
-        ) {
+        if (row.components.length >= 5) {
             rows.push(row);
-            row =
-                new ActionRowBuilder();
+            row = new ActionRowBuilder();
         }
     }
 
-    if (
-        row.components.length > 0
-    ) {
+    if (row.components.length > 0) {
         rows.push(row);
     }
 
-    // =================================================
-    // 📄 NAVEGAÇÃO
-    // =================================================
+    const paginas = await buscarPaginas(guildId);
 
-    const paginas =
-        await buscarPaginas(
-            guildId
-        );
-
-    if (
-        paginas.length > 1
-    ) {
+    if (paginas.length > 1) {
         const navegacao =
             new ActionRowBuilder();
 
         const paginaAtual =
-            Number(
-                numeroPagina
-            );
+            Number(numeroPagina);
 
         const anterior =
             new ButtonBuilder()
@@ -514,16 +397,10 @@ async function criarComponentesPagina(
                         paginaAtual - 1
                     )}`
                 )
-                .setLabel(
-                    "Anterior"
-                )
+                .setLabel("Anterior")
                 .setEmoji("◀️")
-                .setStyle(
-                    ButtonStyle.Secondary
-                )
-                .setDisabled(
-                    paginaAtual <= 1
-                );
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(paginaAtual <= 1);
 
         const proxima =
             new ButtonBuilder()
@@ -533,16 +410,11 @@ async function criarComponentesPagina(
                         paginaAtual + 1
                     )}`
                 )
-                .setLabel(
-                    "Próxima"
-                )
+                .setLabel("Próxima")
                 .setEmoji("▶️")
-                .setStyle(
-                    ButtonStyle.Secondary
-                )
+                .setStyle(ButtonStyle.Secondary)
                 .setDisabled(
-                    paginaAtual >=
-                        paginas.length
+                    paginaAtual >= paginas.length
                 );
 
         navegacao.addComponents(
@@ -550,9 +422,7 @@ async function criarComponentesPagina(
             proxima
         );
 
-        rows.push(
-            navegacao
-        );
+        rows.push(navegacao);
     }
 
     return rows;
@@ -593,9 +463,7 @@ async function atualizarMensagemRegistro(
             );
 
         const embed =
-            criarEmbedPainelInicial(
-                config
-            );
+            criarEmbedPainelInicial(config);
 
         const components =
             criarComponentesPainelInicial(
@@ -609,7 +477,6 @@ async function atualizarMensagemRegistro(
         });
 
         return true;
-
     } catch (erro) {
         console.error(
             "❌ Erro ao atualizar painel de registro:",
@@ -629,9 +496,7 @@ async function atualizarPublicacaoSeExistir(
     guildId
 ) {
     const config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     if (
         !config ||
@@ -651,9 +516,7 @@ async function atualizarPublicacaoSeExistir(
 // 📝 PAINEL PRINCIPAL
 // =====================================================
 
-async function mostrarPainel(
-    interaction
-) {
+async function mostrarPainel(interaction) {
     const config =
         await garantirConfiguracao(
             interaction.guild.id
@@ -665,15 +528,11 @@ async function mostrarPainel(
         );
 
     const configurado =
-        Boolean(
-            config.configurado
-        );
+        Boolean(config.configurado);
 
     const embed =
         new EmbedBuilder()
-            .setTitle(
-                "📝 Sistema de Registro"
-            )
+            .setTitle("📝 Sistema de Registro")
             .setDescription(
                 [
                     "Configure o sistema de registro do servidor.",
@@ -710,13 +569,9 @@ async function mostrarPainel(
             .setCustomId(
                 `registro_selecionar_pagina_${interaction.guild.id}`
             )
-            .setPlaceholder(
-                "📄 Escolha uma página"
-            );
+            .setPlaceholder("📄 Escolha uma página");
 
-    for (
-        const pagina of paginas
-    ) {
+    for (const pagina of paginas) {
         menu.addOptions({
             label:
                 `Página ${pagina.pagina}`,
@@ -724,22 +579,15 @@ async function mostrarPainel(
                 String(
                     pagina.titulo ||
                     "Sem título"
-                ).substring(
-                    0,
-                    100
-                ),
+                ).substring(0, 100),
             value:
-                String(
-                    pagina.pagina
-                )
+                String(pagina.pagina)
         });
     }
 
     const rowMenu =
         new ActionRowBuilder()
-            .addComponents(
-                menu
-            );
+            .addComponents(menu);
 
     const rowBotoes =
         new ActionRowBuilder()
@@ -748,25 +596,25 @@ async function mostrarPainel(
                     .setCustomId(
                         `registro_painel_inicial_${interaction.guild.id}`
                     )
-                    .setLabel(
-                        "Painel inicial"
-                    )
+                    .setLabel("Painel inicial")
                     .setEmoji("🎨")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
+                    .setStyle(ButtonStyle.Primary),
 
                 new ButtonBuilder()
                     .setCustomId(
                         `registro_canal_${interaction.guild.id}`
                     )
-                    .setLabel(
-                        "Selecionar canal"
-                    )
+                    .setLabel("Selecionar canal")
                     .setEmoji("📺")
-                    .setStyle(
-                        ButtonStyle.Secondary
+                    .setStyle(ButtonStyle.Secondary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_botao_painel_${interaction.guild.id}`
                     )
+                    .setLabel("Botão Registrar")
+                    .setEmoji("🔘")
+                    .setStyle(ButtonStyle.Secondary)
             );
 
     const rowPaginas =
@@ -776,29 +624,20 @@ async function mostrarPainel(
                     .setCustomId(
                         `registro_adicionar_pagina_${interaction.guild.id}`
                     )
-                    .setLabel(
-                        "Adicionar página"
-                    )
+                    .setLabel("Adicionar página")
                     .setEmoji("➕")
-                    .setStyle(
-                        ButtonStyle.Success
-                    )
+                    .setStyle(ButtonStyle.Success)
                     .setDisabled(
-                        paginas.length >=
-                            MAX_PAGINAS
+                        paginas.length >= MAX_PAGINAS
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
                         `registro_publicar_${interaction.guild.id}`
                     )
-                    .setLabel(
-                        "Publicar / Atualizar"
-                    )
+                    .setLabel("Publicar / Atualizar")
                     .setEmoji("📢")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    )
+                    .setStyle(ButtonStyle.Primary)
             );
 
     const rowExcluir =
@@ -808,13 +647,9 @@ async function mostrarPainel(
                     .setCustomId(
                         `registro_excluir_${interaction.guild.id}`
                     )
-                    .setLabel(
-                        "Excluir configuração"
-                    )
+                    .setLabel("Excluir configuração")
                     .setEmoji("🗑️")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
+                    .setStyle(ButtonStyle.Danger)
             );
 
     await interaction.reply({
@@ -839,10 +674,7 @@ async function abrirModalPainelInicial(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -852,9 +684,7 @@ async function abrirModalPainelInicial(
     }
 
     const config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     if (!config) {
         return interaction.reply({
@@ -869,160 +699,87 @@ async function abrirModalPainelInicial(
             .setCustomId(
                 `registro_modal_painel_inicial_${guildId}`
             )
-            .setTitle(
-                "Painel inicial"
-            );
+            .setTitle("Painel inicial");
 
     const titulo =
         new TextInputBuilder()
-            .setCustomId(
-                "painel_titulo"
-            )
-            .setLabel(
-                "Título"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("painel_titulo")
+            .setLabel("Título")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(256);
 
-    if (
-        config.painel_titulo
-    ) {
+    if (config.painel_titulo) {
         titulo.setValue(
-            String(
-                config.painel_titulo
-            )
+            String(config.painel_titulo)
         );
     }
 
     const descricao =
         new TextInputBuilder()
-            .setCustomId(
-                "painel_descricao"
-            )
-            .setLabel(
-                "Descrição / explicação"
-            )
-            .setStyle(
-                TextInputStyle.Paragraph
-            )
+            .setCustomId("painel_descricao")
+            .setLabel("Descrição / explicação")
+            .setStyle(TextInputStyle.Paragraph)
             .setRequired(false)
             .setMaxLength(4000);
 
-    if (
-        config.painel_descricao
-    ) {
+    if (config.painel_descricao) {
         descricao.setValue(
-            String(
-                config.painel_descricao
-            )
+            String(config.painel_descricao)
         );
     }
 
     const imagem =
         new TextInputBuilder()
-            .setCustomId(
-                "painel_imagem"
-            )
-            .setLabel(
-                "URL da imagem"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("painel_imagem")
+            .setLabel("URL da imagem")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(2048);
 
-    if (
-        config.painel_imagem
-    ) {
+    if (config.painel_imagem) {
         imagem.setValue(
-            String(
-                config.painel_imagem
-            )
+            String(config.painel_imagem)
         );
     }
 
     const thumbnail =
         new TextInputBuilder()
-            .setCustomId(
-                "painel_thumbnail"
-            )
-            .setLabel(
-                "URL da thumbnail"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("painel_thumbnail")
+            .setLabel("URL da thumbnail")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(2048);
 
-    if (
-        config.painel_thumbnail
-    ) {
+    if (config.painel_thumbnail) {
         thumbnail.setValue(
-            String(
-                config.painel_thumbnail
-            )
+            String(config.painel_thumbnail)
         );
     }
 
     const rodape =
         new TextInputBuilder()
-            .setCustomId(
-                "painel_rodape"
-            )
-            .setLabel(
-                "Rodapé"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("painel_rodape")
+            .setLabel("Rodapé")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(2048);
 
-    if (
-        config.painel_rodape
-    ) {
+    if (config.painel_rodape) {
         rodape.setValue(
-            String(
-                config.painel_rodape
-            )
+            String(config.painel_rodape)
         );
     }
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(
-                titulo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                descricao
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                imagem
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                thumbnail
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                rodape
-            )
+        new ActionRowBuilder().addComponents(titulo),
+        new ActionRowBuilder().addComponents(descricao),
+        new ActionRowBuilder().addComponents(imagem),
+        new ActionRowBuilder().addComponents(thumbnail),
+        new ActionRowBuilder().addComponents(rodape)
     );
 
-    await interaction.showModal(
-        modal
-    );
+    await interaction.showModal(modal);
 }
 
 // =====================================================
@@ -1033,31 +790,32 @@ async function abrirModalTextoBotaoPainel(
     interaction,
     guildId
 ) {
+    if (
+        !podeConfigurar(interaction) ||
+        !pertenceAoServidor(interaction, guildId)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Você não tem permissão para configurar o registro.",
+            flags: EPHEMERAL
+        });
+    }
+
     const config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 `registro_modal_botao_painel_${guildId}`
             )
-            .setTitle(
-                "Botão do painel"
-            );
+            .setTitle("Botão do painel");
 
     const texto =
         new TextInputBuilder()
-            .setCustomId(
-                "painel_botao_texto"
-            )
-            .setLabel(
-                "Texto do botão"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("painel_botao_texto")
+            .setLabel("Texto do botão")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(80)
             .setValue(
@@ -1069,14 +827,10 @@ async function abrirModalTextoBotaoPainel(
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(
-                texto
-            )
+            .addComponents(texto)
     );
 
-    await interaction.showModal(
-        modal
-    );
+    await interaction.showModal(modal);
 }
 
 // =====================================================
@@ -1089,10 +843,7 @@ async function mostrarSelecaoCanal(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -1102,9 +853,7 @@ async function mostrarSelecaoCanal(
     }
 
     const config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     const embed =
         new EmbedBuilder()
@@ -1122,18 +871,14 @@ async function mostrarSelecaoCanal(
                     }`
                 ].join("\n")
             )
-            .setColor(
-                0x5865F2
-            );
+            .setColor(0x5865F2);
 
     const menu =
         new ChannelSelectMenuBuilder()
             .setCustomId(
                 `registro_selecionar_canal_${guildId}`
             )
-            .setPlaceholder(
-                "📺 Escolha o canal"
-            )
+            .setPlaceholder("📺 Escolha o canal")
             .setChannelTypes(
                 ChannelType.GuildText,
                 ChannelType.GuildAnnouncement
@@ -1143,9 +888,7 @@ async function mostrarSelecaoCanal(
 
     const row =
         new ActionRowBuilder()
-            .addComponents(
-                menu
-            );
+            .addComponents(menu);
 
     await interaction.update({
         embeds: [embed],
@@ -1162,12 +905,7 @@ async function mostrarConfiguracaoPagina(
     guildId,
     numeroPagina
 ) {
-    if (
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
-    ) {
+    if (!pertenceAoServidor(interaction, guildId)) {
         return interaction.reply({
             content:
                 "❌ Essa interação não pertence a este servidor.",
@@ -1190,9 +928,7 @@ async function mostrarConfiguracaoPagina(
     }
 
     const botoes =
-        await buscarBotoes(
-            pagina.id
-        );
+        await buscarBotoes(pagina.id);
 
     const embed =
         new EmbedBuilder()
@@ -1221,9 +957,7 @@ async function mostrarConfiguracaoPagina(
                     `🔘 Botões: **${botoes.length}/${MAX_BOTOES}**`
                 ].join("\n")
             )
-            .setColor(
-                0x5865F2
-            );
+            .setColor(0x5865F2);
 
     const row1 =
         new ActionRowBuilder()
@@ -1232,25 +966,17 @@ async function mostrarConfiguracaoPagina(
                     .setCustomId(
                         `registro_editar_texto_${guildId}_${numeroPagina}`
                     )
-                    .setLabel(
-                        "Título / Descrição"
-                    )
+                    .setLabel("Título / Descrição")
                     .setEmoji("📝")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
+                    .setStyle(ButtonStyle.Primary),
 
                 new ButtonBuilder()
                     .setCustomId(
                         `registro_editar_rodape_${guildId}_${numeroPagina}`
                     )
-                    .setLabel(
-                        "Rodapé"
-                    )
+                    .setLabel("Rodapé")
                     .setEmoji("🔻")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    )
+                    .setStyle(ButtonStyle.Secondary)
             );
 
     const row2 =
@@ -1260,29 +986,20 @@ async function mostrarConfiguracaoPagina(
                     .setCustomId(
                         `registro_adicionar_botao_${guildId}_${numeroPagina}`
                     )
-                    .setLabel(
-                        "Adicionar botão"
-                    )
+                    .setLabel("Adicionar botão")
                     .setEmoji("🔘")
-                    .setStyle(
-                        ButtonStyle.Success
-                    )
+                    .setStyle(ButtonStyle.Success)
                     .setDisabled(
-                        botoes.length >=
-                            MAX_BOTOES
+                        botoes.length >= MAX_BOTOES
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
                         `registro_botoes_${guildId}_${numeroPagina}`
                     )
-                    .setLabel(
-                        "Editar botões"
-                    )
+                    .setLabel("Editar botões")
                     .setEmoji("⚙️")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    )
+                    .setStyle(ButtonStyle.Primary)
             );
 
     const row3 =
@@ -1292,13 +1009,9 @@ async function mostrarConfiguracaoPagina(
                     .setCustomId(
                         `registro_voltar_${guildId}`
                     )
-                    .setLabel(
-                        "Voltar"
-                    )
+                    .setLabel("Voltar")
                     .setEmoji("◀️")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    )
+                    .setStyle(ButtonStyle.Secondary)
             );
 
     await interaction.update({
@@ -1322,10 +1035,7 @@ async function abrirModalTexto(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -1359,63 +1069,38 @@ async function abrirModalTexto(
 
     const titulo =
         new TextInputBuilder()
-            .setCustomId(
-                "titulo"
-            )
-            .setLabel(
-                "Título"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("titulo")
+            .setLabel("Título")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(256);
 
     if (pagina.titulo) {
         titulo.setValue(
-            String(
-                pagina.titulo
-            )
+            String(pagina.titulo)
         );
     }
 
     const descricao =
         new TextInputBuilder()
-            .setCustomId(
-                "descricao"
-            )
-            .setLabel(
-                "Descrição"
-            )
-            .setStyle(
-                TextInputStyle.Paragraph
-            )
+            .setCustomId("descricao")
+            .setLabel("Descrição")
+            .setStyle(TextInputStyle.Paragraph)
             .setRequired(false)
             .setMaxLength(4000);
 
     if (pagina.descricao) {
         descricao.setValue(
-            String(
-                pagina.descricao
-            )
+            String(pagina.descricao)
         );
     }
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(
-                titulo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                descricao
-            )
+        new ActionRowBuilder().addComponents(titulo),
+        new ActionRowBuilder().addComponents(descricao)
     );
 
-    await interaction.showModal(
-        modal
-    );
+    await interaction.showModal(modal);
 }
 
 // =====================================================
@@ -1429,10 +1114,7 @@ async function abrirModalRodape(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -1466,65 +1148,38 @@ async function abrirModalRodape(
 
     const rodape =
         new TextInputBuilder()
-            .setCustomId(
-                "rodape"
-            )
-            .setLabel(
-                "Texto do rodapé"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("rodape")
+            .setLabel("Texto do rodapé")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(2048);
 
     if (pagina.rodape) {
         rodape.setValue(
-            String(
-                pagina.rodape
-            )
+            String(pagina.rodape)
         );
     }
 
     const icone =
         new TextInputBuilder()
-            .setCustomId(
-                "rodape_icone"
-            )
-            .setLabel(
-                "URL do ícone do rodapé"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("rodape_icone")
+            .setLabel("URL do ícone do rodapé")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(2048);
 
-    if (
-        pagina.rodape_icone
-    ) {
+    if (pagina.rodape_icone) {
         icone.setValue(
-            String(
-                pagina.rodape_icone
-            )
+            String(pagina.rodape_icone)
         );
     }
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(
-                rodape
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                icone
-            )
+        new ActionRowBuilder().addComponents(rodape),
+        new ActionRowBuilder().addComponents(icone)
     );
 
-    await interaction.showModal(
-        modal
-    );
+    await interaction.showModal(modal);
 }
 
 // =====================================================
@@ -1538,10 +1193,7 @@ async function abrirModalBotao(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -1565,14 +1217,9 @@ async function abrirModalBotao(
     }
 
     const botoes =
-        await buscarBotoes(
-            pagina.id
-        );
+        await buscarBotoes(pagina.id);
 
-    if (
-        botoes.length >=
-        MAX_BOTOES
-    ) {
+    if (botoes.length >= MAX_BOTOES) {
         return interaction.reply({
             content:
                 `❌ Cada página pode ter no máximo ${MAX_BOTOES} botões.`,
@@ -1591,88 +1238,47 @@ async function abrirModalBotao(
 
     const texto =
         new TextInputBuilder()
-            .setCustomId(
-                "texto"
-            )
-            .setLabel(
-                "Texto do botão"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("texto")
+            .setLabel("Texto do botão")
+            .setStyle(TextInputStyle.Short)
             .setRequired(true)
             .setMaxLength(80);
 
     const emoji =
         new TextInputBuilder()
-            .setCustomId(
-                "emoji"
-            )
-            .setLabel(
-                "Emoji (opcional)"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("emoji")
+            .setLabel("Emoji (opcional)")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(100);
 
     const cargo =
         new TextInputBuilder()
-            .setCustomId(
-                "cargo"
-            )
-            .setLabel(
-                "ID do cargo (opcional)"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("cargo")
+            .setLabel("ID do cargo (opcional)")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(30);
 
     const estilo =
         new TextInputBuilder()
-            .setCustomId(
-                "estilo"
-            )
+            .setCustomId("estilo")
             .setLabel(
                 "PRIMARY / SECONDARY / SUCCESS / DANGER"
             )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
-            .setValue(
-                "PRIMARY"
-            )
+            .setValue("PRIMARY")
             .setMaxLength(20);
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(
-                texto
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                emoji
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                cargo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                estilo
-            )
+        new ActionRowBuilder().addComponents(texto),
+        new ActionRowBuilder().addComponents(emoji),
+        new ActionRowBuilder().addComponents(cargo),
+        new ActionRowBuilder().addComponents(estilo)
     );
 
-    await interaction.showModal(
-        modal
-    );
+    await interaction.showModal(modal);
 }
 
 // =====================================================
@@ -1686,10 +1292,7 @@ async function mostrarBotoes(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -1713,9 +1316,7 @@ async function mostrarBotoes(
     }
 
     const botoes =
-        await buscarBotoes(
-            pagina.id
-        );
+        await buscarBotoes(pagina.id);
 
     const embed =
         new EmbedBuilder()
@@ -1726,10 +1327,7 @@ async function mostrarBotoes(
                 botoes.length
                     ? botoes
                         .map(
-                            (
-                                botao,
-                                index
-                            ) =>
+                            (botao, index) =>
                                 [
                                     `**${index + 1}. ${botao.texto}**`,
                                     `🎭 Cargo: ${
@@ -1741,18 +1339,12 @@ async function mostrarBotoes(
                                         botao.estilo ||
                                         "PRIMARY"
                                     }`
-                                ].join(
-                                    "\n"
-                                )
+                                ].join("\n")
                         )
-                        .join(
-                            "\n\n"
-                        )
+                        .join("\n\n")
                     : "Nenhum botão configurado."
             )
-            .setColor(
-                0x5865F2
-            );
+            .setColor(0x5865F2);
 
     const components = [];
 
@@ -1760,10 +1352,7 @@ async function mostrarBotoes(
         new ActionRowBuilder();
 
     for (
-        const botao of botoes.slice(
-            0,
-            MAX_BOTOES
-        )
+        const botao of botoes.slice(0, MAX_BOTOES)
     ) {
         linhaEditar.addComponents(
             new ButtonBuilder()
@@ -1774,33 +1363,21 @@ async function mostrarBotoes(
                     `✏️ ${String(
                         botao.texto ||
                         "Botão"
-                    ).substring(
-                        0,
-                        70
-                    )}`
+                    ).substring(0, 70)}`
                 )
-                .setStyle(
-                    ButtonStyle.Primary
-                )
+                .setStyle(ButtonStyle.Primary)
         );
     }
 
-    if (
-        linhaEditar.components.length
-    ) {
-        components.push(
-            linhaEditar
-        );
+    if (linhaEditar.components.length) {
+        components.push(linhaEditar);
     }
 
     const linhaExcluir =
         new ActionRowBuilder();
 
     for (
-        const botao of botoes.slice(
-            0,
-            MAX_BOTOES
-        )
+        const botao of botoes.slice(0, MAX_BOTOES)
     ) {
         linhaExcluir.addComponents(
             new ButtonBuilder()
@@ -1811,23 +1388,14 @@ async function mostrarBotoes(
                     `🗑️ ${String(
                         botao.texto ||
                         "Botão"
-                    ).substring(
-                        0,
-                        70
-                    )}`
+                    ).substring(0, 70)}`
                 )
-                .setStyle(
-                    ButtonStyle.Danger
-                )
+                .setStyle(ButtonStyle.Danger)
         );
     }
 
-    if (
-        linhaExcluir.components.length
-    ) {
-        components.push(
-            linhaExcluir
-        );
+    if (linhaExcluir.components.length) {
+        components.push(linhaExcluir);
     }
 
     components.push(
@@ -1837,13 +1405,9 @@ async function mostrarBotoes(
                     .setCustomId(
                         `registro_voltar_pagina_${guildId}_${numeroPagina}`
                     )
-                    .setLabel(
-                        "Voltar"
-                    )
+                    .setLabel("Voltar")
                     .setEmoji("◀️")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    )
+                    .setStyle(ButtonStyle.Secondary)
             )
     );
 
@@ -1865,10 +1429,7 @@ async function abrirModalEditarBotao(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -1892,19 +1453,13 @@ async function abrirModalEditarBotao(
     }
 
     const botoes =
-        await buscarBotoes(
-            pagina.id
-        );
+        await buscarBotoes(pagina.id);
 
     const botao =
         botoes.find(
             item =>
-                String(
-                    item.id
-                ) ===
-                String(
-                    botaoId
-                )
+                String(item.id) ===
+                String(botaoId)
         );
 
     if (!botao) {
@@ -1920,85 +1475,56 @@ async function abrirModalEditarBotao(
             .setCustomId(
                 `registro_modal_editar_botao_${guildId}_${botaoId}_${numeroPagina}`
             )
-            .setTitle(
-                "Editar botão"
-            );
+            .setTitle("Editar botão");
 
     const texto =
         new TextInputBuilder()
-            .setCustomId(
-                "texto"
-            )
-            .setLabel(
-                "Texto"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("texto")
+            .setLabel("Texto")
+            .setStyle(TextInputStyle.Short)
             .setRequired(true)
             .setMaxLength(80)
             .setValue(
-                String(
-                    botao.texto ||
-                    ""
-                )
+                String(botao.texto || "")
             );
 
     const emoji =
         new TextInputBuilder()
-            .setCustomId(
-                "emoji"
-            )
-            .setLabel(
-                "Emoji"
-            )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setCustomId("emoji")
+            .setLabel("Emoji")
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(100);
 
     if (botao.emoji) {
         emoji.setValue(
-            String(
-                botao.emoji
-            )
+            String(botao.emoji)
         );
     }
 
     const cargo =
         new TextInputBuilder()
-            .setCustomId(
-                "cargo"
-            )
+            .setCustomId("cargo")
             .setLabel(
                 "ID do cargo — deixe vazio para nenhum"
             )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setMaxLength(30);
 
     if (botao.cargo_id) {
         cargo.setValue(
-            String(
-                botao.cargo_id
-            )
+            String(botao.cargo_id)
         );
     }
 
     const estilo =
         new TextInputBuilder()
-            .setCustomId(
-                "estilo"
-            )
+            .setCustomId("estilo")
             .setLabel(
                 "PRIMARY / SECONDARY / SUCCESS / DANGER"
             )
-            .setStyle(
-                TextInputStyle.Short
-            )
+            .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setValue(
                 String(
@@ -2009,30 +1535,13 @@ async function abrirModalEditarBotao(
             .setMaxLength(20);
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(
-                texto
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                emoji
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                cargo
-            ),
-
-        new ActionRowBuilder()
-            .addComponents(
-                estilo
-            )
+        new ActionRowBuilder().addComponents(texto),
+        new ActionRowBuilder().addComponents(emoji),
+        new ActionRowBuilder().addComponents(cargo),
+        new ActionRowBuilder().addComponents(estilo)
     );
 
-    await interaction.showModal(
-        modal
-    );
+    await interaction.showModal(modal);
 }
 
 // =====================================================
@@ -2051,15 +1560,9 @@ function obterCargoConfigurado(
     }
 
     const cargoId =
-        String(
-            cargoTexto
-        ).trim();
+        String(cargoTexto).trim();
 
-    if (
-        !/^\d{15,25}$/.test(
-            cargoId
-        )
-    ) {
+    if (!/^\d{15,25}$/.test(cargoId)) {
         return {
             id: null,
             erro:
@@ -2104,10 +1607,7 @@ async function publicarRegistro(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -2117,15 +1617,11 @@ async function publicarRegistro(
     }
 
     let config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     if (!config) {
         config =
-            await garantirConfiguracao(
-                guildId
-            );
+            await garantirConfiguracao(guildId);
     }
 
     if (!config.canal_id) {
@@ -2137,11 +1633,9 @@ async function publicarRegistro(
     }
 
     const canal =
-        await interaction.guild.channels.fetch(
-            config.canal_id
-        ).catch(
-            () => null
-        );
+        await interaction.guild.channels
+            .fetch(config.canal_id)
+            .catch(() => null);
 
     if (
         !canal ||
@@ -2158,9 +1652,7 @@ async function publicarRegistro(
     // 🔄 ATUALIZAR EXISTENTE
     // =================================================
 
-    if (
-        config.mensagem_id
-    ) {
+    if (config.mensagem_id) {
         const atualizado =
             await atualizarMensagemRegistro(
                 interaction.guild,
@@ -2172,8 +1664,8 @@ async function publicarRegistro(
                 `
                 UPDATE registro_config
                 SET configurado = TRUE,
-                    atualizado_em = ?
-                WHERE guild_id = ?
+                    atualizado_em = $1
+                WHERE guild_id = $2
                 `,
                 [
                     Date.now(),
@@ -2194,9 +1686,7 @@ async function publicarRegistro(
     // =================================================
 
     const embed =
-        criarEmbedPainelInicial(
-            config
-        );
+        criarEmbedPainelInicial(config);
 
     const components =
         criarComponentesPainelInicial(
@@ -2211,18 +1701,13 @@ async function publicarRegistro(
         });
 
     const paginas =
-        await buscarPaginas(
-            guildId
-        );
+        await buscarPaginas(guildId);
 
     await salvarRegistroConfig(
         guildId,
         canal.id,
         mensagem.id,
-        Math.max(
-            1,
-            paginas.length
-        ),
+        Math.max(1, paginas.length),
         true
     );
 
@@ -2248,10 +1733,7 @@ async function adicionarPagina(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -2260,19 +1742,12 @@ async function adicionarPagina(
         });
     }
 
-    await garantirConfiguracao(
-        guildId
-    );
+    await garantirConfiguracao(guildId);
 
     const paginas =
-        await buscarPaginas(
-            guildId
-        );
+        await buscarPaginas(guildId);
 
-    if (
-        paginas.length >=
-        MAX_PAGINAS
-    ) {
+    if (paginas.length >= MAX_PAGINAS) {
         return interaction.reply({
             content:
                 `❌ O limite máximo é de ${MAX_PAGINAS} páginas.`,
@@ -2287,10 +1762,8 @@ async function adicionarPagina(
         guildId,
         numero,
         {
-            titulo:
-                `Página ${numero}`,
-            descricao:
-                "Configure esta página.",
+            titulo: `Página ${numero}`,
+            descricao: "Configure esta página.",
             rodape: null,
             rodape_icone: null
         }
@@ -2299,9 +1772,9 @@ async function adicionarPagina(
     await pool.query(
         `
         UPDATE registro_config
-        SET paginas = ?,
-            atualizado_em = ?
-        WHERE guild_id = ?
+        SET paginas = $1,
+            atualizado_em = $2
+        WHERE guild_id = $3
         `,
         [
             numero,
@@ -2332,10 +1805,7 @@ async function excluirRegistro(
 ) {
     if (
         !podeConfigurar(interaction) ||
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
+        !pertenceAoServidor(interaction, guildId)
     ) {
         return interaction.reply({
             content:
@@ -2345,9 +1815,7 @@ async function excluirRegistro(
     }
 
     const config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     if (!config) {
         return interaction.reply({
@@ -2373,18 +1841,12 @@ async function excluirRegistro(
             ) {
                 const mensagem =
                     await canal.messages
-                        .fetch(
-                            config.mensagem_id
-                        )
-                        .catch(
-                            () => null
-                        );
+                        .fetch(config.mensagem_id)
+                        .catch(() => null);
 
                 if (mensagem) {
                     await mensagem.delete()
-                        .catch(
-                            () => {}
-                        );
+                        .catch(() => {});
                 }
             }
         } catch {}
@@ -2393,7 +1855,7 @@ async function excluirRegistro(
     await pool.query(
         `
         DELETE FROM registro_usuarios
-        WHERE guild_id = ?
+        WHERE guild_id = $1
         `,
         [guildId]
     );
@@ -2404,7 +1866,7 @@ async function excluirRegistro(
         FROM registro_botoes b
         INNER JOIN registro_paginas p
             ON p.id = b.pagina_id
-        WHERE p.guild_id = ?
+        WHERE p.guild_id = $1
         `,
         [guildId]
     );
@@ -2412,7 +1874,7 @@ async function excluirRegistro(
     await pool.query(
         `
         DELETE FROM registro_paginas
-        WHERE guild_id = ?
+        WHERE guild_id = $1
         `,
         [guildId]
     );
@@ -2420,7 +1882,7 @@ async function excluirRegistro(
     await pool.query(
         `
         DELETE FROM registro_config
-        WHERE guild_id = ?
+        WHERE guild_id = $1
         `,
         [guildId]
     );
@@ -2440,12 +1902,7 @@ async function iniciarRegistroPrivado(
     interaction,
     guildId
 ) {
-    if (
-        !pertenceAoServidor(
-            interaction,
-            guildId
-        )
-    ) {
+    if (!pertenceAoServidor(interaction, guildId)) {
         return interaction.reply({
             content:
                 "❌ Esse registro não pertence a este servidor.",
@@ -2468,9 +1925,7 @@ async function iniciarRegistroPrivado(
     }
 
     const paginas =
-        await buscarPaginas(
-            guildId
-        );
+        await buscarPaginas(guildId);
 
     if (!paginas.length) {
         return interaction.reply({
@@ -2481,10 +1936,7 @@ async function iniciarRegistroPrivado(
     }
 
     const pagina =
-        await buscarPagina(
-            guildId,
-            1
-        );
+        await buscarPagina(guildId, 1);
 
     if (!pagina) {
         return interaction.reply({
@@ -2495,9 +1947,7 @@ async function iniciarRegistroPrivado(
     }
 
     const embed =
-        criarEmbedPagina(
-            pagina
-        );
+        criarEmbedPagina(pagina);
 
     const components =
         await criarComponentesPagina(
@@ -2534,7 +1984,7 @@ async function processarBotaoRegistro(
             FROM registro_botoes b
             INNER JOIN registro_paginas p
                 ON p.id = b.pagina_id
-            WHERE b.custom_id = ?
+            WHERE b.custom_id = $1
             LIMIT 1
             `,
             [customId]
@@ -2553,12 +2003,8 @@ async function processarBotaoRegistro(
     }
 
     if (
-        String(
-            botao.guild_id
-        ) !==
-        String(
-            interaction.guild.id
-        )
+        String(botao.guild_id) !==
+        String(interaction.guild.id)
     ) {
         return interaction.reply({
             content:
@@ -2586,9 +2032,7 @@ async function processarBotaoRegistro(
     if (botao.cargo_id) {
         const cargo =
             interaction.guild.roles.cache.get(
-                String(
-                    botao.cargo_id
-                )
+                String(botao.cargo_id)
             );
 
         if (!cargo) {
@@ -2630,8 +2074,7 @@ async function processarBotaoRegistro(
         if (
             cargo.managed ||
             cargo.position >=
-                botMember.roles.highest
-                    .position
+                botMember.roles.highest.position
         ) {
             return interaction.reply({
                 content:
@@ -2641,13 +2084,10 @@ async function processarBotaoRegistro(
         }
 
         try {
-            await membro.roles.add(
-                cargo
-            );
+            await membro.roles.add(cargo);
 
             cargoRecebido =
                 cargo.id;
-
         } catch (erro) {
             console.error(
                 "❌ Erro ao dar cargo do registro:",
@@ -2670,7 +2110,6 @@ async function processarBotaoRegistro(
             botao.id,
             cargoRecebido
         );
-
     } catch (erro) {
         console.error(
             "❌ Erro ao salvar usuário registrado:",
@@ -2681,9 +2120,7 @@ async function processarBotaoRegistro(
             await usuarioJaRegistrado(
                 interaction.guild.id,
                 interaction.user.id
-            ).catch(
-                () => false
-            );
+            ).catch(() => false);
 
         if (agoraRegistrado) {
             return interaction.reply({
@@ -2718,20 +2155,14 @@ async function atualizarPainelPrincipal(
     guildId
 ) {
     const paginas =
-        await buscarPaginas(
-            guildId
-        );
+        await buscarPaginas(guildId);
 
     const config =
-        await buscarConfiguracao(
-            guildId
-        );
+        await buscarConfiguracao(guildId);
 
     const embed =
         new EmbedBuilder()
-            .setTitle(
-                "📝 Sistema de Registro"
-            )
+            .setTitle("📝 Sistema de Registro")
             .setDescription(
                 [
                     `📄 Páginas: **${paginas.length}/${MAX_PAGINAS}**`,
@@ -2770,13 +2201,9 @@ async function atualizarPainelPrincipal(
             .setCustomId(
                 `registro_selecionar_pagina_${guildId}`
             )
-            .setPlaceholder(
-                "📄 Escolha uma página"
-            );
+            .setPlaceholder("📄 Escolha uma página");
 
-    for (
-        const pagina of paginas
-    ) {
+    for (const pagina of paginas) {
         menu.addOptions({
             label:
                 `Página ${pagina.pagina}`,
@@ -2784,22 +2211,15 @@ async function atualizarPainelPrincipal(
                 String(
                     pagina.titulo ||
                     "Sem título"
-                ).substring(
-                    0,
-                    100
-                ),
+                ).substring(0, 100),
             value:
-                String(
-                    pagina.pagina
-                )
+                String(pagina.pagina)
         });
     }
 
     const rowMenu =
         new ActionRowBuilder()
-            .addComponents(
-                menu
-            );
+            .addComponents(menu);
 
     const rowBotoes =
         new ActionRowBuilder()
@@ -2808,25 +2228,25 @@ async function atualizarPainelPrincipal(
                     .setCustomId(
                         `registro_painel_inicial_${guildId}`
                     )
-                    .setLabel(
-                        "Painel inicial"
-                    )
+                    .setLabel("Painel inicial")
                     .setEmoji("🎨")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
+                    .setStyle(ButtonStyle.Primary),
 
                 new ButtonBuilder()
                     .setCustomId(
                         `registro_canal_${guildId}`
                     )
-                    .setLabel(
-                        "Selecionar canal"
-                    )
+                    .setLabel("Selecionar canal")
                     .setEmoji("📺")
-                    .setStyle(
-                        ButtonStyle.Secondary
+                    .setStyle(ButtonStyle.Secondary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_botao_painel_${guildId}`
                     )
+                    .setLabel("Botão Registrar")
+                    .setEmoji("🔘")
+                    .setStyle(ButtonStyle.Secondary)
             );
 
     const rowPaginas =
@@ -2836,29 +2256,20 @@ async function atualizarPainelPrincipal(
                     .setCustomId(
                         `registro_adicionar_pagina_${guildId}`
                     )
-                    .setLabel(
-                        "Adicionar página"
-                    )
+                    .setLabel("Adicionar página")
                     .setEmoji("➕")
-                    .setStyle(
-                        ButtonStyle.Success
-                    )
+                    .setStyle(ButtonStyle.Success)
                     .setDisabled(
-                        paginas.length >=
-                            MAX_PAGINAS
+                        paginas.length >= MAX_PAGINAS
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
                         `registro_publicar_${guildId}`
                     )
-                    .setLabel(
-                        "Publicar / Atualizar"
-                    )
+                    .setLabel("Publicar / Atualizar")
                     .setEmoji("📢")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    )
+                    .setStyle(ButtonStyle.Primary)
             );
 
     const rowExcluir =
@@ -2868,13 +2279,9 @@ async function atualizarPainelPrincipal(
                     .setCustomId(
                         `registro_excluir_${guildId}`
                     )
-                    .setLabel(
-                        "Excluir configuração"
-                    )
+                    .setLabel("Excluir configuração")
                     .setEmoji("🗑️")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
+                    .setStyle(ButtonStyle.Danger)
             );
 
     return interaction.update({
@@ -2892,17 +2299,14 @@ async function atualizarPainelPrincipal(
 // 🖱️ INTERAÇÕES
 // =====================================================
 
-async function handleInteraction(
-    interaction
-) {
+async function handleInteraction(interaction) {
     try {
         if (!interaction.guild) {
             return false;
         }
 
         const customId =
-            interaction.customId ||
-            "";
+            interaction.customId || "";
 
         // =================================================
         // 📝 INICIAR REGISTRO
@@ -2954,9 +2358,7 @@ async function handleInteraction(
             const partes =
                 customId.split("_");
 
-            if (
-                partes.length < 4
-            ) {
+            if (partes.length < 4) {
                 return interaction.reply({
                     content:
                         "❌ Botão de navegação inválido.",
@@ -2968,9 +2370,7 @@ async function handleInteraction(
                 partes[2];
 
             const numeroPagina =
-                Number(
-                    partes[3]
-                );
+                Number(partes[3]);
 
             if (
                 !pertenceAoServidor(
@@ -2986,13 +2386,9 @@ async function handleInteraction(
             }
 
             const paginas =
-                await buscarPaginas(
-                    guildId
-                );
+                await buscarPaginas(guildId);
 
-            if (
-                !paginas.length
-            ) {
+            if (!paginas.length) {
                 return interaction.reply({
                     content:
                         "❌ Nenhuma página encontrada.",
@@ -3024,9 +2420,7 @@ async function handleInteraction(
             }
 
             const embed =
-                criarEmbedPagina(
-                    pagina
-                );
+                criarEmbedPagina(pagina);
 
             const components =
                 await criarComponentesPagina(
@@ -3047,6 +2441,7 @@ async function handleInteraction(
 
         const idsAdministrativos = [
             "registro_painel_inicial_",
+            "registro_botao_painel_",
             "registro_canal_",
             "registro_selecionar_canal_",
             "registro_modal_painel_inicial_",
@@ -3071,16 +2466,12 @@ async function handleInteraction(
         const ehAdministrativo =
             idsAdministrativos.some(
                 prefixo =>
-                    customId.startsWith(
-                        prefixo
-                    )
+                    customId.startsWith(prefixo)
             );
 
         if (
             ehAdministrativo &&
-            !podeConfigurar(
-                interaction
-            )
+            !podeConfigurar(interaction)
         ) {
             return interaction.reply({
                 content:
@@ -3106,6 +2497,28 @@ async function handleInteraction(
                 );
 
             return await abrirModalPainelInicial(
+                interaction,
+                guildId
+            );
+        }
+
+        // =================================================
+        // 🔘 BOTÃO DO PAINEL
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_botao_painel_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_botao_painel_",
+                    ""
+                );
+
+            return await abrirModalTextoBotaoPainel(
                 interaction,
                 guildId
             );
@@ -3166,11 +2579,9 @@ async function handleInteraction(
                 interaction.values[0];
 
             const canal =
-                await interaction.guild.channels.fetch(
-                    canalId
-                ).catch(
-                    () => null
-                );
+                await interaction.guild.channels
+                    .fetch(canalId)
+                    .catch(() => null);
 
             if (
                 !canal ||
@@ -3186,9 +2597,9 @@ async function handleInteraction(
             await pool.query(
                 `
                 UPDATE registro_config
-                SET canal_id = ?,
-                    atualizado_em = ?
-                WHERE guild_id = ?
+                SET canal_id = $1,
+                    atualizado_em = $2
+                WHERE guild_id = $3
                 `,
                 [
                     canalId,
@@ -3208,12 +2619,8 @@ async function handleInteraction(
                                 .setCustomId(
                                     `registro_voltar_${guildId}`
                                 )
-                                .setLabel(
-                                    "Voltar"
-                                )
-                                .setEmoji(
-                                    "◀️"
-                                )
+                                .setLabel("Voltar")
+                                .setEmoji("◀️")
                                 .setStyle(
                                     ButtonStyle.Secondary
                                 )
@@ -3223,6 +2630,7 @@ async function handleInteraction(
 
             return;
         }
+
         // =================================================
         // ➕ ADICIONAR PÁGINA
         // =================================================
@@ -3349,9 +2757,7 @@ async function handleInteraction(
             return await abrirModalTexto(
                 interaction,
                 partes[3],
-                Number(
-                    partes[4]
-                )
+                Number(partes[4])
             );
         }
 
@@ -3371,9 +2777,7 @@ async function handleInteraction(
             return await abrirModalRodape(
                 interaction,
                 partes[3],
-                Number(
-                    partes[4]
-                )
+                Number(partes[4])
             );
         }
 
@@ -3393,9 +2797,7 @@ async function handleInteraction(
             return await abrirModalBotao(
                 interaction,
                 partes[3],
-                Number(
-                    partes[4]
-                )
+                Number(partes[4])
             );
         }
 
@@ -3415,9 +2817,7 @@ async function handleInteraction(
             return await mostrarBotoes(
                 interaction,
                 partes[2],
-                Number(
-                    partes[3]
-                )
+                Number(partes[3])
             );
         }
 
@@ -3438,9 +2838,7 @@ async function handleInteraction(
                 interaction,
                 partes[3],
                 partes[4],
-                Number(
-                    partes[5]
-                )
+                Number(partes[5])
             );
         }
 
@@ -3464,9 +2862,7 @@ async function handleInteraction(
                 partes[4];
 
             const numeroPagina =
-                Number(
-                    partes[5]
-                );
+                Number(partes[5]);
 
             if (
                 !pertenceAoServidor(
@@ -3503,12 +2899,8 @@ async function handleInteraction(
             const botao =
                 botoes.find(
                     item =>
-                        String(
-                            item.id
-                        ) ===
-                        String(
-                            botaoId
-                        )
+                        String(item.id) ===
+                        String(botaoId)
                 );
 
             if (!botao) {
@@ -3546,9 +2938,7 @@ async function handleInteraction(
             return await mostrarConfiguracaoPagina(
                 interaction,
                 partes[3],
-                Number(
-                    partes[4]
-                )
+                Number(partes[4])
             );
         }
 
@@ -3663,25 +3053,22 @@ async function handleInteraction(
             await pool.query(
                 `
                 UPDATE registro_config
-                SET painel_titulo = ?,
-                    painel_descricao = ?,
-                    painel_imagem = ?,
-                    painel_thumbnail = ?,
-                    painel_rodape = ?,
-                    atualizado_em = ?
-                WHERE guild_id = ?
+                SET painel_titulo = $1,
+                    painel_descricao = $2,
+                    painel_imagem = $3,
+                    painel_thumbnail = $4,
+                    painel_rodape = $5,
+                    atualizado_em = $6
+                WHERE guild_id = $7
                 `,
                 [
                     titulo ||
                         "📝 Registro",
                     descricao ||
                         "Clique no botão abaixo para começar seu registro.",
-                    imagem ||
-                        null,
-                    thumbnail ||
-                        null,
-                    rodape ||
-                        null,
+                    imagem || null,
+                    thumbnail || null,
+                    rodape || null,
                     Date.now(),
                     guildId
                 ]
@@ -3732,13 +3119,12 @@ async function handleInteraction(
             await pool.query(
                 `
                 UPDATE registro_config
-                SET painel_botao_texto = ?,
-                    atualizado_em = ?
-                WHERE guild_id = ?
+                SET painel_botao_texto = $1,
+                    atualizado_em = $2
+                WHERE guild_id = $3
                 `,
                 [
-                    texto ||
-                        "Registrar",
+                    texto || "Registrar",
                     Date.now(),
                     guildId
                 ]
@@ -3780,9 +3166,7 @@ async function handleInteraction(
                 partes[3];
 
             const numeroPagina =
-                Number(
-                    partes[4]
-                );
+                Number(partes[4]);
 
             const pagina =
                 await buscarPagina(
@@ -3800,16 +3184,12 @@ async function handleInteraction(
 
             const titulo =
                 interaction.fields
-                    .getTextInputValue(
-                        "titulo"
-                    )
+                    .getTextInputValue("titulo")
                     .trim();
 
             const descricao =
                 interaction.fields
-                    .getTextInputValue(
-                        "descricao"
-                    )
+                    .getTextInputValue("descricao")
                     .trim();
 
             await atualizarRegistroPagina(
@@ -3817,11 +3197,9 @@ async function handleInteraction(
                 guildId,
                 {
                     titulo:
-                        titulo ||
-                        null,
+                        titulo || null,
                     descricao:
-                        descricao ||
-                        null
+                        descricao || null
                 }
             );
 
@@ -3856,9 +3234,7 @@ async function handleInteraction(
                 partes[3];
 
             const numeroPagina =
-                Number(
-                    partes[4]
-                );
+                Number(partes[4]);
 
             const pagina =
                 await buscarPagina(
@@ -3876,9 +3252,7 @@ async function handleInteraction(
 
             const rodape =
                 interaction.fields
-                    .getTextInputValue(
-                        "rodape"
-                    )
+                    .getTextInputValue("rodape")
                     .trim();
 
             const icone =
@@ -3893,11 +3267,9 @@ async function handleInteraction(
                 guildId,
                 {
                     rodape:
-                        rodape ||
-                        null,
+                        rodape || null,
                     rodape_icone:
-                        icone ||
-                        null
+                        icone || null
                 }
             );
 
@@ -3932,9 +3304,7 @@ async function handleInteraction(
                 partes[3];
 
             const numeroPagina =
-                Number(
-                    partes[4]
-                );
+                Number(partes[4]);
 
             const pagina =
                 await buscarPagina(
@@ -3955,10 +3325,7 @@ async function handleInteraction(
                     pagina.id
                 );
 
-            if (
-                botoes.length >=
-                MAX_BOTOES
-            ) {
+            if (botoes.length >= MAX_BOTOES) {
                 return interaction.reply({
                     content:
                         `❌ O limite é de ${MAX_BOTOES} botões por página.`,
@@ -3968,9 +3335,7 @@ async function handleInteraction(
 
             const texto =
                 interaction.fields
-                    .getTextInputValue(
-                        "texto"
-                    )
+                    .getTextInputValue("texto")
                     .trim();
 
             if (!texto) {
@@ -3983,39 +3348,27 @@ async function handleInteraction(
 
             const emoji =
                 interaction.fields
-                    .getTextInputValue(
-                        "emoji"
-                    )
+                    .getTextInputValue("emoji")
                     .trim();
 
             const cargo =
                 interaction.fields
-                    .getTextInputValue(
-                        "cargo"
-                    )
+                    .getTextInputValue("cargo")
                     .trim();
 
             let estilo =
                 interaction.fields
-                    .getTextInputValue(
-                        "estilo"
-                    );
+                    .getTextInputValue("estilo");
 
             estilo =
                 String(
-                    estilo ||
-                    "PRIMARY"
+                    estilo || "PRIMARY"
                 )
                     .toUpperCase()
                     .trim();
 
-            if (
-                !ESTILOS_BOTOES[
-                    estilo
-                ]
-            ) {
-                estilo =
-                    "PRIMARY";
+            if (!ESTILOS_BOTOES[estilo]) {
+                estilo = "PRIMARY";
             }
 
             const cargoResultado =
@@ -4024,9 +3377,7 @@ async function handleInteraction(
                     cargo
                 );
 
-            if (
-                cargoResultado.erro
-            ) {
+            if (cargoResultado.erro) {
                 return interaction.reply({
                     content:
                         cargoResultado.erro,
@@ -4044,8 +3395,7 @@ async function handleInteraction(
                 {
                     texto,
                     emoji:
-                        emoji ||
-                        null,
+                        emoji || null,
                     estilo,
                     cargo_id:
                         cargoResultado.id,
@@ -4087,9 +3437,7 @@ async function handleInteraction(
                 partes[5];
 
             const numeroPagina =
-                Number(
-                    partes[6]
-                );
+                Number(partes[6]);
 
             const pagina =
                 await buscarPagina(
@@ -4113,12 +3461,8 @@ async function handleInteraction(
             const botao =
                 botoes.find(
                     item =>
-                        String(
-                            item.id
-                        ) ===
-                        String(
-                            botaoId
-                        )
+                        String(item.id) ===
+                        String(botaoId)
                 );
 
             if (!botao) {
@@ -4131,9 +3475,7 @@ async function handleInteraction(
 
             const texto =
                 interaction.fields
-                    .getTextInputValue(
-                        "texto"
-                    )
+                    .getTextInputValue("texto")
                     .trim();
 
             if (!texto) {
@@ -4146,39 +3488,27 @@ async function handleInteraction(
 
             const emoji =
                 interaction.fields
-                    .getTextInputValue(
-                        "emoji"
-                    )
+                    .getTextInputValue("emoji")
                     .trim();
 
             const cargo =
                 interaction.fields
-                    .getTextInputValue(
-                        "cargo"
-                    )
+                    .getTextInputValue("cargo")
                     .trim();
 
             let estilo =
                 interaction.fields
-                    .getTextInputValue(
-                        "estilo"
-                    );
+                    .getTextInputValue("estilo");
 
             estilo =
                 String(
-                    estilo ||
-                    "PRIMARY"
+                    estilo || "PRIMARY"
                 )
                     .toUpperCase()
                     .trim();
 
-            if (
-                !ESTILOS_BOTOES[
-                    estilo
-                ]
-            ) {
-                estilo =
-                    "PRIMARY";
+            if (!ESTILOS_BOTOES[estilo]) {
+                estilo = "PRIMARY";
             }
 
             const cargoResultado =
@@ -4187,9 +3517,7 @@ async function handleInteraction(
                     cargo
                 );
 
-            if (
-                cargoResultado.erro
-            ) {
+            if (cargoResultado.erro) {
                 return interaction.reply({
                     content:
                         cargoResultado.erro,
@@ -4202,8 +3530,7 @@ async function handleInteraction(
                 {
                     texto,
                     emoji:
-                        emoji ||
-                        null,
+                        emoji || null,
                     estilo,
                     cargo_id:
                         cargoResultado.id
@@ -4235,18 +3562,14 @@ async function handleInteraction(
                 content:
                     "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
                 flags: EPHEMERAL
-            }).catch(
-                () => {}
-            );
+            }).catch(() => {});
         }
 
         return interaction.reply({
             content:
                 "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
             flags: EPHEMERAL
-        }).catch(
-            () => {}
-        );
+        }).catch(() => {});
     }
 }
 
@@ -4256,9 +3579,7 @@ async function handleInteraction(
 
 const data =
     new SlashCommandBuilder()
-        .setName(
-            "registrar"
-        )
+        .setName("registrar")
         .setDescription(
             "Cria e configura o sistema de registro do servidor."
         )
@@ -4270,9 +3591,7 @@ const data =
 // ▶️ EXECUTAR
 // =====================================================
 
-async function execute(
-    interaction
-) {
+async function execute(interaction) {
     if (!interaction.guild) {
         return interaction.reply({
             content:
@@ -4281,11 +3600,7 @@ async function execute(
         });
     }
 
-    if (
-        !podeConfigurar(
-            interaction
-        )
-    ) {
+    if (!podeConfigurar(interaction)) {
         return interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor** para usar este comando.",
@@ -4294,9 +3609,7 @@ async function execute(
     }
 
     try {
-        await mostrarPainel(
-            interaction
-        );
+        await mostrarPainel(interaction);
 
     } catch (erro) {
         console.error(
