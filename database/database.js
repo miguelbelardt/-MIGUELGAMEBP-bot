@@ -38,14 +38,24 @@ const mysqlPool = mysql.createPool({
 //
 // precisa receber o valor duas vezes.
 //
-// Por isso o conversor abaixo também monta
-// automaticamente a lista de parâmetros na mesma
-// ordem em que os ? aparecem.
+// O conversor abaixo faz isso automaticamente.
 //
-// Também devolvemos:
-// resultado.rows
+// Exemplo:
 //
-// para manter o restante do bot compatível.
+// SQL:
+// VALUES ($1, $2, $2)
+//
+// Parâmetros:
+// ["abc", "123"]
+//
+// Resultado:
+//
+// SQL:
+// VALUES (?, ?, ?)
+//
+// Parâmetros:
+// ["abc", "123", "123"]
+//
 // =====================================================
 
 function converterPlaceholders(
@@ -62,6 +72,15 @@ function converterPlaceholders(
 
                 const indice =
                     Number(numero) - 1;
+
+                if (
+                    indice < 0 ||
+                    indice >= parametros.length
+                ) {
+                    throw new Error(
+                        `❌ Parâmetro $${numero} não foi fornecido para a consulta SQL.`
+                    );
+                }
 
                 novosParametros.push(
                     parametros[indice]
