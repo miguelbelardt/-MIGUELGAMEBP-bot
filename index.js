@@ -6,7 +6,8 @@ const {
     Routes,
     EmbedBuilder,
     AttachmentBuilder,
-    AuditLogEvent
+    AuditLogEvent,
+    MessageFlags
 } = require("discord.js");
 
 const http = require("http");
@@ -2545,8 +2546,8 @@ client.on(
         // =================================================
         // 📝 SISTEMA DE REGISTRO
         // =================================================
-        // Todas as interações do sistema de registro
-        // começam com "reg_".
+        // As interações atuais do registrar.js usam
+        // "registro_" no início do customId.
         //
         // Isso inclui:
         // - botões administrativos
@@ -2561,8 +2562,13 @@ client.on(
 
         if (
             interaction.customId &&
-            interaction.customId.startsWith(
-                "reg_"
+            (
+                interaction.customId.startsWith(
+                    "registro_"
+                ) ||
+                interaction.customId.startsWith(
+                    "reg_"
+                )
             )
         ) {
 
@@ -2601,8 +2607,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar o sistema de registro.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
 
                         } else {
@@ -2611,8 +2617,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar o sistema de registro.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
 
@@ -2644,8 +2650,8 @@ client.on(
                             content:
                                 "❌ O sistema de registro não está disponível no momento.",
 
-                            ephemeral:
-                                true
+                            flags:
+                                MessageFlags.Ephemeral
                         });
                     }
 
@@ -2776,8 +2782,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar o sistema de logs.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
 
@@ -2849,8 +2855,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao selecionar a opção do sorteio.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -2898,8 +2904,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao configurar o ticket.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -2947,8 +2953,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao escolher o jogador do PPT Duo.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3006,8 +3012,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao desativar a notificação do Daily.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3060,8 +3066,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3108,8 +3114,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3157,8 +3163,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3206,8 +3212,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao configurar o ticket.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3255,8 +3261,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao participar do sorteio.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3304,8 +3310,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar o sorteio.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3353,8 +3359,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao jogar no PPT Duo.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3402,8 +3408,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao jogar Pedra, Papel e Tesoura.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3462,8 +3468,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao executar esse comando.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3511,8 +3517,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao configurar o ticket.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3560,8 +3566,8 @@ client.on(
                                 content:
                                     "❌ Deu erro ao configurar o sorteio.",
 
-                                ephemeral:
-                                    true
+                                flags:
+                                    MessageFlags.Ephemeral
                             });
                         }
                     }
@@ -3603,8 +3609,8 @@ client.on(
                     content:
                         "❌ Comando não encontrado!",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -3639,8 +3645,8 @@ client.on(
                         content:
                             "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
 
-                        ephemeral:
-                            true
+                        flags:
+                            MessageFlags.Ephemeral
                     });
 
                 } else {
@@ -3649,8 +3655,8 @@ client.on(
                         content:
                             "❌ Deu erro ao executar esse comando.\n🔄 Tente novamente mais tarde.",
 
-                        ephemeral:
-                            true
+                        flags:
+                            MessageFlags.Ephemeral
                     });
                 }
 
