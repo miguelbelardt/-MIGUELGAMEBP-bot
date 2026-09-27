@@ -619,6 +619,184 @@ async function inicializarBanco() {
         WHERE atualizado_em = 0
     `, [agoraMs()]);
 
+    // ================================
+    // 📝 SISTEMA DE REGISTRO
+    // ================================
+    //
+    // Cada servidor possui uma configuração.
+    //
+    // O sistema suporta até 6 páginas.
+    //
+    // Cada página pode possuir vários
+    // botões.
+    //
+    // Cada botão pode ou não entregar
+    // um cargo.
+    // ================================
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS registro_config (
+            guild_id VARCHAR(30) PRIMARY KEY,
+
+            canal_id VARCHAR(30),
+
+            mensagem_id VARCHAR(30),
+
+            paginas INT NOT NULL DEFAULT 1,
+
+            configurado BOOLEAN
+                NOT NULL DEFAULT FALSE,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            )
+        )
+    `);
+
+    // ================================
+    // 📄 PÁGINAS DO REGISTRO
+    // ================================
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS registro_paginas (
+            id BIGINT NOT NULL AUTO_INCREMENT,
+
+            guild_id VARCHAR(30) NOT NULL,
+
+            pagina INT NOT NULL,
+
+            titulo VARCHAR(256),
+
+            descricao TEXT,
+
+            rodape VARCHAR(2048),
+
+            rodape_icone TEXT,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            PRIMARY KEY (id),
+
+            UNIQUE KEY uq_registro_pagina (
+                guild_id,
+                pagina
+            ),
+
+            INDEX idx_registro_paginas_guild (
+                guild_id
+            )
+        )
+    `);
+
+    // ================================
+    // 🔘 BOTÕES DO REGISTRO
+    // ================================
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS registro_botoes (
+            id BIGINT NOT NULL AUTO_INCREMENT,
+
+            pagina_id BIGINT NOT NULL,
+
+            texto VARCHAR(80) NOT NULL,
+
+            emoji VARCHAR(100),
+
+            estilo VARCHAR(20)
+                NOT NULL DEFAULT 'Primary',
+
+            cargo_id VARCHAR(30),
+
+            custom_id VARCHAR(100),
+
+            ordem INT NOT NULL DEFAULT 1,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            PRIMARY KEY (id),
+
+            INDEX idx_registro_botoes_pagina (
+                pagina_id
+            ),
+
+            CONSTRAINT fk_registro_botoes_pagina
+            FOREIGN KEY (
+                pagina_id
+            )
+            REFERENCES registro_paginas(id)
+            ON DELETE CASCADE
+        )
+    `);
+
+    // ================================
+    // 👤 USUÁRIOS REGISTRADOS
+    // ================================
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS registro_usuarios (
+            guild_id VARCHAR(30) NOT NULL,
+
+            user_id VARCHAR(30) NOT NULL,
+
+            pagina_id BIGINT,
+
+            botao_id BIGINT,
+
+            cargo_id VARCHAR(30),
+
+            registrado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            PRIMARY KEY (
+                guild_id,
+                user_id
+            ),
+
+            INDEX idx_registro_usuarios_guild (
+                guild_id
+            ),
+
+            INDEX idx_registro_usuarios_user (
+                user_id
+            ),
+
+            CONSTRAINT fk_registro_usuario_pagina
+            FOREIGN KEY (
+                pagina_id
+            )
+            REFERENCES registro_paginas(id)
+            ON DELETE SET NULL,
+
+            CONSTRAINT fk_registro_usuario_botao
+            FOREIGN KEY (
+                botao_id
+            )
+            REFERENCES registro_botoes(id)
+            ON DELETE SET NULL
+        )
+    `);
+
     console.log(
         "💾 Banco de dados MySQL 8 conectado e tabelas prontas!"
     );
@@ -2022,6 +2200,791 @@ async function excluirEmbedBanco(
 }
 
 // =====================================================
+// 📝 SISTEMA DE REGISTRO
+// =====================================================
+
+// =====================================================
+// ⚙️ CONFIGURAÇÃO DO REGISTRO
+// =====================================================
+
+async function getRegistroConfig(
+    guildId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_config
+            WHERE guild_id = $1
+            `,
+            [guildId]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+async function salvarRegistroConfig(
+    guildId,
+    canalId = null,
+    mensagemId = null,
+    paginas = 1,
+    configurado = true
+) {
+
+    paginas = Math.max(
+        1,
+        Math.min(
+            6,
+            Number(paginas) || 1
+        )
+    );
+
+    const agora =
+        agoraMs();
+
+    await pool.query(
+        `
+        INSERT INTO registro_config (
+            guild_id,
+            canal_id,
+            mensagem_id,
+            paginas,
+            configurado,
+            criado_em,
+            atualizado_em
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $6
+        )
+        ON DUPLICATE KEY UPDATE
+            canal_id = VALUES(canal_id),
+            mensagem_id = VALUES(mensagem_id),
+            paginas = VALUES(paginas),
+            configurado = VALUES(configurado),
+            atualizado_em = VALUES(atualizado_em)
+        `,
+        [
+            guildId,
+            canalId,
+            mensagemId,
+            paginas,
+            configurado ? 1 : 0,
+            agora
+        ]
+    );
+
+    return getRegistroConfig(
+        guildId
+    );
+}
+
+async function atualizarCanalRegistro(
+    guildId,
+    canalId
+) {
+
+    const config =
+        await getRegistroConfig(
+            guildId
+        );
+
+    if (!config) {
+
+        return salvarRegistroConfig(
+            guildId,
+            canalId,
+            null,
+            1,
+            false
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE registro_config
+        SET
+            canal_id = $1,
+            atualizado_em = $2
+        WHERE guild_id = $3
+        `,
+        [
+            canalId,
+            agoraMs(),
+            guildId
+        ]
+    );
+
+    return getRegistroConfig(
+        guildId
+    );
+}
+
+async function salvarMensagemRegistro(
+    guildId,
+    mensagemId
+) {
+
+    const config =
+        await getRegistroConfig(
+            guildId
+        );
+
+    if (!config) {
+
+        return salvarRegistroConfig(
+            guildId,
+            null,
+            mensagemId,
+            1,
+            false
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE registro_config
+        SET
+            mensagem_id = $1,
+            atualizado_em = $2
+        WHERE guild_id = $3
+        `,
+        [
+            mensagemId,
+            agoraMs(),
+            guildId
+        ]
+    );
+
+    return getRegistroConfig(
+        guildId
+    );
+}
+
+// =====================================================
+// 📄 PÁGINAS DO REGISTRO
+// =====================================================
+
+async function criarRegistroPagina(
+    guildId,
+    pagina,
+    dados = {}
+) {
+
+    pagina = Number(
+        pagina
+    );
+
+    if (
+        !Number.isInteger(pagina) ||
+        pagina < 1 ||
+        pagina > 6
+    ) {
+        throw new Error(
+            "A página do registro deve estar entre 1 e 6."
+        );
+    }
+
+    const titulo =
+        dados.titulo ??
+        null;
+
+    const descricao =
+        dados.descricao ??
+        null;
+
+    const rodape =
+        dados.rodape ??
+        null;
+
+    const rodapeIcone =
+        dados.rodapeIcone ??
+        dados.rodape_icone ??
+        null;
+
+    const agora =
+        agoraMs();
+
+    await pool.query(
+        `
+        INSERT INTO registro_paginas (
+            guild_id,
+            pagina,
+            titulo,
+            descricao,
+            rodape,
+            rodape_icone,
+            criado_em,
+            atualizado_em
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $7
+        )
+        ON DUPLICATE KEY UPDATE
+            titulo = VALUES(titulo),
+            descricao = VALUES(descricao),
+            rodape = VALUES(rodape),
+            rodape_icone = VALUES(rodape_icone),
+            atualizado_em = VALUES(atualizado_em)
+        `,
+        [
+            guildId,
+            pagina,
+            titulo,
+            descricao,
+            rodape,
+            rodapeIcone,
+            agora
+        ]
+    );
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_paginas
+            WHERE
+                guild_id = $1
+                AND pagina = $2
+            `,
+            [
+                guildId,
+                pagina
+            ]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+async function getRegistroPagina(
+    guildId,
+    pagina
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_paginas
+            WHERE
+                guild_id = $1
+                AND pagina = $2
+            `,
+            [
+                guildId,
+                pagina
+            ]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+async function getRegistroPaginaPorId(
+    paginaId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_paginas
+            WHERE id = $1
+            `,
+            [paginaId]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+async function getRegistroPaginas(
+    guildId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_paginas
+            WHERE guild_id = $1
+            ORDER BY pagina ASC
+            `,
+            [guildId]
+        );
+
+    return resultado.rows;
+}
+
+async function atualizarRegistroPagina(
+    paginaId,
+    guildId,
+    dados = {}
+) {
+
+    await pool.query(
+        `
+        UPDATE registro_paginas
+        SET
+            titulo = $1,
+            descricao = $2,
+            rodape = $3,
+            rodape_icone = $4,
+            atualizado_em = $5
+        WHERE
+            id = $6
+            AND guild_id = $7
+        `,
+        [
+            dados.titulo ??
+                null,
+
+            dados.descricao ??
+                null,
+
+            dados.rodape ??
+                null,
+
+            dados.rodapeIcone ??
+                dados.rodape_icone ??
+                null,
+
+            agoraMs(),
+
+            paginaId,
+            guildId
+        ]
+    );
+
+    return getRegistroPaginaPorId(
+        paginaId
+    );
+}
+
+async function excluirRegistroPagina(
+    paginaId,
+    guildId
+) {
+
+    await pool.query(
+        `
+        DELETE FROM registro_paginas
+        WHERE
+            id = $1
+            AND guild_id = $2
+        `,
+        [
+            paginaId,
+            guildId
+        ]
+    );
+}
+
+// =====================================================
+// 🔘 BOTÕES DO REGISTRO
+// =====================================================
+
+async function criarRegistroBotao(
+    paginaId,
+    dados = {}
+) {
+
+    const texto =
+        dados.texto ||
+        "Registrar";
+
+    const emoji =
+        dados.emoji ??
+        null;
+
+    const estilo =
+        dados.estilo ||
+        "Primary";
+
+    const cargoId =
+        dados.cargoId ??
+        dados.cargo_id ??
+        null;
+
+    const customId =
+        dados.customId ??
+        dados.custom_id ??
+        `registrar_${paginaId}_${Date.now()}`;
+
+    const ordem =
+        Math.max(
+            1,
+            Number(
+                dados.ordem
+            ) || 1
+        );
+
+    const agora =
+        agoraMs();
+
+    const [resultado] =
+        await mysqlPool.query(
+            `
+            INSERT INTO registro_botoes (
+                pagina_id,
+                texto,
+                emoji,
+                estilo,
+                cargo_id,
+                custom_id,
+                ordem,
+                criado_em,
+                atualizado_em
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            `,
+            [
+                paginaId,
+                texto,
+                emoji,
+                estilo,
+                cargoId,
+                customId,
+                ordem,
+                agora,
+                agora
+            ]
+        );
+
+    return getRegistroBotaoPorId(
+        resultado.insertId
+    );
+}
+
+async function getRegistroBotaoPorId(
+    botaoId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_botoes
+            WHERE id = $1
+            `,
+            [botaoId]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+async function getRegistroBotoes(
+    paginaId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_botoes
+            WHERE pagina_id = $1
+            ORDER BY ordem ASC, id ASC
+            `,
+            [paginaId]
+        );
+
+    return resultado.rows;
+}
+
+async function atualizarRegistroBotao(
+    botaoId,
+    dados = {}
+) {
+
+    await pool.query(
+        `
+        UPDATE registro_botoes
+        SET
+            texto = $1,
+            emoji = $2,
+            estilo = $3,
+            cargo_id = $4,
+            custom_id = $5,
+            ordem = $6,
+            atualizado_em = $7
+        WHERE id = $8
+        `,
+        [
+            dados.texto ??
+                "Registrar",
+
+            dados.emoji ??
+                null,
+
+            dados.estilo ??
+                "Primary",
+
+            dados.cargoId ??
+                dados.cargo_id ??
+                null,
+
+            dados.customId ??
+                dados.custom_id ??
+                null,
+
+            Math.max(
+                1,
+                Number(
+                    dados.ordem
+                ) || 1
+            ),
+
+            agoraMs(),
+
+            botaoId
+        ]
+    );
+
+    return getRegistroBotaoPorId(
+        botaoId
+    );
+}
+
+async function excluirRegistroBotao(
+    botaoId
+) {
+
+    await pool.query(
+        `
+        DELETE FROM registro_botoes
+        WHERE id = $1
+        `,
+        [botaoId]
+    );
+}
+
+// =====================================================
+// 📦 REGISTRO COMPLETO DO SERVIDOR
+// =====================================================
+
+async function getRegistroCompleto(
+    guildId
+) {
+
+    const config =
+        await getRegistroConfig(
+            guildId
+        );
+
+    const paginas =
+        await getRegistroPaginas(
+            guildId
+        );
+
+    for (
+        const pagina of paginas
+    ) {
+
+        pagina.botoes =
+            await getRegistroBotoes(
+                pagina.id
+            );
+    }
+
+    return {
+        config,
+        paginas
+    };
+}
+
+// =====================================================
+// 👤 USUÁRIOS REGISTRADOS
+// =====================================================
+
+async function usuarioJaRegistrado(
+    guildId,
+    userId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_usuarios
+            WHERE
+                guild_id = $1
+                AND user_id = $2
+            `,
+            [
+                guildId,
+                userId
+            ]
+        );
+
+    return (
+        resultado.rows.length > 0
+    );
+}
+
+async function getRegistroUsuario(
+    guildId,
+    userId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_usuarios
+            WHERE
+                guild_id = $1
+                AND user_id = $2
+            `,
+            [
+                guildId,
+                userId
+            ]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+async function registrarUsuario(
+    guildId,
+    userId,
+    paginaId = null,
+    botaoId = null,
+    cargoId = null
+) {
+
+    const agora =
+        agoraMs();
+
+    await pool.query(
+        `
+        INSERT INTO registro_usuarios (
+            guild_id,
+            user_id,
+            pagina_id,
+            botao_id,
+            cargo_id,
+            registrado_em,
+            atualizado_em
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $6
+        )
+        ON DUPLICATE KEY UPDATE
+            pagina_id = VALUES(pagina_id),
+            botao_id = VALUES(botao_id),
+            cargo_id = VALUES(cargo_id),
+            atualizado_em = VALUES(atualizado_em)
+        `,
+        [
+            guildId,
+            userId,
+            paginaId,
+            botaoId,
+            cargoId,
+            agora
+        ]
+    );
+
+    return getRegistroUsuario(
+        guildId,
+        userId
+    );
+}
+
+async function removerRegistroUsuario(
+    guildId,
+    userId
+) {
+
+    await pool.query(
+        `
+        DELETE FROM registro_usuarios
+        WHERE
+            guild_id = $1
+            AND user_id = $2
+        `,
+        [
+            guildId,
+            userId
+        ]
+    );
+}
+
+async function getUsuariosRegistrados(
+    guildId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM registro_usuarios
+            WHERE guild_id = $1
+            ORDER BY registrado_em ASC
+            `,
+            [guildId]
+        );
+
+    return resultado.rows;
+}
+
+async function getTotalUsuariosRegistrados(
+    guildId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT COUNT(*) AS total
+            FROM registro_usuarios
+            WHERE guild_id = $1
+            `,
+            [guildId]
+        );
+
+    return Number(
+        resultado.rows[0]?.total || 0
+    );
+}
+
+// =====================================================
 // 📦 EXPORTAÇÕES
 // =====================================================
 
@@ -2066,5 +3029,37 @@ module.exports = {
     getEmbedPorId,
     salvarMensagemEmbed,
     atualizarCanalEmbed,
-    excluirEmbedBanco
+    excluirEmbedBanco,
+
+    // 📝 Registro
+    getRegistroConfig,
+    salvarRegistroConfig,
+    atualizarCanalRegistro,
+    salvarMensagemRegistro,
+
+    // 📄 Páginas
+    criarRegistroPagina,
+    getRegistroPagina,
+    getRegistroPaginaPorId,
+    getRegistroPaginas,
+    atualizarRegistroPagina,
+    excluirRegistroPagina,
+
+    // 🔘 Botões
+    criarRegistroBotao,
+    getRegistroBotaoPorId,
+    getRegistroBotoes,
+    atualizarRegistroBotao,
+    excluirRegistroBotao,
+
+    // 📦 Registro completo
+    getRegistroCompleto,
+
+    // 👤 Usuários registrados
+    usuarioJaRegistrado,
+    getRegistroUsuario,
+    registrarUsuario,
+    removerRegistroUsuario,
+    getUsuariosRegistrados,
+    getTotalUsuariosRegistrados
 };
