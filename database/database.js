@@ -836,101 +836,80 @@ async function inicializarBanco() {
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            content =
-                '👋 Seja muito bem-vindo(a), {user}! Aproveite o servidor! 🎉'
+        SET content =
+            '👋 Seja muito bem-vindo(a), {user}! Aproveite o servidor! 🎉'
         WHERE content IS NULL
         OR content = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            embed_titulo =
-                '🎉 Bem-vindo ao {server}!'
+        SET embed_titulo =
+            '🎉 Bem-vindo ao {server}!'
         WHERE embed_titulo IS NULL
         OR embed_titulo = ''
     `);
 
-    await mysqlPool.query(`
-        UPDATE join_config
-        SET
-            embed_descricao =
-                'Olá, {user}!\\n\\n' ||
-                'Esperamos que você se divirta por aqui! 💙\\n\\n' ||
-                '👤 Você é o membro **#{members}** do servidor.'
-        WHERE embed_descricao IS NULL
-        OR embed_descricao = ''
-    `);
+    // =================================================
+    // ⚠️ IMPORTANTE:
+    // Não usar || para concatenar no MySQL.
+    // A descrição já fica inteira em uma única string.
+    // =================================================
 
-    /*
-     * MySQL não utiliza || como concatenação de texto
-     * quando PIPES_AS_CONCAT não está habilitado.
-     *
-     * Esta atualização garante a descrição padrão.
-     */
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            embed_descricao =
-                'Olá, {user}!\\n\\nEsperamos que você se divirta por aqui! 💙\\n\\n👤 Você é o membro **#{members}** do servidor.'
+        SET embed_descricao =
+            'Olá, {user}!\\n\\nEsperamos que você se divirta por aqui! 💙\\n\\n👤 Você é o membro **#{members}** do servidor.'
         WHERE embed_descricao IS NULL
         OR embed_descricao = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            embed_cor = '0x5865F2'
+        SET embed_cor = '0x5865F2'
         WHERE embed_cor IS NULL
         OR embed_cor = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            autor_nome = '{username}'
+        SET autor_nome = '{username}'
         WHERE autor_nome IS NULL
         OR autor_nome = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            autor_icone = '{avatar}'
+        SET autor_icone = '{avatar}'
         WHERE autor_icone IS NULL
         OR autor_icone = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            thumbnail = '{avatar}'
+        SET thumbnail = '{avatar}'
         WHERE thumbnail IS NULL
         OR thumbnail = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            imagem = '{banner}'
+        SET imagem = '{banner}'
         WHERE imagem IS NULL
         OR imagem = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            footer_texto =
-                'Massa Com Chika • Bem-vindo!'
+        SET footer_texto =
+            'Massa Com Chika • Bem-vindo!'
         WHERE footer_texto IS NULL
         OR footer_texto = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET
-            footer_icone = '{avatar}'
+        SET footer_icone = '{avatar}'
         WHERE footer_icone IS NULL
         OR footer_icone = ''
     `);
