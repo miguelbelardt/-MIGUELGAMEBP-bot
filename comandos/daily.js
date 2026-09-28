@@ -779,7 +779,7 @@ async function resgatarDailyAtomico(
                     ultimo_daily,
                     daily_sequencia
                 FROM usuarios
-                WHERE id = ?
+                WHERE id = $1
             `, [
                 userId
             ]);
@@ -856,16 +856,16 @@ async function resgatarDailyAtomico(
                             0
                         ) + ?,
 
-                    ultimo_daily = ?,
+                    ultimo_daily = $1,
 
-                    daily_sequencia = ?,
+                    daily_sequencia = $2,
 
                     notificacao_daily = FALSE,
 
                     notificacao_daily_em = NULL
 
                 WHERE
-                    id = ?
+                    id = $3
 
                     AND (
                         ultimo_daily IS NULL
@@ -893,7 +893,7 @@ async function resgatarDailyAtomico(
                         ultimo_daily,
                         daily_sequencia
                     FROM usuarios
-                    WHERE id = ?
+                    WHERE id = $1
                 `, [
                     userId
                 ]);
@@ -928,7 +928,7 @@ async function resgatarDailyAtomico(
             await pool.query(`
                 SELECT saldo
                 FROM usuarios
-                WHERE id = ?
+                WHERE id = $1
             `, [
                 userId
             ]);
