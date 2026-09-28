@@ -11,7 +11,8 @@ const {
     ChannelType,
     StringSelectMenuBuilder,
     PermissionFlagsBits,
-    InteractionContextType
+    InteractionContextType,
+    MessageFlags
 } = require("discord.js");
 
 const { pool } = require("../database/database");
@@ -62,8 +63,7 @@ async function garantirColunaSorteios(
 
     } catch (erro) {
         if (
-            erro?.code ===
-                "ER_DUP_FIELDNAME" ||
+            erro?.code === "ER_DUP_FIELDNAME" ||
             erro?.errno === 1060
         ) {
             console.log(
@@ -103,11 +103,15 @@ async function prepararBanco() {
             "💾 Banco de sorteios preparado."
         );
 
+        return true;
+
     } catch (erro) {
         console.error(
             "❌ Erro ao preparar banco de sorteios:",
             erro
         );
+
+        return false;
     }
 }
 
@@ -142,8 +146,78 @@ function criarConfig(
 
         painelMensagemId: null,
         painelCanalId: null,
+
         sorteioEncerrado: false
     };
+}
+
+function criarConfigDoSorteio(
+    sorteio,
+    usuarioId,
+    guildId
+) {
+    const config =
+        criarConfig(
+            guildId,
+            usuarioId
+        );
+
+    config.canalId =
+        sorteio.canal_id;
+
+    config.titulo =
+        sorteio.titulo || "";
+
+    config.descricao =
+        sorteio.descricao || "";
+
+    config.cor =
+        sorteio.cor || "5865F2";
+
+    config.imagem =
+        sorteio.imagem || null;
+
+    config.thumbnail =
+        sorteio.thumbnail || null;
+
+    config.vencedores =
+        Math.min(
+            Math.max(
+                Number(
+                    sorteio.vencedores
+                ) || 1,
+                1
+            ),
+            20
+        );
+
+    config.mostrarParticipantes =
+        Boolean(
+            sorteio.mostrar_participantes
+        );
+
+    config.sorteioId =
+        sorteio.id;
+
+    config.sorteioEncerrado =
+        Boolean(
+            sorteio.encerrado
+        );
+
+    if (sorteio.encerra_em) {
+        const data =
+            formatarData(
+                sorteio.encerra_em
+            );
+
+        config.data =
+            data.data;
+
+        config.horario =
+            data.horario;
+    }
+
+    return config;
 }
 
 function normalizarCor(
@@ -944,10 +1018,8 @@ async function criarSorteio(
                 config.titulo,
                 config.descricao,
                 config.cor,
-                config.imagem ||
-                    null,
-                config.thumbnail ||
-                    null,
+                config.imagem || null,
+                config.thumbnail || null,
                 encerraEm,
                 quantidadeVencedores,
                 config.mostrarParticipantes
@@ -1155,7 +1227,8 @@ async function mostrarParticipantes(
             return interaction.reply({
                 content:
                     "❌ Esse sorteio não existe.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1165,7 +1238,8 @@ async function mostrarParticipantes(
             return interaction.reply({
                 content:
                     "🔒 A lista de participantes está oculta neste sorteio.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1178,7 +1252,8 @@ async function mostrarParticipantes(
             return interaction.reply({
                 content:
                     "👥 Ninguém participou deste sorteio ainda.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1218,7 +1293,8 @@ async function mostrarParticipantes(
                     0,
                     2000
                 ),
-            ephemeral: true
+            flags:
+                MessageFlags.Ephemeral
         });
 
     } catch (erro) {
@@ -1230,7 +1306,8 @@ async function mostrarParticipantes(
         return interaction.reply({
             content:
                 "❌ Não foi possível mostrar os participantes.",
-            ephemeral: true
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 }
@@ -1353,7 +1430,8 @@ async function sairDoSorteio(
             return interaction.reply({
                 content:
                     "❌ Esse sorteio não existe.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1361,7 +1439,8 @@ async function sairDoSorteio(
             return interaction.reply({
                 content:
                     "❌ Esse sorteio já foi encerrado.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1373,7 +1452,8 @@ async function sairDoSorteio(
             return interaction.reply({
                 content:
                     "❌ Esse sorteio já terminou.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1396,7 +1476,8 @@ async function sairDoSorteio(
             return interaction.reply({
                 content:
                     "⚠️ Você não está participando desse sorteio.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1421,7 +1502,8 @@ async function sairDoSorteio(
             return interaction.reply({
                 content:
                     "❌ Não foi possível sair do sorteio.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
     }
@@ -1570,11 +1652,13 @@ async function finalizarSorteio(
                             dataHoraEncerramento
                     });
 
-            return canal.send({
+            await canal.send({
                 embeds: [
                     embedSemVencedores
                 ]
             });
+
+            return;
         }
 
         const mencoes =
@@ -1657,12 +1741,21 @@ async function verificarSorteios(
     }
 }
 
-function iniciarSistemaSorteios(
+async function iniciarSistemaSorteios(
     client
 ) {
-    prepararBanco();
+    const bancoPronto =
+        await prepararBanco();
 
-    verificarSorteios(
+    if (!bancoPronto) {
+        console.error(
+            "❌ Sistema de sorteios não foi iniciado porque o banco não pôde ser preparado."
+        );
+
+        return;
+    }
+
+    await verificarSorteios(
         client
     );
 
@@ -1696,7 +1789,26 @@ async function verificarCriador(
         await interaction.reply({
             content:
                 "❌ Esse sorteio não existe.",
-            ephemeral: true
+            flags:
+                MessageFlags.Ephemeral
+        });
+
+        return null;
+    }
+
+    if (
+        String(
+            sorteio.guild_id
+        ) !==
+        String(
+            interaction.guildId
+        )
+    ) {
+        await interaction.reply({
+            content:
+                "❌ Esse sorteio pertence a outro servidor.",
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return null;
@@ -1713,7 +1825,8 @@ async function verificarCriador(
         await interaction.reply({
             content:
                 "❌ Apenas quem criou este sorteio pode editá-lo.",
-            ephemeral: true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return null;
@@ -1723,7 +1836,8 @@ async function verificarCriador(
         await interaction.reply({
             content:
                 "❌ Esse sorteio já foi encerrado e não pode mais ser editado.",
-            ephemeral: true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return null;
@@ -1744,7 +1858,23 @@ module.exports = {
                 "sorteio"
             )
             .setDescription(
-                "Cria um novo sorteio."
+                "Cria ou edita um sorteio."
+            )
+            .addIntegerOption(
+                option =>
+                    option
+                        .setName(
+                            "id"
+                        )
+                        .setDescription(
+                            "ID do sorteio existente que deseja editar."
+                        )
+                        .setRequired(
+                            false
+                        )
+                        .setMinValue(
+                            1
+                        )
             )
             .setDefaultMemberPermissions(
                 PermissionFlagsBits.Administrator
@@ -1767,7 +1897,8 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Este comando só pode ser usado em servidores.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1778,10 +1909,124 @@ module.exports = {
         ) {
             return interaction.reply({
                 content:
-                    "❌ Você precisa ser administrador para criar sorteios.",
-                ephemeral: true
+                    "❌ Você precisa ser administrador para criar ou editar sorteios.",
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
+
+        await prepararBanco();
+
+        const sorteioId =
+            interaction.options.getInteger(
+                "id"
+            );
+
+        // ================================
+        // ✏️ EDITAR SORTEIO EXISTENTE
+        // ================================
+
+        if (sorteioId) {
+            const sorteio =
+                await buscarSorteio(
+                    sorteioId
+                );
+
+            if (!sorteio) {
+                return interaction.reply({
+                    content:
+                        "❌ Não encontrei um sorteio com esse ID.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            if (
+                String(
+                    sorteio.guild_id
+                ) !==
+                String(
+                    interaction.guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Esse sorteio pertence a outro servidor.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            if (
+                String(
+                    sorteio.criador_id
+                ) !==
+                String(
+                    interaction.user.id
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Apenas quem criou esse sorteio pode editá-lo.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            if (
+                sorteio.encerrado
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Esse sorteio já foi encerrado e não pode mais ser editado.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            const config =
+                criarConfigDoSorteio(
+                    sorteio,
+                    interaction.user.id,
+                    interaction.guildId
+                );
+
+            config.painelCanalId =
+                interaction.channelId;
+
+            sessoes.set(
+                interaction.user.id,
+                config
+            );
+
+            await interaction.reply({
+                embeds: [
+                    criarEmbedPainel(
+                        config
+                    )
+                ],
+                components:
+                    criarPainelSorteio(
+                        interaction.user.id,
+                        true,
+                        false
+                    ),
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            const mensagem =
+                await interaction.fetchReply();
+
+            config.painelMensagemId =
+                mensagem.id;
+
+            return;
+        }
+
+        // ================================
+        // 🎉 CRIAR NOVO SORTEIO
+        // ================================
 
         const config =
             criarConfig(
@@ -1804,7 +2049,9 @@ module.exports = {
                 criarPainelSorteio(
                     interaction.user.id,
                     false
-                )
+                ),
+            flags:
+                MessageFlags.Ephemeral
         });
 
         const mensagem =
@@ -1865,7 +2112,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "👥 A prévia está com a opção de participantes ativada, mas o sorteio ainda não foi enviado.\n\n🎟️ Ainda não existem participantes.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -1915,7 +2163,8 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Apenas quem criou este sorteio pode usar este painel.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1927,8 +2176,9 @@ module.exports = {
         if (!config) {
             return interaction.reply({
                 content:
-                    "❌ Sua sessão de sorteio expirou.",
-                ephemeral: true
+                    "❌ Sua sessão de sorteio expirou. Use `/sorteio` novamente.",
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1943,7 +2193,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ O sorteio ainda não foi enviado.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -1989,7 +2240,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Não foi possível encerrar o sorteio.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
         }
@@ -2245,7 +2497,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ O canal não pode ser alterado depois que o sorteio foi enviado.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2387,7 +2640,8 @@ module.exports = {
                     criarBotoesPreview(
                         config
                     ),
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -2414,7 +2668,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Configure o título primeiro.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2422,7 +2677,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Configure a descrição primeiro.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2430,7 +2686,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Escolha o canal do sorteio.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2441,7 +2698,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Defina a data e o horário de encerramento.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2458,7 +2716,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ A data e o horário precisam estar no futuro.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2477,6 +2736,11 @@ module.exports = {
                 quantidadeVencedores;
 
             try {
+
+                // ================================
+                // ✏️ ATUALIZAR SORTEIO EXISTENTE
+                // ================================
+
                 if (
                     config.sorteioId
                 ) {
@@ -2492,6 +2756,7 @@ module.exports = {
                             vencedores = $7,
                             mostrar_participantes = $8
                         WHERE id = $9
+                          AND guild_id = $10
                         `,
                         [
                             config.titulo,
@@ -2502,7 +2767,8 @@ module.exports = {
                             encerraEm,
                             quantidadeVencedores,
                             config.mostrarParticipantes,
-                            config.sorteioId
+                            config.sorteioId,
+                            config.guildId
                         ]
                     );
 
@@ -2526,6 +2792,10 @@ module.exports = {
                     });
                 }
 
+                // ================================
+                // 🆕 CRIAR NOVO SORTEIO
+                // ================================
+
                 const canal =
                     await interaction.guild.channels
                         .fetch(
@@ -2539,7 +2809,8 @@ module.exports = {
                     return interaction.reply({
                         content:
                             "❌ Não consegui encontrar o canal escolhido.",
-                        ephemeral: true
+                        flags:
+                            MessageFlags.Ephemeral
                     });
                 }
 
@@ -2547,6 +2818,15 @@ module.exports = {
                     await criarSorteio(
                         config
                     );
+
+                if (!sorteio) {
+                    return interaction.reply({
+                        content:
+                            "❌ Não foi possível criar o sorteio no banco de dados.",
+                        flags:
+                            MessageFlags.Ephemeral
+                    });
+                }
 
                 const mensagem =
                     await canal.send({
@@ -2604,8 +2884,9 @@ module.exports = {
 
                 return interaction.reply({
                     content:
-                        "❌ Não foi possível criar o sorteio.",
-                    ephemeral: true
+                        "❌ Não foi possível criar ou atualizar o sorteio.",
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
         }
@@ -2627,7 +2908,8 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Sua sessão de sorteio expirou.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -2646,7 +2928,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Esse sorteio já foi encerrado e não pode mais ser editado.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
         }
@@ -2689,7 +2972,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ A cor precisa estar no formato hexadecimal.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2749,7 +3033,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ A data precisa estar no formato `DD/MM/AAAA`.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2767,7 +3052,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ O horário precisa estar no formato `HH:MM` ou `HH.MM`.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2787,7 +3073,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ O horário informado é inválido.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2804,7 +3091,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ A data e o horário precisam estar no futuro.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2847,7 +3135,8 @@ module.exports = {
             return interaction.reply({
                 content:
                     "❌ Sua sessão de sorteio expirou.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -2868,7 +3157,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Apenas quem criou este sorteio pode escolher o canal.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2911,7 +3201,8 @@ module.exports = {
                 return interaction.reply({
                     content:
                         "❌ Apenas quem criou este sorteio pode escolher os vencedores.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
 
@@ -2968,7 +3259,8 @@ module.exports = {
             return interaction.reply({
                 content:
                     "👀 Essa é apenas uma prévia. O sorteio ainda não começou.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -3003,14 +3295,16 @@ module.exports = {
                                 )
                         )
                 ],
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
         return interaction.reply({
             content:
                 resultado.mensagem,
-            ephemeral: true
+            flags:
+                MessageFlags.Ephemeral
         });
     },
 
