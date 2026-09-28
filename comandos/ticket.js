@@ -185,27 +185,27 @@ async function inicializarTickets() {
 
     await pool.query(`
         ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS categoria_id VARCHAR(30)
+        ADD COLUMN categoria_id VARCHAR(30)
     `);
 
     await pool.query(`
         ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS mensagem_painel_id VARCHAR(30)
+        ADD COLUMN mensagem_painel_id VARCHAR(30)
     `);
 
     await pool.query(`
         ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS cargo_mencao_id VARCHAR(30)
+        ADD COLUMN cargo_mencao_id VARCHAR(30)
     `);
 
     await pool.query(`
         ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS contador_nome BOOLEAN NOT NULL DEFAULT FALSE
+        ADD COLUMN contador_nome BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
     await pool.query(`
         ALTER TABLE ticket_config
-        ADD COLUMN IF NOT EXISTS contador_tickets BIGINT NOT NULL DEFAULT 0
+        ADD COLUMN contador_tickets BIGINT NOT NULL DEFAULT 0
     `);
 
     await pool.query(`
