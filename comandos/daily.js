@@ -854,22 +854,22 @@ async function resgatarDailyAtomico(
                         COALESCE(
                             saldo,
                             0
-                        ) + ?,
+                        ) + $1,
 
-                    ultimo_daily = $1,
+                    ultimo_daily = $2,
 
-                    daily_sequencia = $2,
+                    daily_sequencia = $3,
 
                     notificacao_daily = FALSE,
 
                     notificacao_daily_em = NULL
 
                 WHERE
-                    id = $3
+                    id = $4
 
                     AND (
                         ultimo_daily IS NULL
-                        OR ultimo_daily < ?
+                        OR ultimo_daily < $5
                     )
             `, [
                 recompensa,
