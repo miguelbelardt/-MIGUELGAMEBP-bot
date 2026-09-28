@@ -553,6 +553,19 @@ function criarEmbedPreview(
                 inline: true
             });
 
+    // ================================
+    // 🆔 ID DO SORTEIO
+    // ================================
+
+    if (config.sorteioId) {
+        embed.addFields({
+            name: "🆔 ID do sorteio",
+            value:
+                `\`${config.sorteioId}\``,
+            inline: true
+        });
+    }
+
     if (
         config.data &&
         config.horario
@@ -1153,24 +1166,35 @@ async function atualizarMensagemSorteio(
             );
 
         const config = {
+            sorteioId:
+                sorteio.id,
+
             titulo:
                 sorteio.titulo,
+
             descricao:
                 sorteio.descricao,
+
             cor:
                 sorteio.cor,
+
             imagem:
                 sorteio.imagem,
+
             thumbnail:
                 sorteio.thumbnail,
+
             vencedores:
                 sorteio.vencedores,
+
             mostrarParticipantes:
                 Boolean(
                     sorteio.mostrar_participantes
                 ),
+
             data:
                 data.data,
+
             horario:
                 data.horario
         };
@@ -1645,12 +1669,22 @@ async function finalizarSorteio(
                     .setDescription(
                         `O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
                     )
-                    .addFields({
-                        name:
-                            "📅 Encerrado em",
-                        value:
-                            dataHoraEncerramento
-                    });
+                    .addFields(
+                        {
+                            name:
+                                "🆔 ID do sorteio",
+                            value:
+                                `\`${sorteio.id}\``,
+                            inline: true
+                        },
+                        {
+                            name:
+                                "📅 Encerrado em",
+                            value:
+                                dataHoraEncerramento,
+                            inline: true
+                        }
+                    );
 
             await canal.send({
                 embeds: [
@@ -1685,12 +1719,22 @@ async function finalizarSorteio(
                     `🎉 O sorteio **${sorteio.titulo}** terminou!\n\n` +
                     `🏆 **Vencedores:**\n${mencoes}`
                 )
-                .addFields({
-                    name:
-                        "📅 Encerrado em",
-                    value:
-                        dataHoraEncerramento
-                });
+                .addFields(
+                    {
+                        name:
+                            "🆔 ID do sorteio",
+                        value:
+                            `\`${sorteio.id}\``,
+                        inline: true
+                    },
+                    {
+                        name:
+                            "📅 Encerrado em",
+                        value:
+                            dataHoraEncerramento,
+                        inline: true
+                    }
+                );
 
         await canal.send({
             embeds: [
@@ -2828,6 +2872,13 @@ module.exports = {
                     });
                 }
 
+                // Coloca o ID imediatamente na configuração
+                config.sorteioId =
+                    sorteio.id;
+
+                config.sorteioEncerrado =
+                    false;
+
                 const mensagem =
                     await canal.send({
                         embeds: [
@@ -2856,11 +2907,12 @@ module.exports = {
                     ]
                 );
 
-                config.sorteioId =
-                    sorteio.id;
-
-                config.sorteioEncerrado =
-                    false;
+                // Garante que o embed público fique
+                // sincronizado com o banco e com o ID.
+                await atualizarMensagemSorteio(
+                    interaction.client,
+                    sorteio.id
+                );
 
                 return interaction.update({
                     embeds: [
