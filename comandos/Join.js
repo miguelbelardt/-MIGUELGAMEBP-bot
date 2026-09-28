@@ -7,90 +7,6 @@ const {
 } = require("../database/database");
 
 // =====================================================
-// ⚙️ CONFIGURAÇÃO PADRÃO DO SISTEMA DE BOAS-VINDAS
-// =====================================================
-
-const CONFIG_PADRAO = {
-
-    // =================================================
-    // 📢 MENSAGEM NORMAL
-    // =================================================
-
-    content:
-        "👋 Seja muito bem-vindo(a), {user}! Aproveite o servidor! 🎉",
-
-    // =================================================
-    // 🎨 EMBED
-    // =================================================
-
-    embed: {
-
-        habilitado: true,
-
-        titulo:
-            "🎉 Bem-vindo ao {server}!",
-
-        descricao:
-            "Olá, {user}!\n\n" +
-            "Esperamos que você se divirta por aqui! 💙\n\n" +
-            "👤 Você é o membro **#{members}** do servidor.",
-
-        cor:
-            0x5865F2,
-
-        // =================================================
-        // 👤 AUTOR
-        // =================================================
-
-        autor: {
-
-            habilitado: true,
-
-            nome:
-                "{username}",
-
-            icone:
-                "{avatar}"
-        },
-
-        // =================================================
-        // 🖼️ THUMBNAIL
-        // =================================================
-
-        thumbnail:
-            "{avatar}",
-
-        // =================================================
-        // 🖼️ IMAGEM / BANNER
-        // =================================================
-
-        imagem:
-            "{banner}",
-
-        // =================================================
-        // 📌 RODAPÉ
-        // =================================================
-
-        footer: {
-
-            habilitado: true,
-
-            texto:
-                "Massa Com Chika • Bem-vindo!",
-
-            icone:
-                "{avatar}"
-        },
-
-        // =================================================
-        // ⏰ DATA E HORA DA ENTRADA
-        // =================================================
-
-        timestamp: true
-    }
-};
-
-// =====================================================
 // 🔄 SUBSTITUIR VARIÁVEIS
 // =====================================================
 
@@ -230,6 +146,20 @@ function converterCor(cor) {
 }
 
 // =====================================================
+// 🔘 VERIFICAR BOOLEAN
+// =====================================================
+
+function estaAtivado(valor) {
+
+    return (
+        valor === true ||
+        valor === 1 ||
+        valor === "1" ||
+        valor === "true"
+    );
+}
+
+// =====================================================
 // 👋 ENVIAR BOAS-VINDAS
 // =====================================================
 
@@ -250,6 +180,9 @@ async function enviarBoasVindas(
             return;
         }
 
+        const guild =
+            membro.guild;
+
         // =================================================
         // 🗄️ BUSCAR CONFIGURAÇÃO DO BANCO
         // =================================================
@@ -260,7 +193,7 @@ async function enviarBoasVindas(
 
             configBanco =
                 await getJoinConfig(
-                    membro.guild.id
+                    guild.id
                 );
 
         } catch (erro) {
@@ -274,7 +207,7 @@ async function enviarBoasVindas(
         }
 
         // =================================================
-        // ⚙️ CONFIGURAÇÃO FINAL
+        // ⚙️ VERIFICAR CONFIGURAÇÃO
         // =================================================
 
         if (
@@ -282,7 +215,7 @@ async function enviarBoasVindas(
         ) {
 
             console.log(
-                `⚠️ Sistema de boas-vindas não configurado para ${membro.guild.name}.`
+                `⚠️ Sistema de boas-vindas não configurado para ${guild.name}.`
             );
 
             return;
@@ -295,14 +228,15 @@ async function enviarBoasVindas(
         if (
             configBanco.habilitado === false ||
             configBanco.habilitado === 0 ||
-            configBanco.habilitado === "0"
+            configBanco.habilitado === "0" ||
+            configBanco.habilitado === "false"
         ) {
 
             return;
         }
 
         // =================================================
-        // 📢 CANAL
+        // 📢 CANAL CONFIGURADO
         // =================================================
 
         const canalId =
@@ -313,14 +247,18 @@ async function enviarBoasVindas(
         ) {
 
             console.log(
-                `⚠️ Canal de boas-vindas não configurado em ${membro.guild.name}.`
+                `⚠️ Canal de boas-vindas não configurado em ${guild.name}.`
             );
 
             return;
         }
 
+        // =================================================
+        // 🔎 BUSCAR CANAL
+        // =================================================
+
         const canal =
-            membro.guild.channels.cache.get(
+            guild.channels.cache.get(
                 canalId
             );
 
@@ -335,12 +273,16 @@ async function enviarBoasVindas(
             return;
         }
 
+        // =================================================
+        // 📝 VERIFICAR CANAL DE TEXTO
+        // =================================================
+
         if (
             !canal.isTextBased()
         ) {
 
             console.error(
-                "❌ O canal configurado para boas-vindas não é um canal de texto."
+                `❌ O canal configurado para boas-vindas não é um canal de texto: ${canalId}`
             );
 
             return;
@@ -356,12 +298,12 @@ async function enviarBoasVindas(
         try {
 
             usuario =
-                await usuario.fetch();
+                await membro.user.fetch();
 
         } catch (erro) {
 
             console.warn(
-                "⚠️ Não foi possível buscar o banner atualizado do membro:",
+                "⚠️ Não foi possível atualizar os dados do usuário:",
                 erro
             );
         }
@@ -381,7 +323,7 @@ async function enviarBoasVindas(
         // =================================================
 
         let banner =
-            null;
+            "";
 
         if (
             usuario.banner
@@ -391,7 +333,7 @@ async function enviarBoasVindas(
                 usuario.bannerURL({
                     extension: "png",
                     size: 2048
-                });
+                }) || "";
         }
 
         // =================================================
@@ -399,7 +341,7 @@ async function enviarBoasVindas(
         // =================================================
 
         const membros =
-            membro.guild.memberCount;
+            guild.memberCount;
 
         // =================================================
         // 📦 DADOS DAS VARIÁVEIS
@@ -411,7 +353,7 @@ async function enviarBoasVindas(
                 `<@${membro.id}>`,
 
             username:
-                membro.user.username,
+                usuario.username,
 
             userid:
                 membro.id,
@@ -420,25 +362,25 @@ async function enviarBoasVindas(
                 avatar,
 
             banner:
-                banner || "",
+                banner,
 
             members:
                 membros,
 
             server:
-                membro.guild.name
+                guild.name
         };
 
         // =================================================
-        // 🎨 CONFIGURAÇÃO DO EMBED
+        // 🎨 EMBED
         // =================================================
 
         let embed = null;
 
         if (
-            configBanco.embed_habilitado === true ||
-            configBanco.embed_habilitado === 1 ||
-            configBanco.embed_habilitado === "1"
+            estaAtivado(
+                configBanco.embed_habilitado
+            )
         ) {
 
             embed =
@@ -452,12 +394,20 @@ async function enviarBoasVindas(
                 configBanco.embed_titulo
             ) {
 
-                embed.setTitle(
+                const titulo =
                     substituirVariaveis(
                         configBanco.embed_titulo,
                         dados
-                    )
-                );
+                    );
+
+                if (
+                    titulo
+                ) {
+
+                    embed.setTitle(
+                        titulo
+                    );
+                }
             }
 
             // =================================================
@@ -468,12 +418,20 @@ async function enviarBoasVindas(
                 configBanco.embed_descricao
             ) {
 
-                embed.setDescription(
+                const descricao =
                     substituirVariaveis(
                         configBanco.embed_descricao,
                         dados
-                    )
-                );
+                    );
+
+                if (
+                    descricao
+                ) {
+
+                    embed.setDescription(
+                        descricao
+                    );
+                }
             }
 
             // =================================================
@@ -481,10 +439,9 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                configBanco.embed_cor !==
-                null &&
-                configBanco.embed_cor !==
-                undefined
+                configBanco.embed_cor !== null &&
+                configBanco.embed_cor !== undefined &&
+                configBanco.embed_cor !== ""
             ) {
 
                 embed.setColor(
@@ -499,9 +456,9 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                configBanco.autor_habilitado === true ||
-                configBanco.autor_habilitado === 1 ||
-                configBanco.autor_habilitado === "1"
+                estaAtivado(
+                    configBanco.autor_habilitado
+                )
             ) {
 
                 const nomeAutor =
@@ -598,9 +555,9 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                configBanco.footer_habilitado === true ||
-                configBanco.footer_habilitado === 1 ||
-                configBanco.footer_habilitado === "1"
+                estaAtivado(
+                    configBanco.footer_habilitado
+                )
             ) {
 
                 const textoFooter =
@@ -642,13 +599,14 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                configBanco.timestamp === true ||
-                configBanco.timestamp === 1 ||
-                configBanco.timestamp === "1"
+                estaAtivado(
+                    configBanco.timestamp
+                )
             ) {
 
-                // Mostra a data/hora em que esta
-                // mensagem de boas-vindas foi criada.
+                // Adiciona somente a data/hora
+                // em que a mensagem foi enviada.
+
                 embed.setTimestamp();
             }
         }
@@ -660,7 +618,9 @@ async function enviarBoasVindas(
         const mensagem = {};
 
         if (
-            configBanco.content
+            configBanco.content !== null &&
+            configBanco.content !== undefined &&
+            configBanco.content !== ""
         ) {
 
             mensagem.content =
@@ -680,7 +640,7 @@ async function enviarBoasVindas(
         }
 
         // =================================================
-        // 📩 ENVIAR
+        // 🛑 NADA PARA ENVIAR
         // =================================================
 
         if (
@@ -689,11 +649,15 @@ async function enviarBoasVindas(
         ) {
 
             console.warn(
-                `⚠️ A configuração de boas-vindas de ${membro.guild.name} não possui conteúdo para enviar.`
+                `⚠️ A configuração de boas-vindas de ${guild.name} não possui conteúdo para enviar.`
             );
 
             return;
         }
+
+        // =================================================
+        // 📩 ENVIAR MENSAGEM
+        // =================================================
 
         await canal.send(
             mensagem
@@ -704,7 +668,7 @@ async function enviarBoasVindas(
         // =================================================
 
         console.log(
-            `👋 Boas-vindas enviadas para ${membro.user.tag} em ${membro.guild.name}`
+            `👋 Boas-vindas enviadas para ${usuario.tag} em ${guild.name}`
         );
 
     } catch (erro) {
