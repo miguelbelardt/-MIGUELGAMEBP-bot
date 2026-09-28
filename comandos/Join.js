@@ -2,11 +2,15 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
+const {
+    getJoinConfig
+} = require("../database/database");
+
 // =====================================================
-// ⚙️ CONFIGURAÇÃO DO SISTEMA DE BOAS-VINDAS
+// ⚙️ CONFIGURAÇÃO PADRÃO DO SISTEMA DE BOAS-VINDAS
 // =====================================================
 
-const CONFIG = {
+const CONFIG_PADRAO = {
 
     // =================================================
     // 📢 MENSAGEM NORMAL
@@ -39,6 +43,7 @@ const CONFIG = {
         // =================================================
 
         autor: {
+
             habilitado: true,
 
             nome:
@@ -67,6 +72,7 @@ const CONFIG = {
         // =================================================
 
         footer: {
+
             habilitado: true,
 
             texto:
@@ -77,7 +83,7 @@ const CONFIG = {
         },
 
         // =================================================
-        // ⏰ DATA
+        // ⏰ DATA E HORA DA ENTRADA
         // =================================================
 
         timestamp: true
@@ -101,30 +107,37 @@ function substituirVariaveis(
     }
 
     return String(texto)
+
         .replace(
             /\{user\}/gi,
             dados.user
         )
+
         .replace(
             /\{username\}/gi,
             dados.username
         )
+
         .replace(
             /\{userid\}/gi,
             dados.userid
         )
+
         .replace(
             /\{avatar\}/gi,
             dados.avatar
         )
+
         .replace(
             /\{banner\}/gi,
             dados.banner || ""
         )
+
         .replace(
             /\{members\}/gi,
             String(dados.members)
         )
+
         .replace(
             /\{server\}/gi,
             dados.server
@@ -132,7 +145,7 @@ function substituirVariaveis(
 }
 
 // =====================================================
-// 🧹 LIMPAR URL VAZIA
+// 🧹 VERIFICAR URL
 // =====================================================
 
 function urlValida(url) {
@@ -151,6 +164,72 @@ function urlValida(url) {
 }
 
 // =====================================================
+// 🔢 CONVERTER COR
+// =====================================================
+
+function converterCor(cor) {
+
+    if (
+        typeof cor === "number"
+    ) {
+        return cor;
+    }
+
+    if (
+        typeof cor === "string"
+    ) {
+
+        const valor =
+            cor.trim();
+
+        if (
+            valor.startsWith("0x")
+        ) {
+
+            const numero =
+                Number.parseInt(
+                    valor,
+                    16
+                );
+
+            if (
+                !Number.isNaN(numero)
+            ) {
+                return numero;
+            }
+        }
+
+        if (
+            valor.startsWith("#")
+        ) {
+
+            const numero =
+                Number.parseInt(
+                    valor.slice(1),
+                    16
+                );
+
+            if (
+                !Number.isNaN(numero)
+            ) {
+                return numero;
+            }
+        }
+
+        const numero =
+            Number(valor);
+
+        if (
+            !Number.isNaN(numero)
+        ) {
+            return numero;
+        }
+    }
+
+    return 0x5865F2;
+}
+
+// =====================================================
 // 👋 ENVIAR BOAS-VINDAS
 // =====================================================
 
@@ -160,10 +239,110 @@ async function enviarBoasVindas(
 
     try {
 
+        // =================================================
+        // 🛡️ VERIFICAÇÕES
+        // =================================================
+
         if (
             !membro ||
             !membro.guild
         ) {
+            return;
+        }
+
+        // =================================================
+        // 🗄️ BUSCAR CONFIGURAÇÃO DO BANCO
+        // =================================================
+
+        let configBanco = null;
+
+        try {
+
+            configBanco =
+                await getJoinConfig(
+                    membro.guild.id
+                );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro ao buscar configuração de boas-vindas no banco:",
+                erro
+            );
+
+            return;
+        }
+
+        // =================================================
+        // ⚙️ CONFIGURAÇÃO FINAL
+        // =================================================
+
+        if (
+            !configBanco
+        ) {
+
+            console.log(
+                `⚠️ Sistema de boas-vindas não configurado para ${membro.guild.name}.`
+            );
+
+            return;
+        }
+
+        // =================================================
+        // 🔴 SISTEMA DESATIVADO
+        // =================================================
+
+        if (
+            configBanco.habilitado === false ||
+            configBanco.habilitado === 0 ||
+            configBanco.habilitado === "0"
+        ) {
+
+            return;
+        }
+
+        // =================================================
+        // 📢 CANAL
+        // =================================================
+
+        const canalId =
+            configBanco.canal_id;
+
+        if (
+            !canalId
+        ) {
+
+            console.log(
+                `⚠️ Canal de boas-vindas não configurado em ${membro.guild.name}.`
+            );
+
+            return;
+        }
+
+        const canal =
+            membro.guild.channels.cache.get(
+                canalId
+            );
+
+        if (
+            !canal
+        ) {
+
+            console.error(
+                `❌ Canal de boas-vindas não encontrado: ${canalId}`
+            );
+
+            return;
+        }
+
+        if (
+            !canal.isTextBased()
+        ) {
+
+            console.error(
+                "❌ O canal configurado para boas-vindas não é um canal de texto."
+            );
+
             return;
         }
 
@@ -216,7 +395,7 @@ async function enviarBoasVindas(
         }
 
         // =================================================
-        // 👥 MEMBROS
+        // 👥 QUANTIDADE DE MEMBROS
         // =================================================
 
         const membros =
@@ -251,67 +430,15 @@ async function enviarBoasVindas(
         };
 
         // =================================================
-        // 🔎 PROCURAR CANAL
-        // =================================================
-
-        /*
-         * COLOQUE AQUI O ID DO CANAL DE BOAS-VINDAS.
-         *
-         * Exemplo:
-         *
-         * canalId: "123456789012345678"
-         */
-
-        const canalId =
-            "COLOQUE_O_ID_DO_CANAL_AQUI";
-
-        if (
-            canalId ===
-            "COLOQUE_O_ID_DO_CANAL_AQUI"
-        ) {
-
-            console.log(
-                "⚠️ Sistema de boas-vindas: coloque o ID do canal no Join.js."
-            );
-
-            return;
-        }
-
-        const canal =
-            membro.guild.channels.cache.get(
-                canalId
-            );
-
-        if (
-            !canal
-        ) {
-
-            console.error(
-                `❌ Canal de boas-vindas não encontrado: ${canalId}`
-            );
-
-            return;
-        }
-
-        if (
-            !canal.isTextBased()
-        ) {
-
-            console.error(
-                "❌ O canal configurado para boas-vindas não é um canal de texto."
-            );
-
-            return;
-        }
-
-        // =================================================
-        // 🎨 CRIAR EMBED
+        // 🎨 CONFIGURAÇÃO DO EMBED
         // =================================================
 
         let embed = null;
 
         if (
-            CONFIG.embed.habilitado
+            configBanco.embed_habilitado === true ||
+            configBanco.embed_habilitado === 1 ||
+            configBanco.embed_habilitado === "1"
         ) {
 
             embed =
@@ -322,12 +449,12 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.titulo
+                configBanco.embed_titulo
             ) {
 
                 embed.setTitle(
                     substituirVariaveis(
-                        CONFIG.embed.titulo,
+                        configBanco.embed_titulo,
                         dados
                     )
                 );
@@ -338,12 +465,12 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.descricao
+                configBanco.embed_descricao
             ) {
 
                 embed.setDescription(
                     substituirVariaveis(
-                        CONFIG.embed.descricao,
+                        configBanco.embed_descricao,
                         dados
                     )
                 );
@@ -354,14 +481,16 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.cor !==
-                undefined &&
-                CONFIG.embed.cor !==
-                null
+                configBanco.embed_cor !==
+                null &&
+                configBanco.embed_cor !==
+                undefined
             ) {
 
                 embed.setColor(
-                    CONFIG.embed.cor
+                    converterCor(
+                        configBanco.embed_cor
+                    )
                 );
             }
 
@@ -370,18 +499,20 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.autor?.habilitado
+                configBanco.autor_habilitado === true ||
+                configBanco.autor_habilitado === 1 ||
+                configBanco.autor_habilitado === "1"
             ) {
 
                 const nomeAutor =
                     substituirVariaveis(
-                        CONFIG.embed.autor.nome,
+                        configBanco.autor_nome,
                         dados
                     );
 
                 const iconeAutor =
                     substituirVariaveis(
-                        CONFIG.embed.autor.icone,
+                        configBanco.autor_icone,
                         dados
                     );
 
@@ -415,12 +546,12 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.thumbnail
+                configBanco.thumbnail
             ) {
 
                 const thumbnail =
                     substituirVariaveis(
-                        CONFIG.embed.thumbnail,
+                        configBanco.thumbnail,
                         dados
                     );
 
@@ -441,12 +572,12 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.imagem
+                configBanco.imagem
             ) {
 
                 const imagem =
                     substituirVariaveis(
-                        CONFIG.embed.imagem,
+                        configBanco.imagem,
                         dados
                     );
 
@@ -467,22 +598,25 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.footer?.habilitado
+                configBanco.footer_habilitado === true ||
+                configBanco.footer_habilitado === 1 ||
+                configBanco.footer_habilitado === "1"
             ) {
 
                 const textoFooter =
                     substituirVariaveis(
-                        CONFIG.embed.footer.texto,
+                        configBanco.footer_texto,
                         dados
                     );
 
                 const iconeFooter =
                     substituirVariaveis(
-                        CONFIG.embed.footer.icone,
+                        configBanco.footer_icone,
                         dados
                     );
 
                 const footer = {
+
                     text:
                         textoFooter ||
                         "Massa Com Chika"
@@ -508,9 +642,13 @@ async function enviarBoasVindas(
             // =================================================
 
             if (
-                CONFIG.embed.timestamp
+                configBanco.timestamp === true ||
+                configBanco.timestamp === 1 ||
+                configBanco.timestamp === "1"
             ) {
 
+                // Mostra a data/hora em que esta
+                // mensagem de boas-vindas foi criada.
                 embed.setTimestamp();
             }
         }
@@ -522,12 +660,12 @@ async function enviarBoasVindas(
         const mensagem = {};
 
         if (
-            CONFIG.content
+            configBanco.content
         ) {
 
             mensagem.content =
                 substituirVariaveis(
-                    CONFIG.content,
+                    configBanco.content,
                     dados
                 );
         }
@@ -545,9 +683,25 @@ async function enviarBoasVindas(
         // 📩 ENVIAR
         // =================================================
 
+        if (
+            !mensagem.content &&
+            !mensagem.embeds
+        ) {
+
+            console.warn(
+                `⚠️ A configuração de boas-vindas de ${membro.guild.name} não possui conteúdo para enviar.`
+            );
+
+            return;
+        }
+
         await canal.send(
             mensagem
         );
+
+        // =================================================
+        // 📋 LOG
+        // =================================================
 
         console.log(
             `👋 Boas-vindas enviadas para ${membro.user.tag} em ${membro.guild.name}`
