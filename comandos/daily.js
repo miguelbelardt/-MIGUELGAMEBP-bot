@@ -757,7 +757,7 @@ async function resgatarDailyAtomico(
                 daily_sequencia
             )
             VALUES (
-                ?,
+                $1,
                 0,
                 NULL,
                 FALSE,
