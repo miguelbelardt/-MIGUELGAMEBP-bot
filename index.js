@@ -20,6 +20,7 @@ const {
 } = require("./database/database");
 
 const logs = require("./comandos/logs");
+const join = require("./comandos/Join");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
@@ -110,31 +111,66 @@ const client = new Client({
 client.registrarLog = logs.registrarLog;
 
 // =====================================================
+// 👋 SISTEMA DE BOAS-VINDAS
+// =====================================================
+
+client.on(
+    "guildMemberAdd",
+    async membro => {
+
+        try {
+
+            await join.enviarBoasVindas(
+                membro
+            );
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro no sistema de boas-vindas:",
+                erro
+            );
+        }
+    }
+);
+
+// =====================================================
 // 🗑️ FUNÇÃO PARA GUARDAR MENSAGEM RECENTE
 // =====================================================
 
 function guardarMensagemRecente(message) {
-    if (!message?.id) return;
 
-    if (!message.guild) return;
+    if (!message?.id) {
+        return;
+    }
+
+    if (!message.guild) {
+        return;
+    }
 
     const dados = {
-        id: message.id,
+
+        id:
+            message.id,
 
         guildId:
             message.guild.id,
 
         guildNome:
-            message.guild.name || "Servidor desconhecido",
+            message.guild.name ||
+            "Servidor desconhecido",
 
         canalId:
-            message.channel?.id || null,
+            message.channel?.id ||
+            null,
 
         canalNome:
-            message.channel?.name || "Canal desconhecido",
+            message.channel?.name ||
+            "Canal desconhecido",
 
         autorId:
-            message.author?.id || null,
+            message.author?.id ||
+            null,
 
         autorTag:
             message.author?.tag ||
@@ -146,11 +182,14 @@ function guardarMensagemRecente(message) {
             "Usuário desconhecido",
 
         conteudo:
-            message.content || "",
+            message.content ||
+            "",
 
         anexos:
             message.attachments
-                ? [...message.attachments.values()].map(
+                ? [
+                    ...message.attachments.values()
+                ].map(
                     anexo => ({
                         nome:
                             anexo.name ||
@@ -172,26 +211,29 @@ function guardarMensagemRecente(message) {
         dados
     );
 
-    setTimeout(() => {
+    setTimeout(
+        () => {
 
-        const atual =
-            mensagensRecentes.get(
-                message.id
-            );
+            const atual =
+                mensagensRecentes.get(
+                    message.id
+                );
 
-        if (
-            atual &&
-            Date.now() -
-            atual.criadoEm >=
-            TEMPO_CACHE_MENSAGEM
-        ) {
+            if (
+                atual &&
+                Date.now() -
+                    atual.criadoEm >=
+                    TEMPO_CACHE_MENSAGEM
+            ) {
 
-            mensagensRecentes.delete(
-                message.id
-            );
-        }
+                mensagensRecentes.delete(
+                    message.id
+                );
+            }
 
-    }, TEMPO_CACHE_MENSAGEM + 1000);
+        },
+        TEMPO_CACHE_MENSAGEM + 1000
+    );
 }
 
 // =====================================================
@@ -219,6 +261,7 @@ function obterDadosMensagemApagada(message) {
     }
 
     return {
+
         id:
             message.id,
 
@@ -257,7 +300,9 @@ function obterDadosMensagemApagada(message) {
 
         anexos:
             message.attachments
-                ? [...message.attachments.values()].map(
+                ? [
+                    ...message.attachments.values()
+                ].map(
                     anexo => ({
                         nome:
                             anexo.name ||
@@ -387,6 +432,7 @@ function criarArquivoMensagensApagadas(
         !mensagens ||
         mensagens.length === 0
     ) {
+
         return Buffer.from(
             "Nenhuma mensagem encontrada.",
             "utf8"
@@ -529,11 +575,10 @@ async function enviarLogMensagemApagada(
 
                 `> ${
                     mensagem.conteudo
-                        ? mensagem.conteudo
-                            .substring(
-                                0,
-                                3900
-                            )
+                        ? mensagem.conteudo.substring(
+                            0,
+                            3900
+                        )
                         : "[Conteúdo não disponível]"
                 }`;
 
@@ -569,11 +614,10 @@ async function enviarLogMensagemApagada(
                         "📎 Anexos",
 
                     value:
-                        anexosTexto
-                            .substring(
-                                0,
-                                1024
-                            )
+                        anexosTexto.substring(
+                            0,
+                            1024
+                        )
                 });
             }
 
@@ -723,8 +767,8 @@ async function logsBuscarConfig(
                 `
                 SELECT canal_id
                 FROM logs_config
-                WHERE guild_id = ?
-                  AND tipo = ?
+                WHERE guild_id = $1
+                  AND tipo = $2
                 `,
                 [
                     guildId,
@@ -938,7 +982,10 @@ client.on(
 
 client.on(
     "messageUpdate",
-    async (mensagemAntiga, mensagemNova) => {
+    async (
+        mensagemAntiga,
+        mensagemNova
+    ) => {
 
         try {
 
@@ -1040,7 +1087,10 @@ client.on(
 
 client.on(
     "guildMemberUpdate",
-    async (membroAntigo, membroNovo) => {
+    async (
+        membroAntigo,
+        membroNovo
+    ) => {
 
         try {
 
@@ -1137,9 +1187,10 @@ client.on(
                             : "🔊 Timeout removido"
                     )
                     .setDescription(
-                        `${recebeuTimeout
-                            ? "🔇"
-                            : "🔊"
+                        `${
+                            recebeuTimeout
+                                ? "🔇"
+                                : "🔊"
                         } ${
                             membroNovo.user
                         } ${
@@ -1615,7 +1666,10 @@ client.on(
 
 client.on(
     "voiceStateUpdate",
-    async (oldState, newState) => {
+    async (
+        oldState,
+        newState
+    ) => {
 
         try {
 
@@ -2010,8 +2064,7 @@ async function registrarComandos() {
                     )
                 ].join(
                     ", "
-                )
-            }`
+                )}`
         );
     }
 
@@ -2545,19 +2598,6 @@ client.on(
 
         // =================================================
         // 📝 SISTEMA DE REGISTRO
-        // =================================================
-        // As interações atuais do registrar.js usam
-        // "registro_" no início do customId.
-        //
-        // Isso inclui:
-        // - botões administrativos
-        // - botões de registro dos usuários
-        // - navegação entre páginas
-        // - menus de seleção
-        // - modais
-        //
-        // O comando registrar.js é responsável por
-        // processar essas interações.
         // =================================================
 
         if (
