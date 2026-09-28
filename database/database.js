@@ -634,6 +634,320 @@ async function inicializarBanco() {
     `, [agoraMs()]);
 
     // =================================================
+    // 👋 SISTEMA DE BOAS-VINDAS / JOIN
+    // =================================================
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS join_config (
+            guild_id VARCHAR(30) PRIMARY KEY,
+
+            habilitado BOOLEAN
+                NOT NULL DEFAULT TRUE,
+
+            canal_id VARCHAR(30),
+
+            content TEXT,
+
+            embed_habilitado BOOLEAN
+                NOT NULL DEFAULT TRUE,
+
+            embed_titulo VARCHAR(256),
+
+            embed_descricao TEXT,
+
+            embed_cor VARCHAR(20),
+
+            autor_habilitado BOOLEAN
+                NOT NULL DEFAULT TRUE,
+
+            autor_nome VARCHAR(256),
+
+            autor_icone TEXT,
+
+            thumbnail TEXT,
+
+            imagem TEXT,
+
+            footer_habilitado BOOLEAN
+                NOT NULL DEFAULT TRUE,
+
+            footer_texto VARCHAR(2048),
+
+            footer_icone TEXT,
+
+            timestamp BOOLEAN
+                NOT NULL DEFAULT TRUE,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            )
+        )
+    `);
+
+    // =================================================
+    // 🔧 MIGRAÇÕES DO JOIN
+    // =================================================
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "habilitado",
+        "BOOLEAN NOT NULL DEFAULT TRUE"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "canal_id",
+        "VARCHAR(30)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "content",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "embed_habilitado",
+        "BOOLEAN NOT NULL DEFAULT TRUE"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "embed_titulo",
+        "VARCHAR(256)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "embed_descricao",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "embed_cor",
+        "VARCHAR(20)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "autor_habilitado",
+        "BOOLEAN NOT NULL DEFAULT TRUE"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "autor_nome",
+        "VARCHAR(256)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "autor_icone",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "thumbnail",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "imagem",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "footer_habilitado",
+        "BOOLEAN NOT NULL DEFAULT TRUE"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "footer_texto",
+        "VARCHAR(2048)"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "footer_icone",
+        "TEXT"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "timestamp",
+        "BOOLEAN NOT NULL DEFAULT TRUE"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "criado_em",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "join_config",
+        "atualizado_em",
+        "BIGINT NOT NULL DEFAULT 0"
+    );
+
+    // =================================================
+    // 🔧 VALORES PADRÃO DO JOIN
+    // =================================================
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET habilitado = TRUE
+        WHERE habilitado IS NULL
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET embed_habilitado = TRUE
+        WHERE embed_habilitado IS NULL
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET autor_habilitado = TRUE
+        WHERE autor_habilitado IS NULL
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET footer_habilitado = TRUE
+        WHERE footer_habilitado IS NULL
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET timestamp = TRUE
+        WHERE timestamp IS NULL
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            content =
+                '👋 Seja muito bem-vindo(a), {user}! Aproveite o servidor! 🎉'
+        WHERE content IS NULL
+        OR content = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            embed_titulo =
+                '🎉 Bem-vindo ao {server}!'
+        WHERE embed_titulo IS NULL
+        OR embed_titulo = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            embed_descricao =
+                'Olá, {user}!\\n\\n' ||
+                'Esperamos que você se divirta por aqui! 💙\\n\\n' ||
+                '👤 Você é o membro **#{members}** do servidor.'
+        WHERE embed_descricao IS NULL
+        OR embed_descricao = ''
+    `);
+
+    /*
+     * MySQL não utiliza || como concatenação de texto
+     * quando PIPES_AS_CONCAT não está habilitado.
+     *
+     * Esta atualização garante a descrição padrão.
+     */
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            embed_descricao =
+                'Olá, {user}!\\n\\nEsperamos que você se divirta por aqui! 💙\\n\\n👤 Você é o membro **#{members}** do servidor.'
+        WHERE embed_descricao IS NULL
+        OR embed_descricao = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            embed_cor = '0x5865F2'
+        WHERE embed_cor IS NULL
+        OR embed_cor = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            autor_nome = '{username}'
+        WHERE autor_nome IS NULL
+        OR autor_nome = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            autor_icone = '{avatar}'
+        WHERE autor_icone IS NULL
+        OR autor_icone = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            thumbnail = '{avatar}'
+        WHERE thumbnail IS NULL
+        OR thumbnail = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            imagem = '{banner}'
+        WHERE imagem IS NULL
+        OR imagem = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            footer_texto =
+                'Massa Com Chika • Bem-vindo!'
+        WHERE footer_texto IS NULL
+        OR footer_texto = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET
+            footer_icone = '{avatar}'
+        WHERE footer_icone IS NULL
+        OR footer_icone = ''
+    `);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET criado_em = ?
+        WHERE criado_em = 0
+    `, [agoraMs()]);
+
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET atualizado_em = ?
+        WHERE atualizado_em = 0
+    `, [agoraMs()]);
+
+    // =================================================
     // 📝 SISTEMA DE REGISTRO
     // =================================================
 
@@ -650,7 +964,6 @@ async function inicializarBanco() {
             configurado BOOLEAN
                 NOT NULL DEFAULT FALSE,
 
-            -- 🎨 PAINEL INICIAL
             painel_titulo VARCHAR(256)
                 DEFAULT '📝 Registro',
 
@@ -1837,6 +2150,360 @@ async function isAdm(
 
     return (
         resultado.rows.length > 0
+    );
+}
+
+// =====================================================
+// 👋 SISTEMA DE BOAS-VINDAS / JOIN
+// =====================================================
+
+function normalizarConfigJoin(
+    config = {}
+) {
+
+    const embed =
+        config.embed ||
+        {};
+
+    const autor =
+        embed.autor ||
+        config.autor ||
+        {};
+
+    const footer =
+        embed.footer ||
+        config.footer ||
+        {};
+
+    return {
+
+        habilitado:
+            config.habilitado ??
+            true,
+
+        canalId:
+            config.canalId ??
+            config.canal_id ??
+            null,
+
+        content:
+            config.content ??
+            "👋 Seja muito bem-vindo(a), {user}! Aproveite o servidor! 🎉",
+
+        embedHabilitado:
+            embed.habilitado ??
+            config.embed_habilitado ??
+            true,
+
+        embedTitulo:
+            embed.titulo ??
+            config.embed_titulo ??
+            "🎉 Bem-vindo ao {server}!",
+
+        embedDescricao:
+            embed.descricao ??
+            config.embed_descricao ??
+            "Olá, {user}!\n\n" +
+            "Esperamos que você se divirta por aqui! 💙\n\n" +
+            "👤 Você é o membro **#{members}** do servidor.",
+
+        embedCor:
+            embed.cor ??
+            config.embed_cor ??
+            "0x5865F2",
+
+        autorHabilitado:
+            autor.habilitado ??
+            config.autor_habilitado ??
+            true,
+
+        autorNome:
+            autor.nome ??
+            config.autor_nome ??
+            "{username}",
+
+        autorIcone:
+            autor.icone ??
+            config.autor_icone ??
+            "{avatar}",
+
+        thumbnail:
+            embed.thumbnail ??
+            config.thumbnail ??
+            "{avatar}",
+
+        imagem:
+            embed.imagem ??
+            config.imagem ??
+            "{banner}",
+
+        footerHabilitado:
+            footer.habilitado ??
+            config.footer_habilitado ??
+            true,
+
+        footerTexto:
+            footer.texto ??
+            config.footer_texto ??
+            "Massa Com Chika • Bem-vindo!",
+
+        footerIcone:
+            footer.icone ??
+            config.footer_icone ??
+            "{avatar}",
+
+        timestamp:
+            embed.timestamp ??
+            config.timestamp ??
+            true
+    };
+}
+
+// =====================================================
+// 👋 BUSCAR CONFIGURAÇÃO DO JOIN
+// =====================================================
+
+async function getJoinConfig(
+    guildId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM join_config
+            WHERE guild_id = $1
+            `,
+            [guildId]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+// =====================================================
+// 👋 SALVAR CONFIGURAÇÃO DO JOIN
+// =====================================================
+
+async function salvarJoinConfig(
+    guildId,
+    config = {}
+) {
+
+    const dados =
+        normalizarConfigJoin(
+            config
+        );
+
+    const agora =
+        agoraMs();
+
+    await pool.query(
+        `
+        INSERT INTO join_config (
+            guild_id,
+            habilitado,
+            canal_id,
+            content,
+
+            embed_habilitado,
+            embed_titulo,
+            embed_descricao,
+            embed_cor,
+
+            autor_habilitado,
+            autor_nome,
+            autor_icone,
+
+            thumbnail,
+            imagem,
+
+            footer_habilitado,
+            footer_texto,
+            footer_icone,
+
+            timestamp,
+
+            criado_em,
+            atualizado_em
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+
+            $5,
+            $6,
+            $7,
+            $8,
+
+            $9,
+            $10,
+            $11,
+
+            $12,
+            $13,
+
+            $14,
+            $15,
+            $16,
+
+            $17,
+
+            $18,
+            $18
+        )
+        ON DUPLICATE KEY UPDATE
+
+            habilitado =
+                VALUES(habilitado),
+
+            canal_id =
+                VALUES(canal_id),
+
+            content =
+                VALUES(content),
+
+            embed_habilitado =
+                VALUES(embed_habilitado),
+
+            embed_titulo =
+                VALUES(embed_titulo),
+
+            embed_descricao =
+                VALUES(embed_descricao),
+
+            embed_cor =
+                VALUES(embed_cor),
+
+            autor_habilitado =
+                VALUES(autor_habilitado),
+
+            autor_nome =
+                VALUES(autor_nome),
+
+            autor_icone =
+                VALUES(autor_icone),
+
+            thumbnail =
+                VALUES(thumbnail),
+
+            imagem =
+                VALUES(imagem),
+
+            footer_habilitado =
+                VALUES(footer_habilitado),
+
+            footer_texto =
+                VALUES(footer_texto),
+
+            footer_icone =
+                VALUES(footer_icone),
+
+            timestamp =
+                VALUES(timestamp),
+
+            atualizado_em =
+                VALUES(atualizado_em)
+        `,
+        [
+            guildId,
+
+            dados.habilitado
+                ? 1
+                : 0,
+
+            dados.canalId,
+
+            dados.content,
+
+            dados.embedHabilitado
+                ? 1
+                : 0,
+
+            dados.embedTitulo,
+
+            dados.embedDescricao,
+
+            dados.embedCor,
+
+            dados.autorHabilitado
+                ? 1
+                : 0,
+
+            dados.autorNome,
+
+            dados.autorIcone,
+
+            dados.thumbnail,
+
+            dados.imagem,
+
+            dados.footerHabilitado
+                ? 1
+                : 0,
+
+            dados.footerTexto,
+
+            dados.footerIcone,
+
+            dados.timestamp
+                ? 1
+                : 0,
+
+            agora
+        ]
+    );
+
+    return getJoinConfig(
+        guildId
+    );
+}
+
+// =====================================================
+// 👋 ATUALIZAR CANAL DO JOIN
+// =====================================================
+
+async function atualizarCanalJoin(
+    guildId,
+    canalId
+) {
+
+    const config =
+        await getJoinConfig(
+            guildId
+        );
+
+    if (!config) {
+
+        return salvarJoinConfig(
+            guildId,
+            {
+                canalId
+            }
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE join_config
+        SET
+            canal_id = $1,
+            atualizado_em = $2
+        WHERE guild_id = $3
+        `,
+        [
+            canalId,
+            agoraMs(),
+            guildId
+        ]
+    );
+
+    return getJoinConfig(
+        guildId
     );
 }
 
@@ -3309,6 +3976,11 @@ module.exports = {
     adicionarAdm,
     removerAdm,
     isAdm,
+
+    // 👋 Boas-vindas / Join
+    getJoinConfig,
+    salvarJoinConfig,
+    atualizarCanalJoin,
 
     // 🎨 Embeds
     criarEmbedBanco,
