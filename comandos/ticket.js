@@ -11,7 +11,8 @@ const {
     TextInputBuilder,
     TextInputStyle,
     ChannelType,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    MessageFlags
 } = require("discord.js");
 
 const { pool } = require("../database/database.js");
@@ -183,30 +184,76 @@ async function inicializarTickets() {
         )
     `);
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN categoria_id VARCHAR(30)
+    // ==========================================
+    // 🔧 COMPATIBILIDADE COM TABELAS ANTIGAS
+    // ==========================================
+
+    const colunasResult = await pool.query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'ticket_config'
     `);
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN mensagem_painel_id VARCHAR(30)
-    `);
+    const colunasExistentes =
+        colunasResult.rows.map(
+            coluna => coluna.COLUMN_NAME
+        );
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN cargo_mencao_id VARCHAR(30)
-    `);
+    if (
+        !colunasExistentes.includes(
+            "categoria_id"
+        )
+    ) {
+        await pool.query(`
+            ALTER TABLE ticket_config
+            ADD COLUMN categoria_id VARCHAR(30)
+        `);
+    }
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN contador_nome BOOLEAN NOT NULL DEFAULT FALSE
-    `);
+    if (
+        !colunasExistentes.includes(
+            "mensagem_painel_id"
+        )
+    ) {
+        await pool.query(`
+            ALTER TABLE ticket_config
+            ADD COLUMN mensagem_painel_id VARCHAR(30)
+        `);
+    }
 
-    await pool.query(`
-        ALTER TABLE ticket_config
-        ADD COLUMN contador_tickets BIGINT NOT NULL DEFAULT 0
-    `);
+    if (
+        !colunasExistentes.includes(
+            "cargo_mencao_id"
+        )
+    ) {
+        await pool.query(`
+            ALTER TABLE ticket_config
+            ADD COLUMN cargo_mencao_id VARCHAR(30)
+        `);
+    }
+
+    if (
+        !colunasExistentes.includes(
+            "contador_nome"
+        )
+    ) {
+        await pool.query(`
+            ALTER TABLE ticket_config
+            ADD COLUMN contador_nome BOOLEAN NOT NULL DEFAULT FALSE
+        `);
+    }
+
+    if (
+        !colunasExistentes.includes(
+            "contador_tickets"
+        )
+    ) {
+        await pool.query(`
+            ALTER TABLE ticket_config
+            ADD COLUMN contador_tickets BIGINT NOT NULL DEFAULT 0
+        `);
+    }
 
     await pool.query(`
         UPDATE ticket_config
@@ -593,8 +640,8 @@ function criarPainel(
         components:
             componentes,
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     };
 }
 
@@ -685,8 +732,8 @@ function criarPainelConfiguracao(
         components:
             componentes,
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     };
 }
 
@@ -1280,8 +1327,8 @@ function criarPainelModelo(
             botoes3
         ],
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     };
 }
 
@@ -1323,8 +1370,8 @@ function criarMenuCanal(
                 .addComponents(menu)
         ],
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     };
 }
 
@@ -1365,8 +1412,8 @@ function criarMenuCategoria(
                 .addComponents(menu)
         ],
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     };
 }
 
@@ -1423,8 +1470,8 @@ function criarMenuCargo(
                 .addComponents(botaoRemover)
         ],
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     };
 }
 
@@ -1575,8 +1622,8 @@ async function atualizarPainelPublicado(
         await pool.query(
             `
             UPDATE ticket_config
-            SET mensagem_painel_id = ?
-            WHERE guild_id = ?
+            SET mensagem_painel_id = $1
+            WHERE guild_id = $2
             `,
             [
                 mensagem.id,
@@ -1633,7 +1680,7 @@ async function abrirTicket(
             `
             SELECT *
             FROM ticket_config
-            WHERE guild_id = ?
+            WHERE guild_id = $1
             `,
             [
                 interaction.guildId
@@ -1653,8 +1700,8 @@ async function abrirTicket(
             content:
                 "❌ O sistema de tickets ainda não foi configurado corretamente.",
 
-            ephemeral:
-                true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -1675,8 +1722,8 @@ async function abrirTicket(
             content:
                 "❌ A categoria configurada não existe mais.",
 
-            ephemeral:
-                true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -1695,8 +1742,8 @@ async function abrirTicket(
             content:
                 `❌ Você já possui um ticket aberto: ${ticketExistente}`,
 
-            ephemeral:
-                true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -1710,7 +1757,7 @@ async function abrirTicket(
         `
         UPDATE ticket_config
         SET contador_tickets = contador_tickets + 1
-        WHERE guild_id = ?
+        WHERE guild_id = $1
         `,
         [
             interaction.guildId
@@ -1722,7 +1769,7 @@ async function abrirTicket(
             `
             SELECT contador_tickets
             FROM ticket_config
-            WHERE guild_id = ?
+            WHERE guild_id = $1
             `,
             [
                 interaction.guildId
@@ -1953,8 +2000,8 @@ async function abrirTicket(
         content:
             `✅ Seu ticket foi criado com sucesso: ${canal}`,
 
-        ephemeral:
-            true
+        flags:
+            MessageFlags.Ephemeral
     });
 
     console.log(
@@ -1985,8 +2032,8 @@ async function fecharTicket(
             content:
                 "❌ Este botão só pode ser usado dentro de um ticket.",
 
-            ephemeral:
-                true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -2003,8 +2050,8 @@ async function fecharTicket(
             content:
                 "❌ Este canal não é um ticket.",
 
-            ephemeral:
-                true
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -2066,8 +2113,8 @@ module.exports = {
                 content:
                     "❌ O comando `/ticket` só pode ser usado dentro de um servidor.",
 
-                ephemeral:
-                    true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -2080,7 +2127,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     ORDER BY id ASC
                     `,
                     [
@@ -2120,8 +2167,8 @@ module.exports = {
                     content:
                         "❌ Ocorreu um erro ao abrir a configuração de tickets.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
             }
         }
@@ -2170,8 +2217,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -2187,8 +2234,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo de ticket não existe mais.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2231,7 +2278,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     ORDER BY id ASC
                     `,
                     [
@@ -2269,8 +2316,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -2286,8 +2333,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo de ticket não existe.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2323,8 +2370,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -2340,8 +2387,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo de ticket não existe.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2409,9 +2456,6 @@ module.exports = {
         // ================================
         // 🗑️ REMOVER CARGO
         // ================================
-        // IMPORTANTE:
-        // Este bloco precisa ficar ANTES
-        // do ticket_cargo_ normal.
 
         if (
             interaction.customId.startsWith(
@@ -2430,8 +2474,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -2447,8 +2491,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo de ticket não existe mais.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2469,7 +2513,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -2540,7 +2584,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -2578,8 +2622,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -2626,8 +2670,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -2643,8 +2687,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo não existe.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2658,7 +2702,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -2686,8 +2730,8 @@ module.exports = {
                     content:
                         "❌ Antes de salvar, escolha o **canal do painel** e a **categoria dos tickets**.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2712,8 +2756,8 @@ module.exports = {
                     content:
                         "❌ O canal escolhido para o painel não existe mais.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2729,8 +2773,8 @@ module.exports = {
                     content:
                         "❌ A categoria escolhida não existe mais.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2770,14 +2814,14 @@ module.exports = {
                     configurado
                 )
                 VALUES (
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6,
+                    $7,
+                    $8,
                     TRUE
                 )
 
@@ -2822,7 +2866,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -2845,8 +2889,8 @@ module.exports = {
                     content:
                         "❌ Não consegui enviar/atualizar o painel. Verifique as permissões do bot.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -2941,7 +2985,7 @@ module.exports = {
                         `
                         SELECT *
                         FROM ticket_modelos
-                        WHERE guild_id = ?
+                        WHERE guild_id = $1
                         ORDER BY id ASC
                         `,
                         [
@@ -2973,8 +3017,8 @@ module.exports = {
                         `
                         SELECT *
                         FROM ticket_modelos
-                        WHERE id = ?
-                        AND guild_id = ?
+                        WHERE id = $1
+                        AND guild_id = $2
                         `,
                         [
                             id,
@@ -2990,8 +3034,8 @@ module.exports = {
                         content:
                             "❌ Esse modelo não existe.",
 
-                        ephemeral:
-                            true
+                        flags:
+                            MessageFlags.Ephemeral
                     });
 
                     return true;
@@ -3002,7 +3046,7 @@ module.exports = {
                         `
                         SELECT *
                         FROM ticket_config
-                        WHERE guild_id = ?
+                        WHERE guild_id = $1
                         `,
                         [
                             interaction.guildId
@@ -3043,8 +3087,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -3060,8 +3104,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo não existe.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -3072,7 +3116,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -3129,7 +3173,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -3141,8 +3185,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         modeloId,
@@ -3200,7 +3244,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -3212,8 +3256,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         modeloId,
@@ -3271,7 +3315,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -3283,8 +3327,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         modeloId,
@@ -3354,8 +3398,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         modeloId,
@@ -3371,8 +3415,8 @@ module.exports = {
                     content:
                         "❌ Esse modelo de ticket não existe mais.",
 
-                    ephemeral:
-                        true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return true;
@@ -3426,12 +3470,12 @@ module.exports = {
                     cor
                 )
                 VALUES (
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6
                 )
                 `,
                 [
@@ -3465,7 +3509,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     ORDER BY id DESC
                     LIMIT 1
                     `,
@@ -3517,13 +3561,13 @@ module.exports = {
                 `
                 UPDATE ticket_modelos
                 SET
-                    nome = ?,
-                    titulo = ?,
-                    descricao = ?,
-                    autor_nome = ?,
-                    cor = ?
-                WHERE id = ?
-                AND guild_id = ?
+                    nome = $1,
+                    titulo = $2,
+                    descricao = $3,
+                    autor_nome = $4,
+                    cor = $5
+                WHERE id = $6
+                AND guild_id = $7
                 `,
                 [
                     interaction.fields
@@ -3558,8 +3602,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -3572,7 +3616,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
@@ -3630,13 +3674,13 @@ module.exports = {
                 `
                 UPDATE ticket_modelos
                 SET
-                    imagem = ?,
-                    thumbnail = ?,
-                    rodape = ?,
-                    botao_texto = ?,
-                    botao_emoji = ?
-                WHERE id = ?
-                AND guild_id = ?
+                    imagem = $1,
+                    thumbnail = $2,
+                    rodape = $3,
+                    botao_texto = $4,
+                    botao_emoji = $5
+                WHERE id = $6
+                AND guild_id = $7
                 `,
                 [
                     interaction.fields
@@ -3675,8 +3719,8 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_modelos
-                    WHERE id = ?
-                    AND guild_id = ?
+                    WHERE id = $1
+                    AND guild_id = $2
                     `,
                     [
                         id,
@@ -3689,7 +3733,7 @@ module.exports = {
                     `
                     SELECT *
                     FROM ticket_config
-                    WHERE guild_id = ?
+                    WHERE guild_id = $1
                     `,
                     [
                         interaction.guildId
