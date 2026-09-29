@@ -2,7 +2,8 @@ const {
     SlashCommandBuilder,
     PermissionFlagsBits,
     EmbedBuilder,
-    ChannelType
+    ChannelType,
+    MessageFlags
 } = require("discord.js");
 
 const {
@@ -64,7 +65,10 @@ function converterCor(cor) {
         const valor = cor.trim();
 
         if (valor.startsWith("0x")) {
-            const numero = Number.parseInt(valor, 16);
+            const numero = Number.parseInt(
+                valor,
+                16
+            );
 
             if (!Number.isNaN(numero)) {
                 return numero;
@@ -121,10 +125,11 @@ async function pegarDadosMembro(membro) {
         );
     }
 
-    const avatar = usuario.displayAvatarURL({
-        extension: "png",
-        size: 1024
-    });
+    const avatar =
+        usuario.displayAvatarURL({
+            extension: "png",
+            size: 1024
+        });
 
     let banner = "";
 
@@ -151,7 +156,10 @@ async function pegarDadosMembro(membro) {
 // 🎨 CRIAR EMBED
 // =====================================================
 
-function criarEmbedBoasVindas(configBanco, dados) {
+function criarEmbedBoasVindas(
+    configBanco,
+    dados
+) {
     if (
         !estaAtivado(
             configBanco.embed_habilitado
@@ -160,7 +168,8 @@ function criarEmbedBoasVindas(configBanco, dados) {
         return null;
     }
 
-    const embed = new EmbedBuilder();
+    const embed =
+        new EmbedBuilder();
 
     // =================================================
     // 📝 TÍTULO
@@ -190,7 +199,9 @@ function criarEmbedBoasVindas(configBanco, dados) {
             );
 
         if (descricao) {
-            embed.setDescription(descricao);
+            embed.setDescription(
+                descricao
+            );
         }
     }
 
@@ -236,8 +247,13 @@ function criarEmbedBoasVindas(configBanco, dados) {
                 name: nomeAutor
             };
 
-            if (urlValida(iconeAutor)) {
-                autor.iconURL = iconeAutor;
+            if (
+                urlValida(
+                    iconeAutor
+                )
+            ) {
+                autor.iconURL =
+                    iconeAutor;
             }
 
             embed.setAuthor(autor);
@@ -255,8 +271,12 @@ function criarEmbedBoasVindas(configBanco, dados) {
                 dados
             );
 
-        if (urlValida(thumbnail)) {
-            embed.setThumbnail(thumbnail);
+        if (
+            urlValida(thumbnail)
+        ) {
+            embed.setThumbnail(
+                thumbnail
+            );
         }
     }
 
@@ -271,7 +291,9 @@ function criarEmbedBoasVindas(configBanco, dados) {
                 dados
             );
 
-        if (urlValida(imagem)) {
+        if (
+            urlValida(imagem)
+        ) {
             embed.setImage(imagem);
         }
     }
@@ -303,8 +325,13 @@ function criarEmbedBoasVindas(configBanco, dados) {
                 "Massa Com Chika"
         };
 
-        if (urlValida(iconeFooter)) {
-            footer.iconURL = iconeFooter;
+        if (
+            urlValida(
+                iconeFooter
+            )
+        ) {
+            footer.iconURL =
+                iconeFooter;
         }
 
         embed.setFooter(footer);
@@ -338,7 +365,8 @@ async function enviarBoasVindas(membro) {
             return;
         }
 
-        const guild = membro.guild;
+        const guild =
+            membro.guild;
 
         // =================================================
         // 🗄️ BUSCAR CONFIGURAÇÃO
@@ -421,7 +449,7 @@ async function enviarBoasVindas(membro) {
         }
 
         // =================================================
-        // 👤 DADOS
+        // 👤 DADOS DO MEMBRO
         // =================================================
 
         const dados =
@@ -463,6 +491,10 @@ async function enviarBoasVindas(membro) {
             ];
         }
 
+        // =================================================
+        // ⚠️ NADA PARA ENVIAR
+        // =================================================
+
         if (
             !mensagem.content &&
             !mensagem.embeds
@@ -478,7 +510,9 @@ async function enviarBoasVindas(membro) {
         // 📩 ENVIAR
         // =================================================
 
-        await canal.send(mensagem);
+        await canal.send(
+            mensagem
+        );
 
         console.log(
             `👋 Boas-vindas enviadas para ${membro.user.tag} em ${guild.name}`
@@ -496,92 +530,115 @@ async function enviarBoasVindas(membro) {
 // ⚙️ COMANDO /JOIN
 // =====================================================
 
-const data = new SlashCommandBuilder()
-    .setName("join")
-    .setDescription(
-        "Configura o sistema de boas-vindas"
-    )
-    .setDefaultMemberPermissions(
-        PermissionFlagsBits.ManageGuild.toString()
-    )
+const data =
+    new SlashCommandBuilder()
+        .setName("join")
+        .setDescription(
+            "Configura o sistema de boas-vindas"
+        )
+        .setDefaultMemberPermissions(
+            PermissionFlagsBits.ManageGuild.toString()
+        )
 
-    // =================================================
-    // 📢 CONFIGURAR
-    // =================================================
+        // =================================================
+        // 📢 CONFIGURAR
+        // =================================================
 
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("configurar")
-            .setDescription(
-                "Define o canal das mensagens de boas-vindas"
-            )
-            .addChannelOption(option =>
-                option
-                    .setName("canal")
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName(
+                        "configurar"
+                    )
                     .setDescription(
-                        "Canal onde as boas-vindas serão enviadas"
+                        "Define o canal das mensagens de boas-vindas"
                     )
-                    .addChannelTypes(
-                        ChannelType.GuildText,
-                        ChannelType.GuildAnnouncement
+                    .addChannelOption(
+                        option =>
+                            option
+                                .setName(
+                                    "canal"
+                                )
+                                .setDescription(
+                                    "Canal onde as boas-vindas serão enviadas"
+                                )
+                                .addChannelTypes(
+                                    ChannelType.GuildText,
+                                    ChannelType.GuildAnnouncement
+                                )
+                                .setRequired(
+                                    true
+                                )
                     )
-                    .setRequired(true)
-            )
-    )
+        )
 
-    // =================================================
-    // 🟢 ATIVAR
-    // =================================================
+        // =================================================
+        // 🟢 ATIVAR
+        // =================================================
 
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("ativar")
-            .setDescription(
-                "Ativa o sistema de boas-vindas"
-            )
-    )
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName(
+                        "ativar"
+                    )
+                    .setDescription(
+                        "Ativa o sistema de boas-vindas"
+                    )
+        )
 
-    // =================================================
-    // 🔴 DESATIVAR
-    // =================================================
+        // =================================================
+        // 🔴 DESATIVAR
+        // =================================================
 
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("desativar")
-            .setDescription(
-                "Desativa o sistema de boas-vindas"
-            )
-    )
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName(
+                        "desativar"
+                    )
+                    .setDescription(
+                        "Desativa o sistema de boas-vindas"
+                    )
+        )
 
-    // =================================================
-    // 📊 STATUS
-    // =================================================
+        // =================================================
+        // 📊 STATUS
+        // =================================================
 
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("status")
-            .setDescription(
-                "Mostra a configuração atual"
-            )
-    )
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName(
+                        "status"
+                    )
+                    .setDescription(
+                        "Mostra a configuração atual"
+                    )
+        )
 
-    // =================================================
-    // 🧪 TESTE
-    // =================================================
+        // =================================================
+        // 🧪 TESTE
+        // =================================================
 
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("teste")
-            .setDescription(
-                "Envia uma mensagem de teste"
-            )
-    );
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName(
+                        "teste"
+                    )
+                    .setDescription(
+                        "Envia uma mensagem de teste"
+                    )
+        );
 
 // =====================================================
 // ⚡ EXECUTAR COMANDO
 // =====================================================
 
-async function execute(interaction) {
+async function execute(
+    interaction
+) {
     try {
         const subcomando =
             interaction.options.getSubcommand();
@@ -594,7 +651,8 @@ async function execute(interaction) {
         // =================================================
 
         if (
-            subcomando === "configurar"
+            subcomando ===
+            "configurar"
         ) {
             const canal =
                 interaction.options.getChannel(
@@ -615,7 +673,8 @@ async function execute(interaction) {
                 await salvarJoinConfig(
                     guildId,
                     {
-                        canalId: canal.id
+                        canalId:
+                            canal.id
                     }
                 );
             }
@@ -623,7 +682,8 @@ async function execute(interaction) {
             await interaction.reply({
                 content:
                     `✅ Canal de boas-vindas configurado para ${canal}.`,
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
 
             return;
@@ -634,7 +694,8 @@ async function execute(interaction) {
         // =================================================
 
         if (
-            subcomando === "ativar"
+            subcomando ===
+            "ativar"
         ) {
             const configAtual =
                 await getJoinConfig(
@@ -654,7 +715,8 @@ async function execute(interaction) {
             await interaction.reply({
                 content:
                     "✅ Sistema de boas-vindas ativado!",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
 
             return;
@@ -665,7 +727,8 @@ async function execute(interaction) {
         // =================================================
 
         if (
-            subcomando === "desativar"
+            subcomando ===
+            "desativar"
         ) {
             const configAtual =
                 await getJoinConfig(
@@ -685,7 +748,8 @@ async function execute(interaction) {
             await interaction.reply({
                 content:
                     "🔴 Sistema de boas-vindas desativado!",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
 
             return;
@@ -696,7 +760,8 @@ async function execute(interaction) {
         // =================================================
 
         if (
-            subcomando === "status"
+            subcomando ===
+            "status"
         ) {
             const config =
                 await getJoinConfig(
@@ -707,7 +772,8 @@ async function execute(interaction) {
                 await interaction.reply({
                     content:
                         "⚠️ O sistema de boas-vindas ainda não foi configurado.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return;
@@ -725,7 +791,8 @@ async function execute(interaction) {
                     )
                     .addFields(
                         {
-                            name: "📢 Canal",
+                            name:
+                                "📢 Canal",
                             value:
                                 config.canal_id
                                     ? `<#${config.canal_id}>`
@@ -733,7 +800,8 @@ async function execute(interaction) {
                             inline: true
                         },
                         {
-                            name: "⚙️ Sistema",
+                            name:
+                                "⚙️ Sistema",
                             value:
                                 estaAtivado(
                                     config.habilitado
@@ -743,7 +811,8 @@ async function execute(interaction) {
                             inline: true
                         },
                         {
-                            name: "🎨 Embed",
+                            name:
+                                "🎨 Embed",
                             value:
                                 estaAtivado(
                                     config.embed_habilitado
@@ -753,7 +822,8 @@ async function execute(interaction) {
                             inline: true
                         },
                         {
-                            name: "⏰ Timestamp",
+                            name:
+                                "⏰ Timestamp",
                             value:
                                 estaAtivado(
                                     config.timestamp
@@ -766,7 +836,8 @@ async function execute(interaction) {
 
             await interaction.reply({
                 embeds: [embed],
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
 
             return;
@@ -777,7 +848,8 @@ async function execute(interaction) {
         // =================================================
 
         if (
-            subcomando === "teste"
+            subcomando ===
+            "teste"
         ) {
             const config =
                 await getJoinConfig(
@@ -788,7 +860,8 @@ async function execute(interaction) {
                 await interaction.reply({
                     content:
                         "⚠️ Configure o sistema primeiro com `/join configurar`.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return;
@@ -798,7 +871,8 @@ async function execute(interaction) {
                 await interaction.reply({
                     content:
                         "⚠️ Nenhum canal de boas-vindas foi configurado.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return;
@@ -813,10 +887,54 @@ async function execute(interaction) {
                 await interaction.reply({
                     content:
                         "❌ O canal configurado não foi encontrado.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return;
+            }
+
+            if (
+                !canal.isTextBased()
+            ) {
+                await interaction.reply({
+                    content:
+                        "❌ O canal configurado não é um canal de texto.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return;
+            }
+
+            // =================================================
+            // 👤 DADOS DO TESTE
+            // =================================================
+
+            const usuario =
+                interaction.user;
+
+            let banner = "";
+
+            try {
+                const usuarioAtualizado =
+                    await usuario.fetch();
+
+                if (
+                    usuarioAtualizado.banner
+                ) {
+                    banner =
+                        usuarioAtualizado.bannerURL({
+                            extension:
+                                "png",
+                            size: 2048
+                        }) || "";
+                }
+            } catch (erro) {
+                console.warn(
+                    "⚠️ Não foi possível obter o banner no teste:",
+                    erro
+                );
             }
 
             const dados = {
@@ -828,15 +946,20 @@ async function execute(interaction) {
                     interaction.user.id,
                 avatar:
                     interaction.user.displayAvatarURL({
-                        extension: "png",
+                        extension:
+                            "png",
                         size: 1024
                     }),
-                banner: "",
+                banner,
                 members:
                     interaction.guild.memberCount,
                 server:
                     interaction.guild.name
             };
+
+            // =================================================
+            // 🎨 EMBED
+            // =================================================
 
             const embed =
                 criarEmbedBoasVindas(
@@ -844,10 +967,16 @@ async function execute(interaction) {
                     dados
                 );
 
+            // =================================================
+            // 📤 MENSAGEM
+            // =================================================
+
             const mensagem = {};
 
             if (
-                config.content
+                config.content !== null &&
+                config.content !== undefined &&
+                config.content !== ""
             ) {
                 mensagem.content =
                     substituirVariaveis(
@@ -869,11 +998,16 @@ async function execute(interaction) {
                 await interaction.reply({
                     content:
                         "⚠️ Não há conteúdo configurado para testar.",
-                    ephemeral: true
+                    flags:
+                        MessageFlags.Ephemeral
                 });
 
                 return;
             }
+
+            // =================================================
+            // 📩 ENVIAR TESTE
+            // =================================================
 
             await canal.send(
                 mensagem
@@ -882,7 +1016,8 @@ async function execute(interaction) {
             await interaction.reply({
                 content:
                     `✅ Mensagem de teste enviada em ${canal}.`,
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
 
             return;
@@ -901,13 +1036,15 @@ async function execute(interaction) {
             await interaction.followUp({
                 content:
                     "❌ Ocorreu um erro ao executar o comando.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         } else {
             await interaction.reply({
                 content:
                     "❌ Ocorreu um erro ao executar o comando.",
-                ephemeral: true
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
     }
