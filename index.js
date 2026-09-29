@@ -2597,6 +2597,77 @@ client.on(
         );
 
         // =================================================
+        // 👋 SISTEMA DE BOAS-VINDAS / JOIN
+        // =================================================
+
+        if (
+            interaction.customId &&
+            interaction.customId.startsWith(
+                "join_"
+            )
+        ) {
+
+            try {
+
+                const tratou =
+                    await join.tratarInteracao(
+                        interaction
+                    );
+
+                if (
+                    tratou
+                ) {
+                    return;
+                }
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro no sistema de configuração do Join:",
+                    erro
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Deu erro ao configurar o sistema de boas-vindas.",
+
+                            flags:
+                                MessageFlags.Ephemeral
+                        });
+
+                    } else {
+
+                        await interaction.followUp({
+                            content:
+                                "❌ Deu erro ao configurar o sistema de boas-vindas.",
+
+                            flags:
+                                MessageFlags.Ephemeral
+                        });
+                    }
+
+                } catch (
+                    erroResposta
+                ) {
+
+                    console.error(
+                        "❌ Não foi possível responder ao erro do Join:",
+                        erroResposta
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // =================================================
         // 📝 SISTEMA DE REGISTRO
         // =================================================
 
