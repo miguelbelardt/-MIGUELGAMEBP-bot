@@ -850,23 +850,17 @@ async function inicializarBanco() {
         OR embed_titulo = ''
     `);
 
-    // =================================================
-    // ⚠️ IMPORTANTE:
-    // Não usar || para concatenar no MySQL.
-    // A descrição já fica inteira em uma única string.
-    // =================================================
-
     await mysqlPool.query(`
         UPDATE join_config
         SET embed_descricao =
-            'Olá, {user}!\\n\\nEsperamos que você se divirta por aqui! 💙\\n\\n👤 Você é o membro **#{members}** do servidor.'
+            'Olá, {user}!\n\nEsperamos que você se divirta por aqui! 💙\n\n👤 Você é o membro **#{members}** do servidor.'
         WHERE embed_descricao IS NULL
         OR embed_descricao = ''
     `);
 
     await mysqlPool.query(`
         UPDATE join_config
-        SET embed_cor = '0x5865F2'
+        SET embed_cor = '#5865F2'
         WHERE embed_cor IS NULL
         OR embed_cor = ''
     `);
@@ -2189,7 +2183,7 @@ function normalizarConfigJoin(
         embedCor:
             embed.cor ??
             config.embed_cor ??
-            "0x5865F2",
+            "#5865F2",
 
         autorHabilitado:
             autor.habilitado ??
@@ -2495,6 +2489,7 @@ function normalizarConfigEmbed(
 ) {
 
     return {
+
         nome:
             config.nome ||
             "Embed",
