@@ -20,7 +20,7 @@ const {
 } = require("./database/database");
 
 const logs = require("./comandos/logs");
-const join = require("./comandos/Join");
+const join = require("./comandos/join");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
