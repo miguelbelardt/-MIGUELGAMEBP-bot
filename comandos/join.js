@@ -787,7 +787,9 @@ function criarModalEmbed(config) {
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setValue(
-                config.embed_titulo || ""
+                String(
+                    config.embed_titulo ?? ""
+                )
             )
             .setMaxLength(256);
 
@@ -798,18 +800,24 @@ function criarModalEmbed(config) {
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(false)
             .setValue(
-                config.embed_descricao || ""
+                String(
+                    config.embed_descricao ?? ""
+                )
             )
             .setMaxLength(4096);
 
     const cor =
         new TextInputBuilder()
             .setCustomId("cor")
-            .setLabel("Cor (#5865F2, 0x5865F2 ou número)")
+            .setLabel(
+                "Cor (#5865F2, 0x5865F2 ou número)"
+            )
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setValue(
-                config.embed_cor || "#5865F2"
+                String(
+                    config.embed_cor ?? "#5865F2"
+                )
             )
             .setMaxLength(20);
 
