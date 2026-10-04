@@ -4,6 +4,25 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
+const mysql = require("mysql2/promise");
+
+// =====================================================
+// 🔐 CONEXÃO COM MYSQL
+// =====================================================
+
+if (!process.env.DATABASE_URL) {
+    throw new Error(
+        "❌ DATABASE_URL não foi encontrada nas variáveis de ambiente."
+    );
+}
+
+const mysqlPool = mysql.createPool({
+    uri: process.env.DATABASE_URL,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+});
+
 // =====================================================
 // ⚙️ COMANDO REACT ROLE
 // =====================================================
@@ -24,7 +43,6 @@ const data = new SlashCommandBuilder()
             .setName("configurar")
             .setDescription("Configura uma mensagem de React Role.")
 
-            // ID DA MENSAGEM
             .addStringOption(option =>
                 option
                     .setName("mensagem")
@@ -34,7 +52,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(true)
             )
 
-            // EMOJI
             .addStringOption(option =>
                 option
                     .setName("emoji")
@@ -44,7 +61,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(true)
             )
 
-            // CARGO
             .addRoleOption(option =>
                 option
                     .setName("cargo")
@@ -54,7 +70,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(true)
             )
 
-            // TÍTULO
             .addStringOption(option =>
                 option
                     .setName("titulo")
@@ -64,7 +79,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(false)
             )
 
-            // DESCRIÇÃO
             .addStringOption(option =>
                 option
                     .setName("descricao")
@@ -74,7 +88,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(false)
             )
 
-            // RODAPÉ
             .addStringOption(option =>
                 option
                     .setName("rodape")
@@ -84,7 +97,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(false)
             )
 
-            // IMAGEM
             .addStringOption(option =>
                 option
                     .setName("imagem")
@@ -94,7 +106,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(false)
             )
 
-            // THUMBNAIL
             .addStringOption(option =>
                 option
                     .setName("thumbnail")
@@ -104,7 +115,6 @@ const data = new SlashCommandBuilder()
                     .setRequired(false)
             )
 
-            // CONTENT
             .addStringOption(option =>
                 option
                     .setName("content")
@@ -116,7 +126,7 @@ const data = new SlashCommandBuilder()
     )
 
     // =================================================
-    // ➕ ADICIONAR REAÇÃO
+    // ➕ ADICIONAR
     // =================================================
 
     .addSubcommand(subcommand =>
@@ -155,7 +165,7 @@ const data = new SlashCommandBuilder()
     )
 
     // =================================================
-    // ➖ REMOVER REAÇÃO
+    // ➖ REMOVER
     // =================================================
 
     .addSubcommand(subcommand =>
@@ -225,6 +235,323 @@ const data = new SlashCommandBuilder()
                     .setRequired(true)
             )
     );
+
+// =====================================================
+// 🔧 NORMALIZAR EMOJI
+// =====================================================
+
+function normalizarEmoji(emoji) {
+    if (!emoji) return null;
+
+    if (
+        typeof emoji === "object" &&
+        emoji.id
+    ) {
+        return `${emoji.name}:${emoji.id}`;
+    }
+
+    const texto = String(emoji).trim();
+
+    const customEmoji =
+        texto.match(
+            /^<a?:([^:>]+):(\d+)>$/
+        );
+
+    if (customEmoji) {
+        return `${customEmoji[1]}:${customEmoji[2]}`;
+    }
+
+    return texto;
+}
+
+// =====================================================
+// 📨 BUSCAR CONFIGURAÇÕES
+// =====================================================
+
+async function buscarReactRoles(
+    guildId,
+    mensagemId
+) {
+    const [rows] =
+        await mysqlPool.query(
+            `
+            SELECT *
+            FROM react_roles
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+            ORDER BY id ASC
+            `,
+            [
+                guildId,
+                mensagemId
+            ]
+        );
+
+    return rows;
+}
+
+// =====================================================
+// 💾 SALVAR REACT ROLE
+// =====================================================
+
+async function salvarReactRole({
+    guildId,
+    mensagemId,
+    emoji,
+    cargoId,
+    content,
+    titulo,
+    descricao,
+    rodape,
+    imagem,
+    thumbnail
+}) {
+
+    const emojiNormalizado =
+        normalizarEmoji(emoji);
+
+    await mysqlPool.query(
+        `
+        INSERT INTO react_roles (
+            guild_id,
+            mensagem_id,
+            emoji,
+            cargo_id,
+            content,
+            embed_habilitado,
+            embed_titulo,
+            embed_descricao,
+            embed_cor,
+            footer_habilitado,
+            footer_texto,
+            imagem,
+            thumbnail,
+            criado_em,
+            atualizado_em
+        )
+        VALUES (
+            ?, ?, ?, ?, ?,
+            TRUE,
+            ?, ?, NULL,
+            ?, ?,
+            ?, ?,
+            UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000,
+            UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+        )
+        ON DUPLICATE KEY UPDATE
+            cargo_id = VALUES(cargo_id),
+            content = VALUES(content),
+            embed_habilitado = TRUE,
+            embed_titulo = VALUES(embed_titulo),
+            embed_descricao = VALUES(embed_descricao),
+            footer_habilitado = VALUES(footer_habilitado),
+            footer_texto = VALUES(footer_texto),
+            imagem = VALUES(imagem),
+            thumbnail = VALUES(thumbnail),
+            atualizado_em =
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+        `,
+        [
+            guildId,
+            mensagemId,
+            emojiNormalizado,
+            cargoId,
+            content,
+            titulo,
+            descricao,
+            rodape ? true : false,
+            rodape || null,
+            imagem,
+            thumbnail
+        ]
+    );
+}
+
+// =====================================================
+// 🗑️ REMOVER REACT ROLE
+// =====================================================
+
+async function removerReactRole(
+    guildId,
+    mensagemId,
+    emoji
+) {
+    const emojiNormalizado =
+        normalizarEmoji(emoji);
+
+    const [resultado] =
+        await mysqlPool.query(
+            `
+            DELETE FROM react_roles
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+              AND emoji = ?
+            `,
+            [
+                guildId,
+                mensagemId,
+                emojiNormalizado
+            ]
+        );
+
+    return resultado.affectedRows > 0;
+}
+
+// =====================================================
+// 🧹 LIMPAR MENSAGEM
+// =====================================================
+
+async function limparReactRoles(
+    guildId,
+    mensagemId
+) {
+    const [resultado] =
+        await mysqlPool.query(
+            `
+            DELETE FROM react_roles
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+            `,
+            [
+                guildId,
+                mensagemId
+            ]
+        );
+
+    return resultado.affectedRows;
+}
+
+// =====================================================
+// 🎭 PROCESSAR REAÇÃO
+// =====================================================
+
+async function handleReaction(
+    reaction,
+    user,
+    adicionar
+) {
+    try {
+
+        if (!reaction.guild) return;
+        if (user.bot) return;
+
+        const guildId =
+            reaction.guild.id;
+
+        const mensagemId =
+            reaction.message.id;
+
+        const emoji =
+            normalizarEmoji(
+                reaction.emoji
+            );
+
+        const [rows] =
+            await mysqlPool.query(
+                `
+                SELECT *
+                FROM react_roles
+                WHERE guild_id = ?
+                  AND mensagem_id = ?
+                  AND emoji = ?
+                LIMIT 1
+                `,
+                [
+                    guildId,
+                    mensagemId,
+                    emoji
+                ]
+            );
+
+        if (!rows.length) {
+            return;
+        }
+
+        const config =
+            rows[0];
+
+        const guild =
+            reaction.guild;
+
+        const membro =
+            await guild.members.fetch(
+                user.id
+            );
+
+        const cargo =
+            await guild.roles.fetch(
+                config.cargo_id
+            );
+
+        if (!cargo) {
+            console.error(
+                `❌ Cargo ${config.cargo_id} não encontrado.`
+            );
+            return;
+        }
+
+        const me =
+            guild.members.me;
+
+        if (!me) {
+            console.error(
+                "❌ Não consegui encontrar o membro do bot."
+            );
+            return;
+        }
+
+        if (
+            !cargo.editable
+        ) {
+            console.error(
+                `❌ Não posso gerenciar o cargo ${cargo.name}. Verifique a hierarquia de cargos.`
+            );
+            return;
+        }
+
+        if (adicionar) {
+
+            if (
+                !membro.roles.cache.has(
+                    cargo.id
+                )
+            ) {
+                await membro.roles.add(
+                    cargo,
+                    "Reaction Role"
+                );
+
+                console.log(
+                    `🎭 Cargo ${cargo.name} dado para ${user.tag}.`
+                );
+            }
+
+        } else {
+
+            if (
+                membro.roles.cache.has(
+                    cargo.id
+                )
+            ) {
+                await membro.roles.remove(
+                    cargo,
+                    "Reaction Role"
+                );
+
+                console.log(
+                    `🎭 Cargo ${cargo.name} removido de ${user.tag}.`
+                );
+            }
+        }
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao processar Reaction Role:",
+            erro
+        );
+    }
+}
 
 // =====================================================
 // ▶️ EXECUTE
@@ -300,7 +627,10 @@ async function execute(interaction) {
                 "content"
             );
 
-        // Verifica se a mensagem existe
+        // =================================================
+        // 🔍 VERIFICAR MENSAGEM
+        // =================================================
+
         let mensagem;
 
         try {
@@ -319,42 +649,34 @@ async function execute(interaction) {
             });
         }
 
-        // Cria o Embed
-        const embed =
-            new EmbedBuilder();
+        // =================================================
+        // 🔐 VERIFICAR CARGO
+        // =================================================
 
-        if (titulo) {
-            embed.setTitle(titulo);
-        }
+        const botMember =
+            interaction.guild.members.me;
 
-        if (descricao) {
-            embed.setDescription(
-                descricao
-            );
-        }
-
-        if (rodape) {
-            embed.setFooter({
-                text: rodape
+        if (!botMember) {
+            return interaction.reply({
+                content:
+                    "❌ Não consegui identificar o membro do bot.",
+                ephemeral: true
             });
         }
 
-        if (imagem) {
-            try {
-                embed.setImage(imagem);
-            } catch {}
+        if (
+            !cargo.editable
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Não consigo gerenciar esse cargo. Coloque o meu cargo acima dele na hierarquia.",
+                ephemeral: true
+            });
         }
 
-        if (thumbnail) {
-            try {
-                embed.setThumbnail(
-                    thumbnail
-                );
-            } catch {}
-        }
-
-        // Aqui futuramente salvaremos no banco
-        // e o index.js adicionará o listener.
+        // =================================================
+        // ➕ ADICIONAR REAÇÃO
+        // =================================================
 
         try {
 
@@ -376,12 +698,98 @@ async function execute(interaction) {
             });
         }
 
-        // Apenas teste inicial.
-        // O banco será conectado na próxima etapa.
+        // =================================================
+        // 💾 SALVAR NO BANCO
+        // =================================================
+
+        try {
+
+            await salvarReactRole({
+                guildId:
+                    interaction.guild.id,
+
+                mensagemId,
+
+                emoji,
+
+                cargoId:
+                    cargo.id,
+
+                content,
+
+                titulo,
+
+                descricao,
+
+                rodape,
+
+                imagem,
+
+                thumbnail
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro ao salvar Reaction Role:",
+                erro
+            );
+
+            return interaction.reply({
+                content:
+                    "❌ A reação foi adicionada, mas não consegui salvar a configuração no banco de dados.",
+                ephemeral: true
+            });
+        }
+
+        // =================================================
+        // 📝 EMBED DE VISUALIZAÇÃO
+        // =================================================
+
+        const embed =
+            new EmbedBuilder();
+
+        if (titulo) {
+            embed.setTitle(
+                titulo
+            );
+        }
+
+        if (descricao) {
+            embed.setDescription(
+                descricao
+            );
+        }
+
+        if (rodape) {
+            embed.setFooter({
+                text: rodape
+            });
+        }
+
+        if (imagem) {
+            try {
+                embed.setImage(
+                    imagem
+                );
+            } catch {}
+        }
+
+        if (thumbnail) {
+            try {
+                embed.setThumbnail(
+                    thumbnail
+                );
+            } catch {}
+        }
+
+        // =================================================
+        // ✅ RESPOSTA
+        // =================================================
 
         return interaction.reply({
             content:
-                `✅ React Role configurado!\n\n` +
+                `✅ **Reaction Role configurado!**\n\n` +
                 `📨 Mensagem: \`${mensagemId}\`\n` +
                 `😀 Emoji: ${emoji}\n` +
                 `🎭 Cargo: ${cargo}\n` +
@@ -431,6 +839,20 @@ async function execute(interaction) {
             });
         }
 
+        const botMember =
+            interaction.guild.members.me;
+
+        if (
+            !botMember ||
+            !cargo.editable
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Não consigo gerenciar esse cargo. Coloque o meu cargo acima dele na hierarquia.",
+                ephemeral: true
+            });
+        }
+
         try {
 
             await mensagem.react(
@@ -442,6 +864,41 @@ async function execute(interaction) {
             return interaction.reply({
                 content:
                     "❌ Não consegui adicionar esse emoji à mensagem.",
+                ephemeral: true
+            });
+        }
+
+        try {
+
+            await salvarReactRole({
+                guildId:
+                    interaction.guild.id,
+
+                mensagemId,
+
+                emoji,
+
+                cargoId:
+                    cargo.id,
+
+                content: null,
+                titulo: null,
+                descricao: null,
+                rodape: null,
+                imagem: null,
+                thumbnail: null
+            });
+
+        } catch (erro) {
+
+            console.error(
+                "❌ Erro ao salvar Reaction Role:",
+                erro
+            );
+
+            return interaction.reply({
+                content:
+                    "❌ Não consegui salvar essa configuração no banco de dados.",
                 ephemeral: true
             });
         }
@@ -466,9 +923,24 @@ async function execute(interaction) {
                 "emoji"
             );
 
+        const removido =
+            await removerReactRole(
+                interaction.guild.id,
+                mensagemId,
+                emoji
+            );
+
+        if (!removido) {
+            return interaction.reply({
+                content:
+                    "❌ Não encontrei essa configuração no banco de dados.",
+                ephemeral: true
+            });
+        }
+
         return interaction.reply({
             content:
-                `🗑️ A configuração do emoji ${emoji} será removida na próxima etapa, quando conectarmos o banco de dados.`,
+                `🗑️ A configuração do emoji ${emoji} foi removida.`,
             ephemeral: true
         });
     }
@@ -481,9 +953,33 @@ async function execute(interaction) {
         subcomando === "status"
     ) {
 
+        const configs =
+            await buscarReactRoles(
+                interaction.guild.id,
+                mensagemId
+            );
+
+        if (!configs.length) {
+            return interaction.reply({
+                content:
+                    `📋 Nenhum Reaction Role configurado para a mensagem \`${mensagemId}\`.`,
+                ephemeral: true
+            });
+        }
+
+        let texto =
+            `📋 **Reaction Roles da mensagem \`${mensagemId}\`**\n\n`;
+
+        for (
+            const config of configs
+        ) {
+
+            texto +=
+                `😀 ${config.emoji} → <@&${config.cargo_id}>\n`;
+        }
+
         return interaction.reply({
-            content:
-                `📋 O sistema da mensagem \`${mensagemId}\` ainda será conectado ao banco de dados.`,
+            content: texto,
             ephemeral: true
         });
     }
@@ -496,9 +992,23 @@ async function execute(interaction) {
         subcomando === "limpar"
     ) {
 
+        const quantidade =
+            await limparReactRoles(
+                interaction.guild.id,
+                mensagemId
+            );
+
+        if (!quantidade) {
+            return interaction.reply({
+                content:
+                    "❌ Não havia configurações para remover nessa mensagem.",
+                ephemeral: true
+            });
+        }
+
         return interaction.reply({
             content:
-                `🗑️ A configuração da mensagem \`${mensagemId}\` será limpa na próxima etapa.`,
+                `🗑️ Removi **${quantidade}** configuração(ões) de Reaction Role da mensagem \`${mensagemId}\`.`,
             ephemeral: true
         });
     }
@@ -510,5 +1020,6 @@ async function execute(interaction) {
 
 module.exports = {
     data,
-    execute
+    execute,
+    handleReaction
 };
