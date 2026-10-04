@@ -7,7 +7,8 @@ const {
     EmbedBuilder,
     AttachmentBuilder,
     AuditLogEvent,
-    MessageFlags
+    MessageFlags,
+    Partials
 } = require("discord.js");
 
 const http = require("http");
@@ -22,6 +23,7 @@ const {
 const logs = require("./comandos/logs");
 const join = require("./comandos/join");
 const leave = require("./comandos/leave");
+const reactrole = require("./comandos/reactrole");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
@@ -95,13 +97,20 @@ const TEMPO_AGRUPAMENTO = 1000;
 // =====================================================
 
 const client = new Client({
+    partials: [
+        Partials.Message,
+        Partials.Channel,
+        Partials.Reaction
+    ],
+
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildModeration
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildMessageReactions
     ]
 });
 
@@ -2618,6 +2627,42 @@ client.on(
         }
     }
 );
+
+// =====================================================
+// 🎭 REACTION ROLE
+// =====================================================
+
+client.on("messageReactionAdd", async (reaction, user) => {
+    try {
+        if (user.bot) return;
+
+        if (reaction.partial) {
+            await reaction.fetch();
+        }
+
+        if (typeof reactrole.handleReaction === "function") {
+            await reactrole.handleReaction(reaction, user, true);
+        }
+    } catch (erro) {
+        console.error("❌ Erro ao adicionar Reaction Role:", erro);
+    }
+});
+
+client.on("messageReactionRemove", async (reaction, user) => {
+    try {
+        if (user.bot) return;
+
+        if (reaction.partial) {
+            await reaction.fetch();
+        }
+
+        if (typeof reactrole.handleReaction === "function") {
+            await reactrole.handleReaction(reaction, user, false);
+        }
+    } catch (erro) {
+        console.error("❌ Erro ao remover Reaction Role:", erro);
+    }
+});
 
 // =====================================================
 // 📩 INTERAÇÕES
