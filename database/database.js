@@ -1040,6 +1040,8 @@ async function inicializarBanco() {
             painel_botao_texto VARCHAR(80)
                 NOT NULL DEFAULT 'Registrar',
 
+            cargo_registro_id VARCHAR(30),
+
             criado_em BIGINT NOT NULL DEFAULT (
                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
             ),
@@ -1118,6 +1120,12 @@ async function inicializarBanco() {
         "registro_config",
         "painel_botao_texto",
         "VARCHAR(80) NOT NULL DEFAULT 'Registrar'"
+    );
+
+    await adicionarColunaSeNaoExiste(
+        "registro_config",
+        "cargo_registro_id",
+        "VARCHAR(30)"
     );
 
     await adicionarColunaSeNaoExiste(
