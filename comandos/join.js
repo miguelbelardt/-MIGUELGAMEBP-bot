@@ -563,7 +563,8 @@ function criarPainelJoin(config = {}) {
                 "👤 **Autor:** configure nome e ícone do autor.\n" +
                 "🖼️ **Imagens:** configure thumbnail e imagem.\n" +
                 "📌 **Rodapé:** configure texto e ícone.\n" +
-                "⚙️ **Opções:** configure ativação e timestamp.\n\n" +
+                "⚙️ **Opções:** configure embed e timestamp.\n" +
+                "🟢 **Ativar / 🔴 Desativar:** controle o sistema diretamente pelo painel.\n\n" +
                 "As variáveis disponíveis continuam funcionando."
             )
             .setColor(
@@ -685,9 +686,33 @@ function criarPainelJoin(config = {}) {
                     )
             );
 
+    // =================================================
+    // 🟢🔴 CONTROLE DO SISTEMA
+    // =================================================
+
     const row3 =
         new ActionRowBuilder()
             .addComponents(
+                new ButtonBuilder()
+                    .setCustomId(
+                        "join_config_ativar"
+                    )
+                    .setLabel("Ativar")
+                    .setEmoji("🟢")
+                    .setStyle(
+                        ButtonStyle.Success
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        "join_config_desativar"
+                    )
+                    .setLabel("Desativar")
+                    .setEmoji("🔴")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    ),
+
                 new ButtonBuilder()
                     .setCustomId(
                         "join_config_status"
@@ -696,8 +721,12 @@ function criarPainelJoin(config = {}) {
                     .setEmoji("📊")
                     .setStyle(
                         ButtonStyle.Secondary
-                    ),
+                    )
+            );
 
+    const row4 =
+        new ActionRowBuilder()
+            .addComponents(
                 new ButtonBuilder()
                     .setCustomId(
                         "join_config_teste"
@@ -725,7 +754,8 @@ function criarPainelJoin(config = {}) {
             rowCanal,
             row1,
             row2,
-            row3
+            row3,
+            row4
         ]
     };
 }
@@ -1302,10 +1332,7 @@ const data =
         .setDefaultMemberPermissions(
             PermissionFlagsBits.ManageGuild.toString()
         )
-
-        // =================================================
-        // 📢 CONFIGURAR
-        // =================================================
+        .setDMPermission(false)
 
         .addSubcommand(
             subcommand =>
@@ -1316,10 +1343,6 @@ const data =
                     )
         )
 
-        // =================================================
-        // 🟢 ATIVAR
-        // =================================================
-
         .addSubcommand(
             subcommand =>
                 subcommand
@@ -1328,10 +1351,6 @@ const data =
                         "Ativa o sistema de boas-vindas"
                     )
         )
-
-        // =================================================
-        // 🔴 DESATIVAR
-        // =================================================
 
         .addSubcommand(
             subcommand =>
@@ -1342,10 +1361,6 @@ const data =
                     )
         )
 
-        // =================================================
-        // 📊 STATUS
-        // =================================================
-
         .addSubcommand(
             subcommand =>
                 subcommand
@@ -1354,10 +1369,6 @@ const data =
                         "Mostra a configuração atual"
                     )
         )
-
-        // =================================================
-        // 🧪 TESTE
-        // =================================================
 
         .addSubcommand(
             subcommand =>
@@ -1738,6 +1749,68 @@ async function tratarInteracao(interaction) {
                 config || {}
             )
         );
+
+        return true;
+    }
+
+    // =================================================
+    // 🟢 ATIVAR PELO PAINEL
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        id === "join_config_ativar"
+    ) {
+        const configAtual =
+            await getJoinConfig(
+                interaction.guild.id
+            );
+
+        await salvarJoinConfig(
+            interaction.guild.id,
+            {
+                ...(configAtual || {}),
+                habilitado: true
+            }
+        );
+
+        await interaction.reply({
+            content:
+                "🟢 Sistema de boas-vindas ativado pelo painel!",
+            flags:
+                MessageFlags.Ephemeral
+        });
+
+        return true;
+    }
+
+    // =================================================
+    // 🔴 DESATIVAR PELO PAINEL
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        id === "join_config_desativar"
+    ) {
+        const configAtual =
+            await getJoinConfig(
+                interaction.guild.id
+            );
+
+        await salvarJoinConfig(
+            interaction.guild.id,
+            {
+                ...(configAtual || {}),
+                habilitado: false
+            }
+        );
+
+        await interaction.reply({
+            content:
+                "🔴 Sistema de boas-vindas desativado pelo painel!",
+            flags:
+                MessageFlags.Ephemeral
+        });
 
         return true;
     }
