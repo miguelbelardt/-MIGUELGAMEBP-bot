@@ -73,6 +73,15 @@ const data = new SlashCommandBuilder()
 
             .addStringOption(option =>
                 option
+                    .setName("cor")
+                    .setDescription(
+                        "Cor do Embed em hexadecimal. Ex: #00A8FF"
+                    )
+                    .setRequired(false)
+            )
+
+            .addStringOption(option =>
+                option
                     .setName("rodape")
                     .setDescription(
                         "Texto do rodapé do Embed."
@@ -248,6 +257,27 @@ function normalizarEmoji(emoji) {
 }
 
 // =====================================================
+// 🎨 NORMALIZAR COR
+// =====================================================
+
+function normalizarCor(cor) {
+    if (!cor) return null;
+
+    let texto =
+        String(cor)
+            .trim()
+            .replace(/^#/, "");
+
+    if (
+        !/^[0-9A-Fa-f]{6}$/.test(texto)
+    ) {
+        return null;
+    }
+
+    return `#${texto.toUpperCase()}`;
+}
+
+// =====================================================
 // 📨 BUSCAR CONFIGURAÇÕES
 // =====================================================
 
@@ -285,6 +315,7 @@ async function salvarReactRole({
     content,
     titulo,
     descricao,
+    cor,
     rodape,
     imagem,
     thumbnail
@@ -315,7 +346,7 @@ async function salvarReactRole({
         VALUES (
             ?, ?, ?, ?, ?,
             TRUE,
-            ?, ?, NULL,
+            ?, ?, ?,
             ?, ?,
             ?, ?,
             UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000,
@@ -327,6 +358,7 @@ async function salvarReactRole({
             embed_habilitado = TRUE,
             embed_titulo = VALUES(embed_titulo),
             embed_descricao = VALUES(embed_descricao),
+            embed_cor = VALUES(embed_cor),
             footer_habilitado = VALUES(footer_habilitado),
             footer_texto = VALUES(footer_texto),
             imagem = VALUES(imagem),
@@ -342,6 +374,7 @@ async function salvarReactRole({
             content,
             titulo,
             descricao,
+            cor,
             rodape ? true : false,
             rodape || null,
             imagem,
@@ -590,6 +623,27 @@ async function execute(interaction) {
                 "descricao"
             );
 
+        const corInformada =
+            interaction.options.getString(
+                "cor"
+            );
+
+        const cor =
+            normalizarCor(
+                corInformada
+            );
+
+        if (
+            corInformada &&
+            !cor
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Cor inválida.\n\nUse uma cor hexadecimal com 6 caracteres, por exemplo:\n`#00A8FF`\n`00A8FF`\n`#FF0000`",
+                ephemeral: true
+            });
+        }
+
         const rodape =
             interaction.options.getString(
                 "rodape"
@@ -704,6 +758,8 @@ async function execute(interaction) {
 
                 descricao,
 
+                cor,
+
                 rodape,
 
                 imagem,
@@ -744,6 +800,12 @@ async function execute(interaction) {
             );
         }
 
+        if (cor) {
+            embed.setColor(
+                cor
+            );
+        }
+
         if (rodape) {
             embed.setFooter({
                 text: rodape
@@ -778,6 +840,7 @@ async function execute(interaction) {
                 `🎭 Cargo: ${cargo}\n` +
                 `📝 Título: ${titulo || "Não definido"}\n` +
                 `📄 Descrição: ${descricao || "Não definida"}\n` +
+                `🎨 Cor: ${cor || "Padrão"}\n` +
                 `🔻 Rodapé: ${rodape || "Não definido"}\n` +
                 `🖼️ Imagem: ${imagem || "Não definida"}\n` +
                 `🔳 Thumbnail: ${thumbnail || "Não definida"}\n` +
@@ -867,6 +930,7 @@ async function execute(interaction) {
                 content: null,
                 titulo: null,
                 descricao: null,
+                cor: null,
                 rodape: null,
                 imagem: null,
                 thumbnail: null
@@ -958,7 +1022,8 @@ async function execute(interaction) {
         ) {
 
             texto +=
-                `😀 ${config.emoji} → <@&${config.cargo_id}>\n`;
+                `😀 ${config.emoji} → <@&${config.cargo_id}>` +
+                `${config.embed_cor ? ` • 🎨 ${config.embed_cor}` : ""}\n`;
         }
 
         return interaction.reply({
