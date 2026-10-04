@@ -60,7 +60,6 @@ const data = new SlashCommandBuilder()
             .setDescription(
                 "Mostra a configuração de um Reaction Role."
             )
-
             .addStringOption(option =>
                 option
                     .setName("mensagem")
@@ -106,6 +105,58 @@ const data = new SlashCommandBuilder()
                 "Desativa um Reaction Role."
             )
     );
+
+// =====================================================
+// 🛠️ GARANTIR TABELA DE CONFIGURAÇÃO
+// =====================================================
+
+let tabelaGarantida = false;
+
+async function garantirTabela() {
+    if (tabelaGarantida) return;
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS react_role_configs (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+            guild_id VARCHAR(30) NOT NULL,
+
+            canal_id VARCHAR(30),
+            mensagem_id VARCHAR(30),
+
+            content TEXT,
+
+            embed_habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+            embed_titulo VARCHAR(256),
+            embed_descricao TEXT,
+            embed_cor VARCHAR(20),
+
+            footer_habilitado BOOLEAN NOT NULL DEFAULT FALSE,
+            footer_texto VARCHAR(2048),
+
+            imagem TEXT,
+            thumbnail TEXT,
+
+            habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            INDEX idx_react_role_configs_guild (guild_id),
+            INDEX idx_react_role_configs_mensagem (
+                guild_id,
+                mensagem_id
+            )
+        )
+    `);
+
+    tabelaGarantida = true;
+}
 
 // =====================================================
 // 🎨 NORMALIZAR COR
@@ -172,17 +223,20 @@ function urlValida(url) {
 // =====================================================
 
 async function criarConfig(guildId) {
-    const [resultado] = await mysqlPool.query(
-        `
-        INSERT INTO react_role_configs (
-            guild_id,
-            habilitado,
-            embed_habilitado
-        )
-        VALUES (?, TRUE, TRUE)
-        `,
-        [guildId]
-    );
+    await garantirTabela();
+
+    const [resultado] =
+        await mysqlPool.query(
+            `
+            INSERT INTO react_role_configs (
+                guild_id,
+                habilitado,
+                embed_habilitado
+            )
+            VALUES (?, TRUE, TRUE)
+            `,
+            [guildId]
+        );
 
     return resultado.insertId;
 }
@@ -191,42 +245,55 @@ async function criarConfig(guildId) {
 // 🔎 BUSCAR CONFIGURAÇÃO
 // =====================================================
 
-async function buscarConfig(id, guildId) {
-    const [rows] = await mysqlPool.query(
-        `
-        SELECT *
-        FROM react_role_configs
-        WHERE id = ?
-          AND guild_id = ?
-        LIMIT 1
-        `,
-        [id, guildId]
-    );
+async function buscarConfig(
+    id,
+    guildId
+) {
+    await garantirTabela();
+
+    const [rows] =
+        await mysqlPool.query(
+            `
+            SELECT *
+            FROM react_role_configs
+            WHERE id = ?
+              AND guild_id = ?
+            LIMIT 1
+            `,
+            [
+                id,
+                guildId
+            ]
+        );
 
     return rows[0] || null;
 }
 
 // =====================================================
-// 🔎 BUSCAR POR MENSAGEM
+// 🔎 BUSCAR CONFIG POR MENSAGEM
 // =====================================================
 
 async function buscarConfigMensagem(
     guildId,
     mensagemId
 ) {
-    const [rows] = await mysqlPool.query(
-        `
-        SELECT *
-        FROM react_role_configs
-        WHERE guild_id = ?
-          AND mensagem_id = ?
-        LIMIT 1
-        `,
-        [
-            guildId,
-            mensagemId
-        ]
-    );
+    await garantirTabela();
+
+    const [rows] =
+        await mysqlPool.query(
+            `
+            SELECT *
+            FROM react_role_configs
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            `,
+            [
+                guildId,
+                mensagemId
+            ]
+        );
 
     return rows[0] || null;
 }
@@ -240,6 +307,8 @@ async function atualizarConfig(
     guildId,
     dados
 ) {
+    await garantirTabela();
+
     await mysqlPool.query(
         `
         UPDATE react_role_configs
@@ -247,17 +316,23 @@ async function atualizarConfig(
             canal_id = ?,
             mensagem_id = ?,
             content = ?,
+
             embed_habilitado = ?,
             embed_titulo = ?,
             embed_descricao = ?,
             embed_cor = ?,
+
             footer_habilitado = ?,
             footer_texto = ?,
+
             imagem = ?,
             thumbnail = ?,
+
             habilitado = ?,
+
             atualizado_em =
                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
         WHERE id = ?
           AND guild_id = ?
         `,
@@ -267,7 +342,6 @@ async function atualizarConfig(
             dados.content || null,
 
             dados.embed_habilitado !== false,
-
             dados.embed_titulo || null,
             dados.embed_descricao || null,
             dados.embed_cor || null,
@@ -296,19 +370,20 @@ async function buscarCargos(
 ) {
     if (!mensagemId) return [];
 
-    const [rows] = await mysqlPool.query(
-        `
-        SELECT *
-        FROM react_roles
-        WHERE guild_id = ?
-          AND mensagem_id = ?
-        ORDER BY id ASC
-        `,
-        [
-            guildId,
-            mensagemId
-        ]
-    );
+    const [rows] =
+        await mysqlPool.query(
+            `
+            SELECT *
+            FROM react_roles
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+            ORDER BY id ASC
+            `,
+            [
+                guildId,
+                mensagemId
+            ]
+        );
 
     return rows;
 }
@@ -335,17 +410,22 @@ async function salvarCargo({
             emoji,
             cargo_id,
             content,
+
             embed_habilitado,
             embed_titulo,
             embed_descricao,
             embed_cor,
+
             footer_habilitado,
             footer_texto,
+
             imagem,
             thumbnail,
+
             criado_em,
             atualizado_em
         )
+
         VALUES (
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
@@ -354,17 +434,37 @@ async function salvarCargo({
             UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000,
             UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
         )
+
         ON DUPLICATE KEY UPDATE
+
             cargo_id = VALUES(cargo_id),
+
             content = VALUES(content),
-            embed_habilitado = VALUES(embed_habilitado),
-            embed_titulo = VALUES(embed_titulo),
-            embed_descricao = VALUES(embed_descricao),
-            embed_cor = VALUES(embed_cor),
-            footer_habilitado = VALUES(footer_habilitado),
-            footer_texto = VALUES(footer_texto),
-            imagem = VALUES(imagem),
-            thumbnail = VALUES(thumbnail),
+
+            embed_habilitado =
+                VALUES(embed_habilitado),
+
+            embed_titulo =
+                VALUES(embed_titulo),
+
+            embed_descricao =
+                VALUES(embed_descricao),
+
+            embed_cor =
+                VALUES(embed_cor),
+
+            footer_habilitado =
+                VALUES(footer_habilitado),
+
+            footer_texto =
+                VALUES(footer_texto),
+
+            imagem =
+                VALUES(imagem),
+
+            thumbnail =
+                VALUES(thumbnail),
+
             atualizado_em =
                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
         `,
@@ -399,21 +499,29 @@ async function sincronizarCargos(
     mensagemId,
     config
 ) {
+    if (!mensagemId) return;
+
     await mysqlPool.query(
         `
         UPDATE react_roles
         SET
+
             content = ?,
+
             embed_habilitado = ?,
             embed_titulo = ?,
             embed_descricao = ?,
             embed_cor = ?,
+
             footer_habilitado = ?,
             footer_texto = ?,
+
             imagem = ?,
             thumbnail = ?,
+
             atualizado_em =
                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
         WHERE guild_id = ?
           AND mensagem_id = ?
         `,
@@ -453,6 +561,7 @@ async function removerCargo(
         await mysqlPool.query(
             `
             DELETE FROM react_roles
+
             WHERE guild_id = ?
               AND mensagem_id = ?
               AND emoji = ?
@@ -472,7 +581,9 @@ async function removerCargo(
 // =====================================================
 
 function criarEmbed(config) {
-    if (config.embed_habilitado === false) {
+    if (
+        config.embed_habilitado === false
+    ) {
         return null;
     }
 
@@ -487,7 +598,8 @@ function criarEmbed(config) {
         return null;
     }
 
-    const embed = new EmbedBuilder();
+    const embed =
+        new EmbedBuilder();
 
     if (config.embed_titulo) {
         embed.setTitle(
@@ -512,7 +624,8 @@ function criarEmbed(config) {
         config.footer_texto
     ) {
         embed.setFooter({
-            text: config.footer_texto
+            text:
+                config.footer_texto
         });
     }
 
@@ -542,18 +655,19 @@ async function aplicarMensagem(
     const embed =
         criarEmbed(config);
 
-    const dados = {
+    await mensagem.edit({
         content:
             config.content || null,
-        embeds:
-            embed ? [embed] : []
-    };
 
-    await mensagem.edit(dados);
+        embeds:
+            embed
+                ? [embed]
+                : []
+    });
 }
 
 // =====================================================
-// 📋 PAINEL
+// 📋 CRIAR PAINEL
 // =====================================================
 
 async function criarPainel(
@@ -606,153 +720,198 @@ async function criarPainel(
 
     if (cargos.length) {
         embed.addFields({
-            name: "🎭 Cargos configurados",
-            value: cargos
-                .map(
-                    cargo =>
-                        `${cargo.emoji} → <@&${cargo.cargo_id}>`
-                )
-                .join("\n")
-                .slice(0, 1024)
+            name:
+                "🎭 Cargos configurados",
+
+            value:
+                cargos
+                    .map(
+                        cargo =>
+                            `${cargo.emoji} → <@&${cargo.cargo_id}>`
+                    )
+                    .join("\n")
+                    .slice(0, 1024)
         });
     }
 
+    // =================================================
+    // 📢 CANAL
+    // =================================================
+
     const canalRow =
-        new ActionRowBuilder().addComponents(
-            new ChannelSelectMenuBuilder()
-                .setCustomId(
-                    `rr_canal_${config.id}`
-                )
-                .setPlaceholder(
-                    "📢 Selecionar canal"
-                )
-                .setChannelTypes(
-                    ChannelType.GuildText,
-                    ChannelType.GuildAnnouncement
-                )
-                .setMinValues(1)
-                .setMaxValues(1)
-        );
+        new ActionRowBuilder()
+            .addComponents(
+                new ChannelSelectMenuBuilder()
+                    .setCustomId(
+                        `rr_canal_${config.id}`
+                    )
+                    .setPlaceholder(
+                        "📢 Selecionar canal"
+                    )
+                    .setChannelTypes(
+                        ChannelType.GuildText,
+                        ChannelType.GuildAnnouncement
+                    )
+                    .setMinValues(1)
+                    .setMaxValues(1)
+            );
+
+    // =================================================
+    // 🔧 PRIMEIRA LINHA
+    // =================================================
 
     const row1 =
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_mensagem_${config.id}`
-                )
-                .setLabel("Mensagem")
-                .setEmoji("📨")
-                .setStyle(
-                    ButtonStyle.Primary
-                ),
+        new ActionRowBuilder()
+            .addComponents(
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_cargos_${config.id}`
-                )
-                .setLabel("Cargos")
-                .setEmoji("🎭")
-                .setStyle(
-                    ButtonStyle.Primary
-                ),
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_mensagem_${config.id}`
+                    )
+                    .setLabel(
+                        "Mensagem"
+                    )
+                    .setEmoji("📨")
+                    .setStyle(
+                        ButtonStyle.Primary
+                    ),
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_embed_${config.id}`
-                )
-                .setLabel("Embed")
-                .setEmoji("🎨")
-                .setStyle(
-                    ButtonStyle.Primary
-                )
-        );
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_cargos_${config.id}`
+                    )
+                    .setLabel(
+                        "Cargos"
+                    )
+                    .setEmoji("🎭")
+                    .setStyle(
+                        ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_embed_${config.id}`
+                    )
+                    .setLabel(
+                        "Embed"
+                    )
+                    .setEmoji("🎨")
+                    .setStyle(
+                        ButtonStyle.Primary
+                    )
+            );
+
+    // =================================================
+    // 🖼️ SEGUNDA LINHA
+    // =================================================
 
     const row2 =
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_imagens_${config.id}`
-                )
-                .setLabel("Imagens")
-                .setEmoji("🖼️")
-                .setStyle(
-                    ButtonStyle.Secondary
-                ),
+        new ActionRowBuilder()
+            .addComponents(
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_rodape_${config.id}`
-                )
-                .setLabel("Rodapé")
-                .setEmoji("📌")
-                .setStyle(
-                    ButtonStyle.Secondary
-                ),
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_imagens_${config.id}`
+                    )
+                    .setLabel(
+                        "Imagens"
+                    )
+                    .setEmoji("🖼️")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_enviar_${config.id}`
-                )
-                .setLabel(
-                    modo === "editar"
-                        ? "Salvar"
-                        : "Enviar"
-                )
-                .setEmoji(
-                    modo === "editar"
-                        ? "💾"
-                        : "📤"
-                )
-                .setStyle(
-                    ButtonStyle.Success
-                )
-        );
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_rodape_${config.id}`
+                    )
+                    .setLabel(
+                        "Rodapé"
+                    )
+                    .setEmoji("📌")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_enviar_${config.id}`
+                    )
+                    .setLabel(
+                        config.mensagem_id
+                            ? "Salvar"
+                            : "Enviar"
+                    )
+                    .setEmoji(
+                        config.mensagem_id
+                            ? "💾"
+                            : "📤"
+                    )
+                    .setStyle(
+                        ButtonStyle.Success
+                    )
+            );
+
+    // =================================================
+    // ⚙️ TERCEIRA LINHA
+    // =================================================
 
     const row3 =
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_ativar_${config.id}`
-                )
-                .setLabel("Ativar")
-                .setEmoji("🟢")
-                .setStyle(
-                    ButtonStyle.Success
-                ),
+        new ActionRowBuilder()
+            .addComponents(
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_desativar_${config.id}`
-                )
-                .setLabel("Desativar")
-                .setEmoji("🔴")
-                .setStyle(
-                    ButtonStyle.Danger
-                ),
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_ativar_${config.id}`
+                    )
+                    .setLabel(
+                        "Ativar"
+                    )
+                    .setEmoji("🟢")
+                    .setStyle(
+                        ButtonStyle.Success
+                    ),
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_testar_${config.id}`
-                )
-                .setLabel("Testar")
-                .setEmoji("🧪")
-                .setStyle(
-                    ButtonStyle.Secondary
-                ),
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_desativar_${config.id}`
+                    )
+                    .setLabel(
+                        "Desativar"
+                    )
+                    .setEmoji("🔴")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    ),
 
-            new ButtonBuilder()
-                .setCustomId(
-                    `rr_fechar_${config.id}`
-                )
-                .setLabel("Fechar")
-                .setEmoji("❌")
-                .setStyle(
-                    ButtonStyle.Danger
-                )
-        );
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_testar_${config.id}`
+                    )
+                    .setLabel(
+                        "Testar"
+                    )
+                    .setEmoji("🧪")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_fechar_${config.id}`
+                    )
+                    .setLabel(
+                        "Fechar"
+                    )
+                    .setEmoji("❌")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    )
+            );
 
     return {
         embeds: [embed],
+
         components: [
             canalRow,
             row1,
@@ -796,9 +955,10 @@ function modalMensagem(config) {
             );
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(
-            content
-        )
+        new ActionRowBuilder()
+            .addComponents(
+                content
+            )
     );
 
     return modal;
@@ -870,15 +1030,20 @@ function modalEmbed(config) {
             );
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(
-            titulo
-        ),
-        new ActionRowBuilder().addComponents(
-            descricao
-        ),
-        new ActionRowBuilder().addComponents(
-            cor
-        )
+        new ActionRowBuilder()
+            .addComponents(
+                titulo
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                descricao
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                cor
+            )
     );
 
     return modal;
@@ -931,12 +1096,15 @@ function modalImagens(config) {
             );
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(
-            imagem
-        ),
-        new ActionRowBuilder().addComponents(
-            thumbnail
-        )
+        new ActionRowBuilder()
+            .addComponents(
+                imagem
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                thumbnail
+            )
     );
 
     return modal;
@@ -973,9 +1141,10 @@ function modalRodape(config) {
             );
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(
-            rodape
-        )
+        new ActionRowBuilder()
+            .addComponents(
+                rodape
+            )
     );
 
     return modal;
@@ -1028,12 +1197,15 @@ function modalCargo(config) {
             );
 
     modal.addComponents(
-        new ActionRowBuilder().addComponents(
-            emoji
-        ),
-        new ActionRowBuilder().addComponents(
-            cargo
-        )
+        new ActionRowBuilder()
+            .addComponents(
+                emoji
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                cargo
+            )
     );
 
     return modal;
@@ -1059,7 +1231,10 @@ async function enviarOuEditar(
             config.canal_id
         );
 
-    if (!canal || !canal.isTextBased()) {
+    if (
+        !canal ||
+        !canal.isTextBased()
+    ) {
         return {
             erro:
                 "❌ O canal configurado não é válido."
@@ -1078,21 +1253,27 @@ async function enviarOuEditar(
                 await canal.messages.fetch(
                     config.mensagem_id
                 );
-        } catch {
+
+            await aplicarMensagem(
+                mensagem,
+                config
+            );
+
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao encontrar/editar mensagem:",
+                erro
+            );
+
             return {
                 erro:
                     "❌ Não consegui encontrar a mensagem configurada nesse canal."
             };
         }
-
-        await aplicarMensagem(
-            mensagem,
-            config
-        );
     }
 
     // =================================================
-    // 📤 NOVA MENSAGEM
+    // 📤 CRIAR NOVA
     // =================================================
 
     else {
@@ -1103,6 +1284,7 @@ async function enviarOuEditar(
             await canal.send({
                 content:
                     config.content || null,
+
                 embeds:
                     embed
                         ? [embed]
@@ -1112,10 +1294,12 @@ async function enviarOuEditar(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
+
             SET
                 mensagem_id = ?,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1131,7 +1315,7 @@ async function enviarOuEditar(
     }
 
     // =================================================
-    // 🎭 ADICIONAR REAÇÕES
+    // 🎭 REAÇÕES
     // =================================================
 
     const cargos =
@@ -1152,6 +1336,10 @@ async function enviarOuEditar(
             );
         }
     }
+
+    // =================================================
+    // 🔄 SINCRONIZAR CONFIG
+    // =================================================
 
     await sincronizarCargos(
         interaction.guild.id,
@@ -1210,9 +1398,11 @@ async function handleReaction(
                 `
                 SELECT *
                 FROM react_roles
+
                 WHERE guild_id = ?
                   AND mensagem_id = ?
                   AND emoji = ?
+
                 LIMIT 1
                 `,
                 [
@@ -1243,6 +1433,7 @@ async function handleReaction(
             console.error(
                 `❌ Cargo ${cargoId} não encontrado.`
             );
+
             return;
         }
 
@@ -1250,6 +1441,7 @@ async function handleReaction(
             console.error(
                 `❌ Não posso gerenciar o cargo ${cargo.name}.`
             );
+
             return;
         }
 
@@ -1294,7 +1486,7 @@ async function handleReaction(
 }
 
 // =====================================================
-// 🖱️ TRATAR INTERAÇÕES DO PAINEL
+// 🖱️ TRATAR INTERAÇÕES
 // =====================================================
 
 async function tratarInteracao(
@@ -1329,6 +1521,7 @@ async function tratarInteracao(
         await interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor**.",
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -1341,6 +1534,17 @@ async function tratarInteracao(
 
     const acao =
         partes[1];
+
+    // =================================================
+    // 📝 MODAL EDITAR ESPECIAL
+    // =================================================
+
+    if (
+        interaction.isModalSubmit() &&
+        customId === "rr_modal_editar"
+    ) {
+        return false;
+    }
 
     const configId =
         partes[partes.length - 1];
@@ -1355,6 +1559,7 @@ async function tratarInteracao(
         await interaction.reply({
             content:
                 "❌ Essa configuração não existe mais.",
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -1376,10 +1581,12 @@ async function tratarInteracao(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
+
             SET
                 canal_id = ?,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1402,7 +1609,10 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 config,
-                cargos
+                cargos,
+                config.mensagem_id
+                    ? "editar"
+                    : "configurar"
             );
 
         await interaction.update(
@@ -1483,7 +1693,8 @@ async function tratarInteracao(
         if (!config.mensagem_id) {
             await interaction.reply({
                 content:
-                    "❌ Primeiro envie a mensagem pelo botão **📤 Enviar**. Depois você poderá adicionar os cargos.",
+                    "❌ Primeiro clique em **📤 Enviar** para criar a mensagem. Depois você poderá adicionar os cargos.",
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -1509,10 +1720,12 @@ async function tratarInteracao(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
+
             SET
                 habilitado = TRUE,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1533,7 +1746,10 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 config,
-                cargos
+                cargos,
+                config.mensagem_id
+                    ? "editar"
+                    : "configurar"
             );
 
         await interaction.update(
@@ -1554,10 +1770,12 @@ async function tratarInteracao(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
+
             SET
                 habilitado = FALSE,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1578,7 +1796,10 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 config,
-                cargos
+                cargos,
+                config.mensagem_id
+                    ? "editar"
+                    : "configurar"
             );
 
         await interaction.update(
@@ -1600,6 +1821,7 @@ async function tratarInteracao(
             await interaction.reply({
                 content:
                     "❌ Ainda não existe uma mensagem para testar.",
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -1625,7 +1847,8 @@ async function tratarInteracao(
 
             await interaction.reply({
                 content:
-                    "🧪 **Reaction Role testado com sucesso!**",
+                    "🧪 **Reaction Role atualizado com sucesso!**",
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -1639,6 +1862,7 @@ async function tratarInteracao(
             await interaction.reply({
                 content:
                     "❌ Não consegui testar o Reaction Role.",
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -1666,6 +1890,7 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         resultado.erro,
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -1689,9 +1914,7 @@ async function tratarInteracao(
                 await criarPainel(
                     novaConfig,
                     cargos,
-                    novaConfig.mensagem_id
-                        ? "editar"
-                        : "configurar"
+                    "editar"
                 );
 
             await interaction.update(
@@ -1704,12 +1927,15 @@ async function tratarInteracao(
                 erro
             );
 
-            await interaction.reply({
-                content:
-                    "❌ Não consegui salvar o Reaction Role.",
-                flags:
-                    MessageFlags.Ephemeral
-            });
+            if (!interaction.replied) {
+                await interaction.reply({
+                    content:
+                        "❌ Não consegui salvar o Reaction Role.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
         }
 
         return true;
@@ -1726,7 +1952,9 @@ async function tratarInteracao(
         await interaction.update({
             content:
                 "✅ Painel fechado.",
+
             embeds: [],
+
             components: []
         });
 
@@ -1734,7 +1962,7 @@ async function tratarInteracao(
     }
 
     // =================================================
-    // 📝 MODAL MENSAGEM
+    // 📝 MODAIS
     // =================================================
 
     if (
@@ -1757,10 +1985,12 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
+
                 SET
                     content = ?,
                     atualizado_em =
                         UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
                 WHERE id = ?
                   AND guild_id = ?
                 `,
@@ -1804,6 +2034,7 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         "❌ Cor inválida. Use algo como `#00A8FF`.",
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -1814,13 +2045,16 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
+
                 SET
                     embed_titulo = ?,
                     embed_descricao = ?,
                     embed_cor = ?,
                     embed_habilitado = TRUE,
+
                     atualizado_em =
                         UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
                 WHERE id = ?
                   AND guild_id = ?
                 `,
@@ -1828,6 +2062,7 @@ async function tratarInteracao(
                     titulo || null,
                     descricao || null,
                     cor,
+
                     config.id,
                     interaction.guild.id
                 ]
@@ -1856,6 +2091,7 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         "❌ Uma das URLs informadas é inválida.",
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -1866,17 +2102,21 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
+
                 SET
                     imagem = ?,
                     thumbnail = ?,
+
                     atualizado_em =
                         UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
                 WHERE id = ?
                   AND guild_id = ?
                 `,
                 [
                     imagem || null,
                     thumbnail || null,
+
                     config.id,
                     interaction.guild.id
                 ]
@@ -1896,17 +2136,21 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
+
                 SET
                     footer_texto = ?,
                     footer_habilitado = ?,
+
                     atualizado_em =
                         UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+
                 WHERE id = ?
                   AND guild_id = ?
                 `,
                 [
                     rodape || null,
                     rodape ? true : false,
+
                     config.id,
                     interaction.guild.id
                 ]
@@ -1922,6 +2166,7 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         "❌ Envie a mensagem primeiro.",
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -1932,12 +2177,12 @@ async function tratarInteracao(
             const emoji =
                 interaction.fields.getTextInputValue(
                     "emoji"
-                );
+                ).trim();
 
             const cargoId =
                 interaction.fields.getTextInputValue(
                     "cargo"
-                );
+                ).trim();
 
             const cargo =
                 await interaction.guild.roles.fetch(
@@ -1948,6 +2193,7 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         "❌ Não encontrei esse cargo.",
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -1959,6 +2205,24 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         "❌ Não consigo gerenciar esse cargo. Coloque meu cargo acima dele.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const emojiNormalizado =
+                normalizarEmoji(
+                    emoji
+                );
+
+            if (!emojiNormalizado) {
+                await interaction.reply({
+                    content:
+                        "❌ Emoji inválido.",
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -1972,23 +2236,56 @@ async function tratarInteracao(
                         config.canal_id
                     );
 
+                if (
+                    !canal ||
+                    !canal.isTextBased()
+                ) {
+                    throw new Error(
+                        "Canal inválido."
+                    );
+                }
+
                 const mensagem =
                     await canal.messages.fetch(
                         config.mensagem_id
                     );
 
-                await mensagem.react(
-                    emoji
-                );
+                // Remove a reação antiga caso
+                // esse emoji já exista na mensagem
+                try {
+                    await mensagem.react(
+                        emojiNormalizado
+                    );
+                } catch (erro) {
+                    console.error(
+                        "❌ Erro ao adicionar reação:",
+                        erro
+                    );
+
+                    await interaction.reply({
+                        content:
+                            "❌ Não consegui adicionar esse emoji à mensagem. Verifique se o emoji é válido e se o bot consegue usá-lo.",
+
+                        flags:
+                            MessageFlags.Ephemeral
+                    });
+
+                    return true;
+                }
 
                 await salvarCargo({
                     guildId:
                         interaction.guild.id,
+
                     mensagemId:
                         config.mensagem_id,
-                    emoji,
+
+                    emoji:
+                        emojiNormalizado,
+
                     cargoId:
                         cargo.id,
+
                     config
                 });
 
@@ -2001,6 +2298,7 @@ async function tratarInteracao(
                 await interaction.reply({
                     content:
                         "❌ Não consegui adicionar essa reação à mensagem.",
+
                     flags:
                         MessageFlags.Ephemeral
                 });
@@ -2008,6 +2306,10 @@ async function tratarInteracao(
                 return true;
             }
         }
+
+        // =============================================
+        // 🔄 ATUALIZAR PAINEL
+        // =============================================
 
         const novaConfig =
             await buscarConfig(
@@ -2024,11 +2326,15 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 novaConfig,
-                cargos
+                cargos,
+                novaConfig.mensagem_id
+                    ? "editar"
+                    : "configurar"
             );
 
         await interaction.reply({
             ...painel,
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -2052,6 +2358,24 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor** para usar este comando.",
+
+            flags:
+                MessageFlags.Ephemeral
+        });
+    }
+
+    try {
+        await garantirTabela();
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao verificar tabela do Reaction Role:",
+            erro
+        );
+
+        return interaction.reply({
+            content:
+                "❌ Não consegui preparar o banco de dados do Reaction Role.",
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -2082,11 +2406,13 @@ async function execute(interaction) {
             const painel =
                 await criarPainel(
                     config,
-                    []
+                    [],
+                    "configurar"
                 );
 
             return interaction.reply({
                 ...painel,
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -2100,6 +2426,7 @@ async function execute(interaction) {
             return interaction.reply({
                 content:
                     "❌ Não consegui abrir a configuração do Reaction Role.",
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -2139,9 +2466,10 @@ async function execute(interaction) {
                 );
 
         modal.addComponents(
-            new ActionRowBuilder().addComponents(
-                mensagem
-            )
+            new ActionRowBuilder()
+                .addComponents(
+                    mensagem
+                )
         );
 
         return interaction.showModal(
@@ -2171,6 +2499,7 @@ async function execute(interaction) {
             return interaction.reply({
                 content:
                     "❌ Não encontrei esse Reaction Role.",
+
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -2205,6 +2534,7 @@ async function execute(interaction) {
                             : "Desativado"
                     }`
                 ].join("\n"),
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -2220,6 +2550,7 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "🧪 Use **/reactrole editar** para abrir a configuração de uma mensagem existente e testar pelo painel.",
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -2235,7 +2566,8 @@ async function execute(interaction) {
     ) {
         return interaction.reply({
             content:
-                `ℹ️ Use **/reactrole editar** para abrir o painel e ativar/desativar o sistema.`,
+                "ℹ️ Use **/reactrole editar** para abrir o painel e ativar/desativar o sistema.",
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -2264,6 +2596,7 @@ async function tratarModalEditar(
         await interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor**.",
+
             flags:
                 MessageFlags.Ephemeral
         });
@@ -2271,48 +2604,72 @@ async function tratarModalEditar(
         return true;
     }
 
-    const mensagemId =
-        interaction.fields.getTextInputValue(
-            "mensagem"
-        ).trim();
+    try {
+        await garantirTabela();
 
-    const config =
-        await buscarConfigMensagem(
-            interaction.guild.id,
-            mensagemId
+        const mensagemId =
+            interaction.fields
+                .getTextInputValue(
+                    "mensagem"
+                )
+                .trim();
+
+        const config =
+            await buscarConfigMensagem(
+                interaction.guild.id,
+                mensagemId
+            );
+
+        if (!config) {
+            await interaction.reply({
+                content:
+                    "❌ Não encontrei nenhum Reaction Role configurado para essa mensagem.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        const cargos =
+            await buscarCargos(
+                interaction.guild.id,
+                mensagemId
+            );
+
+        const painel =
+            await criarPainel(
+                config,
+                cargos,
+                "editar"
+            );
+
+        await interaction.reply({
+            ...painel,
+
+            flags:
+                MessageFlags.Ephemeral
+        });
+
+        return true;
+
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao abrir edição do Reaction Role:",
+            erro
         );
 
-    if (!config) {
         await interaction.reply({
             content:
-                "❌ Não encontrei nenhum Reaction Role configurado para essa mensagem.",
+                "❌ Não consegui abrir a configuração desse Reaction Role.",
+
             flags:
                 MessageFlags.Ephemeral
         });
 
         return true;
     }
-
-    const cargos =
-        await buscarCargos(
-            interaction.guild.id,
-            mensagemId
-        );
-
-    const painel =
-        await criarPainel(
-            config,
-            cargos,
-            "editar"
-        );
-
-    await interaction.reply({
-        ...painel,
-        flags:
-            MessageFlags.Ephemeral
-    });
-
-    return true;
 }
 
 // =====================================================
