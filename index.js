@@ -2147,8 +2147,10 @@ async function registrarComandos() {
 }
 
 // =====================================================
-// 🟢 BOT ONLINE
+// 🟢 BOT ONLINE / STATUS
 // =====================================================
+
+let intervaloStatus = null;
 
 client.once(
     "clientReady",
@@ -2158,25 +2160,31 @@ client.once(
             `🤖 Bot online como ${client.user.tag}`
         );
 
+        // =================================================
+        // 🟡 STATUS DE INICIALIZAÇÃO
+        // =================================================
+
         const atualizarStatusInicializacao =
             async () => {
 
                 try {
 
                     await client.user.setPresence({
-                        status:
-                            "idle",
+                        status: "idle",
 
                         activities: [
                             {
                                 name:
                                     "🔄 Iniciando o bot...",
 
-                                type:
-                                    0
+                                type: 0
                             }
                         ]
                     });
+
+                    console.log(
+                        "🟡 Status sincronizado: Ausente — 🔄 Iniciando o bot..."
+                    );
 
                 } catch (erro) {
 
@@ -2187,11 +2195,8 @@ client.once(
                 }
             };
 
+        // Aplica o status imediatamente
         await atualizarStatusInicializacao();
-
-        console.log(
-            "🟡 Status: Ausente — Iniciando o bot..."
-        );
 
         // =================================================
         // 🔔 SISTEMA AUTOMÁTICO DO DAILY
@@ -2267,6 +2272,8 @@ client.once(
                     )
             );
 
+            // Garante que o Discord continue mostrando
+            // o mesmo status durante a inicialização.
             await atualizarStatusInicializacao();
 
             console.log(
@@ -2278,8 +2285,7 @@ client.once(
         // 🟢 STATUS NORMAL DO BOT
         // =================================================
 
-        let mostrandoServidores =
-            true;
+        let mostrandoServidores = true;
 
         const atualizarStatus =
             async () => {
@@ -2308,22 +2314,20 @@ client.once(
                     }
 
                     await client.user.setPresence({
-                        status:
-                            "online",
+                        status: "online",
 
                         activities: [
                             {
                                 name:
                                     texto,
 
-                                type:
-                                    0
+                                type: 0
                             }
                         ]
                     });
 
                     console.log(
-                        `${texto}`
+                        `🟢 Status sincronizado: Online — ${texto}`
                     );
 
                     mostrandoServidores =
@@ -2338,12 +2342,28 @@ client.once(
                 }
             };
 
+        // Limpa qualquer intervalo antigo antes de criar outro
+        if (
+            intervaloStatus
+        ) {
+
+            clearInterval(
+                intervaloStatus
+            );
+
+            intervaloStatus =
+                null;
+        }
+
+        // Primeiro status online imediatamente
         await atualizarStatus();
 
-        setInterval(
-            atualizarStatus,
-            5000
-        );
+        // Depois alterna a cada 5 segundos
+        intervaloStatus =
+            setInterval(
+                atualizarStatus,
+                5000
+            );
     }
 );
 
