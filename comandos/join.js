@@ -804,7 +804,7 @@ function criarModalEmbed(config) {
                     config.embed_descricao ?? ""
                 )
             )
-            .setMaxLength(4096);
+            .setMaxLength(4000);
 
     const cor =
         new TextInputBuilder()
