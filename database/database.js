@@ -4362,6 +4362,7 @@ async function atualizarCanalLeave(
 
 module.exports = {
     pool,
+    mysqlPool,
     inicializarBanco,
     criarUsuario,
 
