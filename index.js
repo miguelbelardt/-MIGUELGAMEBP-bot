@@ -21,6 +21,7 @@ const {
 
 const logs = require("./comandos/logs");
 const join = require("./comandos/join");
+const leave = require("./comandos/leave");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
@@ -1550,6 +1551,24 @@ client.on(
                 return;
             }
 
+            // =================================================
+            // 👋 SISTEMA DE SAÍDA / LEAVE
+            // =================================================
+
+            try {
+
+                await leave.enviarSaida(
+                    membro
+                );
+
+            } catch (erroLeave) {
+
+                console.error(
+                    "❌ Erro no sistema de saída:",
+                    erroLeave
+                );
+            }
+
             let registroKick =
                 null;
 
@@ -2659,6 +2678,77 @@ client.on(
 
                     console.error(
                         "❌ Não foi possível responder ao erro do Join:",
+                        erroResposta
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // =================================================
+        // 👋 SISTEMA DE SAÍDA / LEAVE
+        // =================================================
+
+        if (
+            interaction.customId &&
+            interaction.customId.startsWith(
+                "leave_"
+            )
+        ) {
+
+            try {
+
+                const tratou =
+                    await leave.tratarInteracao(
+                        interaction
+                    );
+
+                if (
+                    tratou
+                ) {
+                    return;
+                }
+
+            } catch (erro) {
+
+                console.error(
+                    "❌ Erro no sistema de configuração do Leave:",
+                    erro
+                );
+
+                try {
+
+                    if (
+                        !interaction.replied &&
+                        !interaction.deferred
+                    ) {
+
+                        await interaction.reply({
+                            content:
+                                "❌ Deu erro ao configurar o sistema de saída.",
+
+                            flags:
+                                MessageFlags.Ephemeral
+                        });
+
+                    } else {
+
+                        await interaction.followUp({
+                            content:
+                                "❌ Deu erro ao configurar o sistema de saída.",
+
+                            flags:
+                                MessageFlags.Ephemeral
+                        });
+                    }
+
+                } catch (
+                    erroResposta
+                ) {
+
+                    console.error(
+                        "❌ Não foi possível responder ao erro do Leave:",
                         erroResposta
                     );
                 }
