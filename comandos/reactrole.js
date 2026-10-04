@@ -4,24 +4,7 @@ const {
     EmbedBuilder
 } = require("discord.js");
 
-const mysql = require("mysql2/promise");
-
-// =====================================================
-// 🔐 CONEXÃO COM MYSQL
-// =====================================================
-
-if (!process.env.DATABASE_URL) {
-    throw new Error(
-        "❌ DATABASE_URL não foi encontrada nas variáveis de ambiente."
-    );
-}
-
-const mysqlPool = mysql.createPool({
-    uri: process.env.DATABASE_URL,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+const { mysqlPool } = require("../database/database");
 
 // =====================================================
 // ⚙️ COMANDO REACT ROLE
