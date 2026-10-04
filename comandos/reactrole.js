@@ -21,89 +21,11 @@ const { mysqlPool } = require("../database/database");
 
 const data = new SlashCommandBuilder()
     .setName("reactrole")
-    .setDescription("Configura um sistema de cargos por reação.")
+    .setDescription(
+        "Abre o painel de configuração do Reaction Role."
+    )
     .setDefaultMemberPermissions(
         PermissionFlagsBits.ManageGuild
-    )
-
-    // =================================================
-    // ⚙️ CONFIGURAR
-    // =================================================
-
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("configurar")
-            .setDescription(
-                "Abre o painel de configuração do Reaction Role."
-            )
-    )
-
-    // =================================================
-    // ✏️ EDITAR
-    // =================================================
-
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("editar")
-            .setDescription(
-                "Edita um Reaction Role já existente."
-            )
-    )
-
-    // =================================================
-    // 📋 STATUS
-    // =================================================
-
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("status")
-            .setDescription(
-                "Mostra a configuração de um Reaction Role."
-            )
-            .addStringOption(option =>
-                option
-                    .setName("mensagem")
-                    .setDescription(
-                        "ID da mensagem."
-                    )
-                    .setRequired(true)
-            )
-    )
-
-    // =================================================
-    // 🧪 TESTE
-    // =================================================
-
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("teste")
-            .setDescription(
-                "Testa um Reaction Role."
-            )
-    )
-
-    // =================================================
-    // 🟢 ATIVAR
-    // =================================================
-
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("ativar")
-            .setDescription(
-                "Ativa um Reaction Role."
-            )
-    )
-
-    // =================================================
-    // 🔴 DESATIVAR
-    // =================================================
-
-    .addSubcommand(subcommand =>
-        subcommand
-            .setName("desativar")
-            .setDescription(
-                "Desativa um Reaction Role."
-            )
     );
 
 // =====================================================
@@ -165,7 +87,7 @@ async function garantirTabela() {
 function normalizarCor(cor) {
     if (!cor) return null;
 
-    let texto = String(cor)
+    const texto = String(cor)
         .trim()
         .replace(/^#/, "");
 
@@ -561,7 +483,6 @@ async function removerCargo(
         await mysqlPool.query(
             `
             DELETE FROM react_roles
-
             WHERE guild_id = ?
               AND mensagem_id = ?
               AND emoji = ?
@@ -655,10 +576,17 @@ async function aplicarMensagem(
     const embed =
         criarEmbed(config);
 
-    await mensagem.edit({
-        content:
-            config.content || null,
+    const content =
+        config.content || null;
 
+    if (!content && !embed) {
+        throw new Error(
+            "A mensagem não possui conteúdo nem embed."
+        );
+    }
+
+    await mensagem.edit({
+        content,
         embeds:
             embed
                 ? [embed]
@@ -672,15 +600,12 @@ async function aplicarMensagem(
 
 async function criarPainel(
     config,
-    cargos = [],
-    modo = "configurar"
+    cargos = []
 ) {
     const embed =
         new EmbedBuilder()
             .setTitle(
-                modo === "editar"
-                    ? "✏️ EDITAR REACTION ROLE"
-                    : "🎭 CONFIGURAÇÃO DO REACTION ROLE"
+                "🎭 CONFIGURAÇÃO DO REACTION ROLE"
             )
             .setColor(
                 config.embed_cor ||
@@ -1226,6 +1151,19 @@ async function enviarOuEditar(
         };
     }
 
+    const embed =
+        criarEmbed(config);
+
+    if (
+        !config.content &&
+        !embed
+    ) {
+        return {
+            erro:
+                "❌ Configure pelo menos um conteúdo na **📨 Mensagem** ou um **🎨 Embed** antes de enviar."
+        };
+    }
+
     const canal =
         await interaction.guild.channels.fetch(
             config.canal_id
@@ -1244,7 +1182,7 @@ async function enviarOuEditar(
     let mensagem;
 
     // =================================================
-    // ✏️ EDITAR
+    // ✏️ EDITAR MENSAGEM EXISTENTE
     // =================================================
 
     if (config.mensagem_id) {
@@ -1267,39 +1205,46 @@ async function enviarOuEditar(
 
             return {
                 erro:
-                    "❌ Não consegui encontrar a mensagem configurada nesse canal."
+                    "❌ Não consegui encontrar ou editar a mensagem configurada nesse canal."
             };
         }
     }
 
     // =================================================
-    // 📤 CRIAR NOVA
+    // 📤 CRIAR NOVA MENSAGEM
     // =================================================
 
     else {
-        const embed =
-            criarEmbed(config);
+        try {
+            mensagem =
+                await canal.send({
+                    content:
+                        config.content || null,
 
-        mensagem =
-            await canal.send({
-                content:
-                    config.content || null,
+                    embeds:
+                        embed
+                            ? [embed]
+                            : []
+                });
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao enviar mensagem do Reaction Role:",
+                erro
+            );
 
-                embeds:
-                    embed
-                        ? [embed]
-                        : []
-            });
+            return {
+                erro:
+                    "❌ Não consegui enviar a mensagem. Verifique as permissões do bot no canal."
+            };
+        }
 
         await mysqlPool.query(
             `
             UPDATE react_role_configs
-
             SET
                 mensagem_id = ?,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1315,7 +1260,7 @@ async function enviarOuEditar(
     }
 
     // =================================================
-    // 🎭 REAÇÕES
+    // 🎭 ADICIONAR REAÇÕES
     // =================================================
 
     const cargos =
@@ -1398,11 +1343,9 @@ async function handleReaction(
                 `
                 SELECT *
                 FROM react_roles
-
                 WHERE guild_id = ?
                   AND mensagem_id = ?
                   AND emoji = ?
-
                 LIMIT 1
                 `,
                 [
@@ -1514,6 +1457,7 @@ async function tratarInteracao(
     // =================================================
 
     if (
+        !interaction.memberPermissions ||
         !interaction.memberPermissions.has(
             PermissionFlagsBits.ManageGuild
         )
@@ -1535,19 +1479,12 @@ async function tratarInteracao(
     const acao =
         partes[1];
 
-    // =================================================
-    // 📝 MODAL EDITAR ESPECIAL
-    // =================================================
-
-    if (
-        interaction.isModalSubmit() &&
-        customId === "rr_modal_editar"
-    ) {
-        return false;
-    }
-
     const configId =
         partes[partes.length - 1];
+
+    // =================================================
+    // 🔎 BUSCAR CONFIG
+    // =================================================
 
     const config =
         await buscarConfig(
@@ -1581,12 +1518,10 @@ async function tratarInteracao(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
-
             SET
                 canal_id = ?,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1609,10 +1544,7 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 config,
-                cargos,
-                config.mensagem_id
-                    ? "editar"
-                    : "configurar"
+                cargos
             );
 
         await interaction.update(
@@ -1720,12 +1652,10 @@ async function tratarInteracao(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
-
             SET
                 habilitado = TRUE,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1746,10 +1676,7 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 config,
-                cargos,
-                config.mensagem_id
-                    ? "editar"
-                    : "configurar"
+                cargos
             );
 
         await interaction.update(
@@ -1770,12 +1697,10 @@ async function tratarInteracao(
         await mysqlPool.query(
             `
             UPDATE react_role_configs
-
             SET
                 habilitado = FALSE,
                 atualizado_em =
                     UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-
             WHERE id = ?
               AND guild_id = ?
             `,
@@ -1796,10 +1721,7 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 config,
-                cargos,
-                config.mensagem_id
-                    ? "editar"
-                    : "configurar"
+                cargos
             );
 
         await interaction.update(
@@ -1835,6 +1757,15 @@ async function tratarInteracao(
                     config.canal_id
                 );
 
+            if (
+                !canal ||
+                !canal.isTextBased()
+            ) {
+                throw new Error(
+                    "Canal inválido."
+                );
+            }
+
             const mensagem =
                 await canal.messages.fetch(
                     config.mensagem_id
@@ -1861,7 +1792,7 @@ async function tratarInteracao(
 
             await interaction.reply({
                 content:
-                    "❌ Não consegui testar o Reaction Role.",
+                    "❌ Não consegui testar o Reaction Role. Verifique se a mensagem ainda existe.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -1913,8 +1844,7 @@ async function tratarInteracao(
             const painel =
                 await criarPainel(
                     novaConfig,
-                    cargos,
-                    "editar"
+                    cargos
                 );
 
             await interaction.update(
@@ -1985,12 +1915,10 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
-
                 SET
                     content = ?,
                     atualizado_em =
                         UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-
                 WHERE id = ?
                   AND guild_id = ?
                 `,
@@ -2020,7 +1948,7 @@ async function tratarInteracao(
             const corInformada =
                 interaction.fields.getTextInputValue(
                     "cor"
-                );
+                ).trim();
 
             const cor =
                 normalizarCor(
@@ -2045,7 +1973,6 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
-
                 SET
                     embed_titulo = ?,
                     embed_descricao = ?,
@@ -2077,12 +2004,12 @@ async function tratarInteracao(
             const imagem =
                 interaction.fields.getTextInputValue(
                     "imagem"
-                );
+                ).trim();
 
             const thumbnail =
                 interaction.fields.getTextInputValue(
                     "thumbnail"
-                );
+                ).trim();
 
             if (
                 !urlValida(imagem) ||
@@ -2102,7 +2029,6 @@ async function tratarInteracao(
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
-
                 SET
                     imagem = ?,
                     thumbnail = ?,
@@ -2131,12 +2057,11 @@ async function tratarInteracao(
             const rodape =
                 interaction.fields.getTextInputValue(
                     "rodape"
-                );
+                ).trim();
 
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
-
                 SET
                     footer_texto = ?,
                     footer_habilitado = ?,
@@ -2250,8 +2175,6 @@ async function tratarInteracao(
                         config.mensagem_id
                     );
 
-                // Remove a reação antiga caso
-                // esse emoji já exista na mensagem
                 try {
                     await mensagem.react(
                         emojiNormalizado
@@ -2326,10 +2249,7 @@ async function tratarInteracao(
         const painel =
             await criarPainel(
                 novaConfig,
-                cargos,
-                novaConfig.mensagem_id
-                    ? "editar"
-                    : "configurar"
+                cargos
             );
 
         await interaction.reply({
@@ -2351,6 +2271,7 @@ async function tratarInteracao(
 
 async function execute(interaction) {
     if (
+        !interaction.memberPermissions ||
         !interaction.memberPermissions.has(
             PermissionFlagsBits.ManageGuild
         )
@@ -2381,201 +2302,61 @@ async function execute(interaction) {
         });
     }
 
-    const subcomando =
-        interaction.options.getSubcommand();
+    try {
+        // =================================================
+        // 🆕 CRIAR UMA NOVA CONFIGURAÇÃO
+        // =================================================
 
-    // =================================================
-    // ⚙️ CONFIGURAR
-    // =================================================
-
-    if (
-        subcomando === "configurar"
-    ) {
-        try {
-            const configId =
-                await criarConfig(
-                    interaction.guild.id
-                );
-
-            const config =
-                await buscarConfig(
-                    configId,
-                    interaction.guild.id
-                );
-
-            const painel =
-                await criarPainel(
-                    config,
-                    [],
-                    "configurar"
-                );
-
-            return interaction.reply({
-                ...painel,
-
-                flags:
-                    MessageFlags.Ephemeral
-            });
-
-        } catch (erro) {
-            console.error(
-                "❌ Erro ao abrir configuração:",
-                erro
-            );
-
-            return interaction.reply({
-                content:
-                    "❌ Não consegui abrir a configuração do Reaction Role.",
-
-                flags:
-                    MessageFlags.Ephemeral
-            });
-        }
-    }
-
-    // =================================================
-    // ✏️ EDITAR
-    // =================================================
-
-    if (
-        subcomando === "editar"
-    ) {
-        const modal =
-            new ModalBuilder()
-                .setCustomId(
-                    "rr_modal_editar"
-                )
-                .setTitle(
-                    "✏️ Editar Reaction Role"
-                );
-
-        const mensagem =
-            new TextInputBuilder()
-                .setCustomId(
-                    "mensagem"
-                )
-                .setLabel(
-                    "ID da mensagem"
-                )
-                .setStyle(
-                    TextInputStyle.Short
-                )
-                .setRequired(true)
-                .setPlaceholder(
-                    "123456789012345678"
-                );
-
-        modal.addComponents(
-            new ActionRowBuilder()
-                .addComponents(
-                    mensagem
-                )
-        );
-
-        return interaction.showModal(
-            modal
-        );
-    }
-
-    // =================================================
-    // 📋 STATUS
-    // =================================================
-
-    if (
-        subcomando === "status"
-    ) {
-        const mensagemId =
-            interaction.options.getString(
-                "mensagem"
+        const configId =
+            await criarConfig(
+                interaction.guild.id
             );
 
         const config =
-            await buscarConfigMensagem(
-                interaction.guild.id,
-                mensagemId
+            await buscarConfig(
+                configId,
+                interaction.guild.id
             );
 
-        if (!config) {
+        const painel =
+            await criarPainel(
+                config,
+                []
+            );
+
+        return interaction.reply({
+            ...painel,
+
+            flags:
+                MessageFlags.Ephemeral
+        });
+
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao abrir painel do Reaction Role:",
+            erro
+        );
+
+        if (!interaction.replied) {
             return interaction.reply({
                 content:
-                    "❌ Não encontrei esse Reaction Role.",
+                    "❌ Não consegui abrir o painel de configuração do Reaction Role.",
 
                 flags:
                     MessageFlags.Ephemeral
             });
         }
-
-        const cargos =
-            await buscarCargos(
-                interaction.guild.id,
-                mensagemId
-            );
-
-        return interaction.reply({
-            content:
-                [
-                    "📋 **STATUS DO REACTION ROLE**",
-                    "",
-                    `📢 Canal: ${
-                        config.canal_id
-                            ? `<#${config.canal_id}>`
-                            : "Não configurado"
-                    }`,
-                    `📨 Mensagem: \`${mensagemId}\``,
-                    `🎭 Cargos: **${cargos.length}**`,
-                    `🎨 Embed: ${
-                        config.embed_habilitado
-                            ? "Ativado"
-                            : "Desativado"
-                    }`,
-                    `🟢 Sistema: ${
-                        config.habilitado
-                            ? "Ativado"
-                            : "Desativado"
-                    }`
-                ].join("\n"),
-
-            flags:
-                MessageFlags.Ephemeral
-        });
-    }
-
-    // =================================================
-    // 🧪 TESTE
-    // =================================================
-
-    if (
-        subcomando === "teste"
-    ) {
-        return interaction.reply({
-            content:
-                "🧪 Use **/reactrole editar** para abrir a configuração de uma mensagem existente e testar pelo painel.",
-
-            flags:
-                MessageFlags.Ephemeral
-        });
-    }
-
-    // =================================================
-    // 🟢 ATIVAR / 🔴 DESATIVAR
-    // =================================================
-
-    if (
-        subcomando === "ativar" ||
-        subcomando === "desativar"
-    ) {
-        return interaction.reply({
-            content:
-                "ℹ️ Use **/reactrole editar** para abrir o painel e ativar/desativar o sistema.",
-
-            flags:
-                MessageFlags.Ephemeral
-        });
     }
 }
 
 // =====================================================
-// 📝 MODAL ESPECIAL: EDITAR
+// 📝 MODAL ESPECIAL
+// =====================================================
+//
+// Mantido apenas por compatibilidade caso o index.js
+// ainda tente chamar essa função.
+//
+// O sistema novo NÃO utiliza mais esse modal.
 // =====================================================
 
 async function tratarModalEditar(
@@ -2588,88 +2369,15 @@ async function tratarModalEditar(
         return false;
     }
 
-    if (
-        !interaction.memberPermissions.has(
-            PermissionFlagsBits.ManageGuild
-        )
-    ) {
-        await interaction.reply({
-            content:
-                "❌ Você precisa da permissão **Gerenciar Servidor**.",
+    await interaction.reply({
+        content:
+            "❌ Essa função foi removida. Use **/reactrole** para abrir o novo painel.",
 
-            flags:
-                MessageFlags.Ephemeral
-        });
+        flags:
+            MessageFlags.Ephemeral
+    });
 
-        return true;
-    }
-
-    try {
-        await garantirTabela();
-
-        const mensagemId =
-            interaction.fields
-                .getTextInputValue(
-                    "mensagem"
-                )
-                .trim();
-
-        const config =
-            await buscarConfigMensagem(
-                interaction.guild.id,
-                mensagemId
-            );
-
-        if (!config) {
-            await interaction.reply({
-                content:
-                    "❌ Não encontrei nenhum Reaction Role configurado para essa mensagem.",
-
-                flags:
-                    MessageFlags.Ephemeral
-            });
-
-            return true;
-        }
-
-        const cargos =
-            await buscarCargos(
-                interaction.guild.id,
-                mensagemId
-            );
-
-        const painel =
-            await criarPainel(
-                config,
-                cargos,
-                "editar"
-            );
-
-        await interaction.reply({
-            ...painel,
-
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
-
-    } catch (erro) {
-        console.error(
-            "❌ Erro ao abrir edição do Reaction Role:",
-            erro
-        );
-
-        await interaction.reply({
-            content:
-                "❌ Não consegui abrir a configuração desse Reaction Role.",
-
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
-    }
+    return true;
 }
 
 // =====================================================
