@@ -32,12 +32,6 @@ module.exports = {
     async handlePrefix(message) {
         const texto = message.content.trim().toLowerCase();
 
-        // Aceita:
-        // ' ajuda
-        // 'ajuda
-        // ' help
-        // 'help
-
         const ehAjuda =
             texto === "' ajuda" ||
             texto === "'ajuda" ||
@@ -71,7 +65,7 @@ module.exports = {
             .join("\n");
 
         const embed = new EmbedBuilder()
-            .setColor(0x5865F2)
+            .setColor(0x00A8FF)
             .setTitle("📋 COMANDOS DISPONÍVEIS")
             .setDescription(
                 lista || "❌ Nenhum comando encontrado."
@@ -90,7 +84,7 @@ module.exports = {
 
 function criarEmbedAjuda() {
     return new EmbedBuilder()
-        .setColor(0x5865F2)
+        .setColor(0x00A8FF)
         .setTitle("📚 CENTRAL DE AJUDA")
         .setDescription(
             `Olá! 👋\n` +
