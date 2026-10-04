@@ -91,9 +91,12 @@ function converterCor(cor) {
 
 
 function estaAtivado(valor) {
-    return valor === true ||
+    return (
+        valor === true ||
         valor === 1 ||
-        valor === "1";
+        valor === "1" ||
+        valor === "true"
+    );
 }
 
 
@@ -103,11 +106,23 @@ function estaAtivado(valor) {
 
 async function pegarDadosMembro(membro) {
 
-    const usuario =
-        await membro.user.fetch();
+    let usuario;
 
-    let avatar =
-        membro.user.displayAvatarURL({
+    try {
+        usuario =
+            await membro.user.fetch();
+    } catch (erro) {
+        console.error(
+            "❌ Não foi possível obter os dados do usuário que saiu:",
+            erro
+        );
+
+        usuario =
+            membro.user;
+    }
+
+    const avatar =
+        usuario.displayAvatarURL({
             extension: "png",
             size: 1024
         });
@@ -116,14 +131,13 @@ async function pegarDadosMembro(membro) {
 
     try {
 
-        const usuarioCompleto =
-            await usuario.fetch();
-
-        banner =
-            usuarioCompleto.bannerURL({
-                extension: "png",
-                size: 1024
-            }) || "";
+        if (usuario.banner) {
+            banner =
+                usuario.bannerURL({
+                    extension: "png",
+                    size: 1024
+                }) || "";
+        }
 
     } catch {
         banner = "";
@@ -150,7 +164,8 @@ function criarEmbedSaida(
     dados
 ) {
 
-    const config = configBanco;
+    const config =
+        configBanco || {};
 
     const embed =
         new EmbedBuilder()
@@ -195,21 +210,20 @@ function criarEmbedSaida(
                 )
         };
 
+        const iconeAutor =
+            substituirVariaveis(
+                config.autor_icone,
+                dados
+            );
+
         if (
-            config.autor_icone &&
             urlValida(
-                substituirVariaveis(
-                    config.autor_icone,
-                    dados
-                )
+                iconeAutor
             )
         ) {
 
             autor.iconURL =
-                substituirVariaveis(
-                    config.autor_icone,
-                    dados
-                );
+                iconeAutor;
         }
 
         embed.setAuthor(autor);
@@ -224,7 +238,9 @@ function criarEmbedSaida(
             );
 
         if (urlValida(thumbnail)) {
-            embed.setThumbnail(thumbnail);
+            embed.setThumbnail(
+                thumbnail
+            );
         }
     }
 
@@ -244,36 +260,40 @@ function criarEmbedSaida(
     if (
         estaAtivado(
             config.footer_habilitado
-        ) &&
-        config.footer_texto
+        )
     ) {
+
+        const textoFooter =
+            substituirVariaveis(
+                config.footer_texto,
+                dados
+            );
 
         const footer = {
             text:
-                substituirVariaveis(
-                    config.footer_texto,
-                    dados
-                )
+                textoFooter ||
+                "Massa Com Chika"
         };
 
+        const iconeFooter =
+            substituirVariaveis(
+                config.footer_icone,
+                dados
+            );
+
         if (
-            config.footer_icone &&
             urlValida(
-                substituirVariaveis(
-                    config.footer_icone,
-                    dados
-                )
+                iconeFooter
             )
         ) {
 
             footer.iconURL =
-                substituirVariaveis(
-                    config.footer_icone,
-                    dados
-                );
+                iconeFooter;
         }
 
-        embed.setFooter(footer);
+        embed.setFooter(
+            footer
+        );
     }
 
     if (
@@ -281,6 +301,7 @@ function criarEmbedSaida(
             config.timestamp
         )
     ) {
+
         embed.setTimestamp();
     }
 
@@ -294,74 +315,124 @@ function criarEmbedSaida(
 
 async function enviarSaida(membro) {
 
-    const config =
-        await getLeaveConfig(
-            membro.guild.id
-        );
+    try {
 
-    if (!config) {
-        return;
-    }
+        if (
+            !membro ||
+            !membro.guild
+        ) {
+            return;
+        }
 
-    if (
-        !estaAtivado(
-            config.habilitado
-        )
-    ) {
-        return;
-    }
+        const guild =
+            membro.guild;
 
-    if (!config.canal_id) {
-        return;
-    }
-
-    const canal =
-        await membro.guild.channels
-            .fetch(config.canal_id)
-            .catch(() => null);
-
-    if (!canal) {
-        return;
-    }
-
-    const dados =
-        await pegarDadosMembro(
-            membro
-        );
-
-    const mensagem = {};
-
-    if (config.content) {
-
-        mensagem.content =
-            substituirVariaveis(
-                config.content,
-                dados
+        const config =
+            await getLeaveConfig(
+                guild.id
             );
-    }
 
-    if (
-        estaAtivado(
-            config.embed_habilitado
-        )
-    ) {
+        if (!config) {
+            return;
+        }
 
-        mensagem.embeds = [
-            criarEmbedSaida(
-                config,
-                dados
+        if (
+            !estaAtivado(
+                config.habilitado
             )
-        ];
-    }
+        ) {
+            return;
+        }
 
-    if (
-        !mensagem.content &&
-        !mensagem.embeds
-    ) {
-        return;
-    }
+        if (!config.canal_id) {
+            return;
+        }
 
-    await canal.send(mensagem);
+        const canal =
+            await guild.channels
+                .fetch(
+                    config.canal_id
+                )
+                .catch(
+                    () => null
+                );
+
+        if (!canal) {
+            console.warn(
+                `⚠️ Canal de saída não encontrado: ${config.canal_id}`
+            );
+
+            return;
+        }
+
+        if (!canal.isTextBased()) {
+            console.warn(
+                `⚠️ O canal configurado para Leave não é de texto: ${config.canal_id}`
+            );
+
+            return;
+        }
+
+        const dados =
+            await pegarDadosMembro(
+                membro
+            );
+
+        const mensagem = {};
+
+        if (
+            config.content !== null &&
+            config.content !== undefined &&
+            config.content !== ""
+        ) {
+
+            mensagem.content =
+                substituirVariaveis(
+                    config.content,
+                    dados
+                );
+        }
+
+        if (
+            estaAtivado(
+                config.embed_habilitado
+            )
+        ) {
+
+            mensagem.embeds = [
+                criarEmbedSaida(
+                    config,
+                    dados
+                )
+            ];
+        }
+
+        if (
+            !mensagem.content &&
+            !mensagem.embeds
+        ) {
+            console.warn(
+                `⚠️ O Leave de ${guild.name} não possui conteúdo configurado.`
+            );
+
+            return;
+        }
+
+        await canal.send(
+            mensagem
+        );
+
+        console.log(
+            `🚪 Mensagem de saída enviada para ${membro.user?.tag || membro.user?.username || membro.id} em ${guild.name}`
+        );
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao enviar mensagem de saída:",
+            erro
+        );
+    }
 }
 
 
@@ -378,28 +449,40 @@ async function pegarDadosTeste(interaction) {
 
     try {
 
-        banner =
-            usuario.bannerURL({
-                extension: "png",
-                size: 1024
-            }) || "";
+        if (usuario.banner) {
+
+            banner =
+                usuario.bannerURL({
+                    extension: "png",
+                    size: 1024
+                }) || "";
+        }
 
     } catch {
         banner = "";
     }
 
     return {
-        user: `<@${interaction.user.id}>`,
-        username: interaction.user.username,
-        userid: interaction.user.id,
+        user:
+            `<@${interaction.user.id}>`,
+
+        username:
+            interaction.user.username,
+
+        userid:
+            interaction.user.id,
+
         avatar:
             interaction.user.displayAvatarURL({
                 extension: "png",
                 size: 1024
             }),
+
         banner,
+
         members:
             interaction.guild.memberCount,
+
         server:
             interaction.guild.name
     };
@@ -410,7 +493,9 @@ async function pegarDadosTeste(interaction) {
 // 🚪 PAINEL
 // =====================================================
 
-function criarPainelLeave(config) {
+function criarPainelLeave(
+    config = {}
+) {
 
     const canal =
         config?.canal_id
@@ -436,7 +521,9 @@ function criarPainelLeave(config) {
             `🚪 **Sistema de saída:** ${status}`,
             `📢 **Canal:** ${canal}`,
             `${embedStatus} **Embed:** ${
-                estaAtivado(config?.embed_habilitado)
+                estaAtivado(
+                    config?.embed_habilitado
+                )
                     ? "Ativado"
                     : "Desativado"
             }`
@@ -445,13 +532,16 @@ function criarPainelLeave(config) {
     const embed =
         new EmbedBuilder()
             .setColor(0xED4245)
-            .setTitle("🚪 Configuração de Leave")
+            .setTitle(
+                "🚪 Configuração de Leave"
+            )
             .setDescription(
                 `${descricao}\n\n` +
                 "Configure abaixo como a mensagem de saída será enviada."
             )
             .setFooter({
-                text: "Massa Com Chika • Sistema de Leave"
+                text:
+                    "Massa Com Chika • Sistema de Leave"
             })
             .setTimestamp();
 
@@ -482,7 +572,9 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_mensagem"
                     )
-                    .setLabel("Mensagem")
+                    .setLabel(
+                        "Mensagem"
+                    )
                     .setEmoji("💬")
                     .setStyle(
                         ButtonStyle.Primary
@@ -492,7 +584,9 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_embed"
                     )
-                    .setLabel("Embed")
+                    .setLabel(
+                        "Embed"
+                    )
                     .setEmoji("🎨")
                     .setStyle(
                         ButtonStyle.Primary
@@ -502,7 +596,9 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_autor"
                     )
-                    .setLabel("Autor")
+                    .setLabel(
+                        "Autor"
+                    )
                     .setEmoji("👤")
                     .setStyle(
                         ButtonStyle.Secondary
@@ -517,7 +613,9 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_imagens"
                     )
-                    .setLabel("Imagens")
+                    .setLabel(
+                        "Imagens"
+                    )
                     .setEmoji("🖼️")
                     .setStyle(
                         ButtonStyle.Secondary
@@ -527,7 +625,9 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_footer"
                     )
-                    .setLabel("Footer")
+                    .setLabel(
+                        "Footer"
+                    )
                     .setEmoji("📝")
                     .setStyle(
                         ButtonStyle.Secondary
@@ -537,12 +637,18 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_opcoes"
                     )
-                    .setLabel("Opções")
+                    .setLabel(
+                        "Opções"
+                    )
                     .setEmoji("⚙️")
                     .setStyle(
                         ButtonStyle.Secondary
                     )
             );
+
+    // =================================================
+    // 🟢🔴 ATIVAR / DESATIVAR
+    // =================================================
 
     const linha3 =
         new ActionRowBuilder()
@@ -550,19 +656,52 @@ function criarPainelLeave(config) {
 
                 new ButtonBuilder()
                     .setCustomId(
-                        "leave_config_status"
+                        "leave_config_ativar"
                     )
-                    .setLabel("Ativar/Desativar")
-                    .setEmoji("🔄")
+                    .setLabel(
+                        "Ativar"
+                    )
+                    .setEmoji("🟢")
                     .setStyle(
                         ButtonStyle.Success
                     ),
 
                 new ButtonBuilder()
                     .setCustomId(
+                        "leave_config_desativar"
+                    )
+                    .setLabel(
+                        "Desativar"
+                    )
+                    .setEmoji("🔴")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        "leave_config_status"
+                    )
+                    .setLabel(
+                        "Status"
+                    )
+                    .setEmoji("📊")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    )
+            );
+
+    const linha4 =
+        new ActionRowBuilder()
+            .addComponents(
+
+                new ButtonBuilder()
+                    .setCustomId(
                         "leave_config_teste"
                     )
-                    .setLabel("Testar")
+                    .setLabel(
+                        "Testar"
+                    )
                     .setEmoji("🧪")
                     .setStyle(
                         ButtonStyle.Success
@@ -572,7 +711,9 @@ function criarPainelLeave(config) {
                     .setCustomId(
                         "leave_config_fechar"
                     )
-                    .setLabel("Fechar")
+                    .setLabel(
+                        "Fechar"
+                    )
                     .setEmoji("❌")
                     .setStyle(
                         ButtonStyle.Danger
@@ -580,12 +721,16 @@ function criarPainelLeave(config) {
             );
 
     return {
-        embeds: [embed],
+        embeds: [
+            embed
+        ],
+
         components: [
             linhaCanal,
             linha1,
             linha2,
-            linha3
+            linha3,
+            linha4
         ]
     };
 }
@@ -595,12 +740,18 @@ function criarPainelLeave(config) {
 // 🚪 MODAL — MENSAGEM
 // =====================================================
 
-function criarModalMensagem(config) {
+function criarModalMensagem(
+    config
+) {
 
     const mensagem =
         new TextInputBuilder()
-            .setCustomId("content")
-            .setLabel("Mensagem")
+            .setCustomId(
+                "content"
+            )
+            .setLabel(
+                "Mensagem"
+            )
             .setStyle(
                 TextInputStyle.Paragraph
             )
@@ -611,18 +762,24 @@ function criarModalMensagem(config) {
                     ""
                 )
             )
-            .setMaxLength(2000);
+            .setMaxLength(
+                2000
+            );
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 "leave_modal_mensagem"
             )
-            .setTitle("💬 Mensagem de saída");
+            .setTitle(
+                "💬 Mensagem de saída"
+            );
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(mensagem)
+            .addComponents(
+                mensagem
+            )
     );
 
     return modal;
@@ -633,12 +790,18 @@ function criarModalMensagem(config) {
 // 🚪 MODAL — EMBED
 // =====================================================
 
-function criarModalEmbed(config) {
+function criarModalEmbed(
+    config
+) {
 
     const titulo =
         new TextInputBuilder()
-            .setCustomId("titulo")
-            .setLabel("Título")
+            .setCustomId(
+                "titulo"
+            )
+            .setLabel(
+                "Título"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -649,12 +812,18 @@ function criarModalEmbed(config) {
                     ""
                 )
             )
-            .setMaxLength(256);
+            .setMaxLength(
+                256
+            );
 
     const descricao =
         new TextInputBuilder()
-            .setCustomId("descricao")
-            .setLabel("Descrição")
+            .setCustomId(
+                "descricao"
+            )
+            .setLabel(
+                "Descrição"
+            )
             .setStyle(
                 TextInputStyle.Paragraph
             )
@@ -665,12 +834,18 @@ function criarModalEmbed(config) {
                     ""
                 )
             )
-            .setMaxLength(4000);
+            .setMaxLength(
+                4000
+            );
 
     const cor =
         new TextInputBuilder()
-            .setCustomId("cor")
-            .setLabel("Cor (#ED4245, 0xED4245 ou número)")
+            .setCustomId(
+                "cor"
+            )
+            .setLabel(
+                "Cor (#ED4245, 0xED4245 ou número)"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -681,24 +856,35 @@ function criarModalEmbed(config) {
                     "#ED4245"
                 )
             )
-            .setMaxLength(20);
+            .setMaxLength(
+                20
+            );
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 "leave_modal_embed"
             )
-            .setTitle("🎨 Configuração do Embed");
+            .setTitle(
+                "🎨 Configuração do Embed"
+            );
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(titulo),
 
         new ActionRowBuilder()
-            .addComponents(descricao),
+            .addComponents(
+                titulo
+            ),
 
         new ActionRowBuilder()
-            .addComponents(cor)
+            .addComponents(
+                descricao
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                cor
+            )
     );
 
     return modal;
@@ -709,12 +895,18 @@ function criarModalEmbed(config) {
 // 🚪 MODAL — AUTOR
 // =====================================================
 
-function criarModalAutor(config) {
+function criarModalAutor(
+    config
+) {
 
     const habilitado =
         new TextInputBuilder()
-            .setCustomId("habilitado")
-            .setLabel("Ativado? (sim/não)")
+            .setCustomId(
+                "habilitado"
+            )
+            .setLabel(
+                "Ativado? (sim/não)"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -726,12 +918,18 @@ function criarModalAutor(config) {
                     ? "sim"
                     : "não"
             )
-            .setMaxLength(10);
+            .setMaxLength(
+                10
+            );
 
     const nome =
         new TextInputBuilder()
-            .setCustomId("nome")
-            .setLabel("Nome do autor")
+            .setCustomId(
+                "nome"
+            )
+            .setLabel(
+                "Nome do autor"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -742,12 +940,18 @@ function criarModalAutor(config) {
                     ""
                 )
             )
-            .setMaxLength(256);
+            .setMaxLength(
+                256
+            );
 
     const icone =
         new TextInputBuilder()
-            .setCustomId("icone")
-            .setLabel("Ícone do autor")
+            .setCustomId(
+                "icone"
+            )
+            .setLabel(
+                "Ícone do autor"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -758,24 +962,35 @@ function criarModalAutor(config) {
                     ""
                 )
             )
-            .setMaxLength(1000);
+            .setMaxLength(
+                1000
+            );
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 "leave_modal_autor"
             )
-            .setTitle("👤 Autor do Embed");
+            .setTitle(
+                "👤 Autor do Embed"
+            );
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(habilitado),
 
         new ActionRowBuilder()
-            .addComponents(nome),
+            .addComponents(
+                habilitado
+            ),
 
         new ActionRowBuilder()
-            .addComponents(icone)
+            .addComponents(
+                nome
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                icone
+            )
     );
 
     return modal;
@@ -786,12 +1001,18 @@ function criarModalAutor(config) {
 // 🚪 MODAL — IMAGENS
 // =====================================================
 
-function criarModalImagens(config) {
+function criarModalImagens(
+    config
+) {
 
     const thumbnail =
         new TextInputBuilder()
-            .setCustomId("thumbnail")
-            .setLabel("Thumbnail")
+            .setCustomId(
+                "thumbnail"
+            )
+            .setLabel(
+                "Thumbnail"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -802,12 +1023,18 @@ function criarModalImagens(config) {
                     ""
                 )
             )
-            .setMaxLength(1000);
+            .setMaxLength(
+                1000
+            );
 
     const imagem =
         new TextInputBuilder()
-            .setCustomId("imagem")
-            .setLabel("Imagem")
+            .setCustomId(
+                "imagem"
+            )
+            .setLabel(
+                "Imagem"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -818,21 +1045,30 @@ function criarModalImagens(config) {
                     ""
                 )
             )
-            .setMaxLength(1000);
+            .setMaxLength(
+                1000
+            );
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 "leave_modal_imagens"
             )
-            .setTitle("🖼️ Imagens do Embed");
+            .setTitle(
+                "🖼️ Imagens do Embed"
+            );
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(thumbnail),
 
         new ActionRowBuilder()
-            .addComponents(imagem)
+            .addComponents(
+                thumbnail
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                imagem
+            )
     );
 
     return modal;
@@ -843,12 +1079,18 @@ function criarModalImagens(config) {
 // 🚪 MODAL — FOOTER
 // =====================================================
 
-function criarModalFooter(config) {
+function criarModalFooter(
+    config
+) {
 
     const habilitado =
         new TextInputBuilder()
-            .setCustomId("habilitado")
-            .setLabel("Ativado? (sim/não)")
+            .setCustomId(
+                "habilitado"
+            )
+            .setLabel(
+                "Ativado? (sim/não)"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -860,12 +1102,18 @@ function criarModalFooter(config) {
                     ? "sim"
                     : "não"
             )
-            .setMaxLength(10);
+            .setMaxLength(
+                10
+            );
 
     const texto =
         new TextInputBuilder()
-            .setCustomId("texto")
-            .setLabel("Texto do footer")
+            .setCustomId(
+                "texto"
+            )
+            .setLabel(
+                "Texto do footer"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -876,12 +1124,18 @@ function criarModalFooter(config) {
                     ""
                 )
             )
-            .setMaxLength(2048);
+            .setMaxLength(
+                2048
+            );
 
     const icone =
         new TextInputBuilder()
-            .setCustomId("icone")
-            .setLabel("Ícone do footer")
+            .setCustomId(
+                "icone"
+            )
+            .setLabel(
+                "Ícone do footer"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -892,24 +1146,35 @@ function criarModalFooter(config) {
                     ""
                 )
             )
-            .setMaxLength(1000);
+            .setMaxLength(
+                1000
+            );
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 "leave_modal_footer"
             )
-            .setTitle("📝 Footer do Embed");
+            .setTitle(
+                "📝 Footer do Embed"
+            );
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(habilitado),
 
         new ActionRowBuilder()
-            .addComponents(texto),
+            .addComponents(
+                habilitado
+            ),
 
         new ActionRowBuilder()
-            .addComponents(icone)
+            .addComponents(
+                texto
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                icone
+            )
     );
 
     return modal;
@@ -920,12 +1185,18 @@ function criarModalFooter(config) {
 // 🚪 MODAL — OPÇÕES
 // =====================================================
 
-function criarModalOpcoes(config) {
+function criarModalOpcoes(
+    config
+) {
 
     const embed =
         new TextInputBuilder()
-            .setCustomId("embed_habilitado")
-            .setLabel("Embed ativado? (sim/não)")
+            .setCustomId(
+                "embed_habilitado"
+            )
+            .setLabel(
+                "Embed ativado? (sim/não)"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -937,12 +1208,18 @@ function criarModalOpcoes(config) {
                     ? "sim"
                     : "não"
             )
-            .setMaxLength(10);
+            .setMaxLength(
+                10
+            );
 
     const timestamp =
         new TextInputBuilder()
-            .setCustomId("timestamp")
-            .setLabel("Timestamp ativado? (sim/não)")
+            .setCustomId(
+                "timestamp"
+            )
+            .setLabel(
+                "Timestamp ativado? (sim/não)"
+            )
             .setStyle(
                 TextInputStyle.Short
             )
@@ -954,21 +1231,30 @@ function criarModalOpcoes(config) {
                     ? "sim"
                     : "não"
             )
-            .setMaxLength(10);
+            .setMaxLength(
+                10
+            );
 
     const modal =
         new ModalBuilder()
             .setCustomId(
                 "leave_modal_opcoes"
             )
-            .setTitle("⚙️ Opções do Leave");
+            .setTitle(
+                "⚙️ Opções do Leave"
+            );
 
     modal.addComponents(
-        new ActionRowBuilder()
-            .addComponents(embed),
 
         new ActionRowBuilder()
-            .addComponents(timestamp)
+            .addComponents(
+                embed
+            ),
+
+        new ActionRowBuilder()
+            .addComponents(
+                timestamp
+            )
     );
 
     return modal;
@@ -979,11 +1265,21 @@ function criarModalOpcoes(config) {
 // 🚪 TRATAR INTERAÇÕES
 // =====================================================
 
-async function tratarInteracao(interaction) {
+async function tratarInteracao(
+    interaction
+) {
 
     if (
         !interaction.customId ||
-        !interaction.customId.startsWith("leave_")
+        !interaction.customId.startsWith(
+            "leave_"
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        !interaction.guild
     ) {
         return false;
     }
@@ -997,7 +1293,8 @@ async function tratarInteracao(interaction) {
         await interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor** para configurar o sistema de Leave.",
-            flags: MessageFlags.Ephemeral
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -1030,7 +1327,9 @@ async function tratarInteracao(interaction) {
             );
 
         await interaction.update(
-            criarPainelLeave(config)
+            criarPainelLeave(
+                config
+            )
         );
 
         return true;
@@ -1048,93 +1347,23 @@ async function tratarInteracao(interaction) {
         const config =
             await getLeaveConfig(
                 guildId
-            );
+            ) || {};
+
+
+        // =============================================
+        // 🟢 ATIVAR
+        // =============================================
 
         if (
             interaction.customId ===
-            "leave_config_mensagem"
-        ) {
-
-            await interaction.showModal(
-                criarModalMensagem(config)
-            );
-
-            return true;
-        }
-
-        if (
-            interaction.customId ===
-            "leave_config_embed"
-        ) {
-
-            await interaction.showModal(
-                criarModalEmbed(config)
-            );
-
-            return true;
-        }
-
-        if (
-            interaction.customId ===
-            "leave_config_autor"
-        ) {
-
-            await interaction.showModal(
-                criarModalAutor(config)
-            );
-
-            return true;
-        }
-
-        if (
-            interaction.customId ===
-            "leave_config_imagens"
-        ) {
-
-            await interaction.showModal(
-                criarModalImagens(config)
-            );
-
-            return true;
-        }
-
-        if (
-            interaction.customId ===
-            "leave_config_footer"
-        ) {
-
-            await interaction.showModal(
-                criarModalFooter(config)
-            );
-
-            return true;
-        }
-
-        if (
-            interaction.customId ===
-            "leave_config_opcoes"
-        ) {
-
-            await interaction.showModal(
-                criarModalOpcoes(config)
-            );
-
-            return true;
-        }
-
-        if (
-            interaction.customId ===
-            "leave_config_status"
+            "leave_config_ativar"
         ) {
 
             await salvarLeaveConfig(
                 guildId,
                 {
                     ...config,
-                    habilitado:
-                        !estaAtivado(
-                            config?.habilitado
-                        )
+                    habilitado: true
                 }
             );
 
@@ -1151,6 +1380,199 @@ async function tratarInteracao(interaction) {
 
             return true;
         }
+
+
+        // =============================================
+        // 🔴 DESATIVAR
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_desativar"
+        ) {
+
+            await salvarLeaveConfig(
+                guildId,
+                {
+                    ...config,
+                    habilitado: false
+                }
+            );
+
+            const novoConfig =
+                await getLeaveConfig(
+                    guildId
+                );
+
+            await interaction.update(
+                criarPainelLeave(
+                    novoConfig
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // 💬 MENSAGEM
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_mensagem"
+        ) {
+
+            await interaction.showModal(
+                criarModalMensagem(
+                    config
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // 🎨 EMBED
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_embed"
+        ) {
+
+            await interaction.showModal(
+                criarModalEmbed(
+                    config
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // 👤 AUTOR
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_autor"
+        ) {
+
+            await interaction.showModal(
+                criarModalAutor(
+                    config
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // 🖼️ IMAGENS
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_imagens"
+        ) {
+
+            await interaction.showModal(
+                criarModalImagens(
+                    config
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // 📝 FOOTER
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_footer"
+        ) {
+
+            await interaction.showModal(
+                criarModalFooter(
+                    config
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // ⚙️ OPÇÕES
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_opcoes"
+        ) {
+
+            await interaction.showModal(
+                criarModalOpcoes(
+                    config
+                )
+            );
+
+            return true;
+        }
+
+
+        // =============================================
+        // 📊 STATUS
+        // =============================================
+
+        if (
+            interaction.customId ===
+            "leave_config_status"
+        ) {
+
+            const status =
+                estaAtivado(
+                    config.habilitado
+                )
+                    ? "🟢 Ativado"
+                    : "🔴 Desativado";
+
+            const canal =
+                config.canal_id
+                    ? `<#${config.canal_id}>`
+                    : "❌ Nenhum canal definido";
+
+            const embedStatus =
+                estaAtivado(
+                    config.embed_habilitado
+                )
+                    ? "🟢 Ativado"
+                    : "🔴 Desativado";
+
+            await interaction.reply({
+                content:
+                    `🚪 **Status do Leave**\n\n` +
+                    `Sistema: ${status}\n` +
+                    `Canal: ${canal}\n` +
+                    `Embed: ${embedStatus}`,
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+
+        // =============================================
+        // 🧪 TESTAR
+        // =============================================
 
         if (
             interaction.customId ===
@@ -1192,13 +1614,39 @@ async function tratarInteracao(interaction) {
                 ];
             }
 
+            if (
+                !resposta.content &&
+                !resposta.embeds
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "⚠️ Não há conteúdo configurado para testar.",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            /*
+             * IMPORTANTE:
+             * O teste é enviado como resposta efêmera
+             * da interação. Ele NÃO é enviado por DM.
+             */
             await interaction.reply({
                 ...resposta,
-                flags: MessageFlags.Ephemeral
+                flags:
+                    MessageFlags.Ephemeral
             });
 
             return true;
         }
+
+
+        // =============================================
+        // ❌ FECHAR
+        // =============================================
 
         if (
             interaction.customId ===
@@ -1256,6 +1704,7 @@ async function tratarInteracao(interaction) {
                 guildId,
                 {
                     ...config,
+
                     embed_titulo:
                         interaction.fields.getTextInputValue(
                             "titulo"
@@ -1284,12 +1733,15 @@ async function tratarInteracao(interaction) {
                     .getTextInputValue(
                         "habilitado"
                     )
-                    .toLowerCase() === "sim";
+                    .trim()
+                    .toLowerCase() ===
+                "sim";
 
             await salvarLeaveConfig(
                 guildId,
                 {
                     ...config,
+
                     autor_habilitado:
                         habilitado,
 
@@ -1315,6 +1767,7 @@ async function tratarInteracao(interaction) {
                 guildId,
                 {
                     ...config,
+
                     thumbnail:
                         interaction.fields.getTextInputValue(
                             "thumbnail"
@@ -1338,12 +1791,15 @@ async function tratarInteracao(interaction) {
                     .getTextInputValue(
                         "habilitado"
                     )
-                    .toLowerCase() === "sim";
+                    .trim()
+                    .toLowerCase() ===
+                "sim";
 
             await salvarLeaveConfig(
                 guildId,
                 {
                     ...config,
+
                     footer_habilitado:
                         habilitado,
 
@@ -1370,19 +1826,24 @@ async function tratarInteracao(interaction) {
                     .getTextInputValue(
                         "embed_habilitado"
                     )
-                    .toLowerCase() === "sim";
+                    .trim()
+                    .toLowerCase() ===
+                "sim";
 
             const timestamp =
                 interaction.fields
                     .getTextInputValue(
                         "timestamp"
                     )
-                    .toLowerCase() === "sim";
+                    .trim()
+                    .toLowerCase() ===
+                "sim";
 
             await salvarLeaveConfig(
                 guildId,
                 {
                     ...config,
+
                     embed_habilitado:
                         embedHabilitado,
 
@@ -1395,15 +1856,11 @@ async function tratarInteracao(interaction) {
             return false;
         }
 
-        const novoConfig =
-            await getLeaveConfig(
-                guildId
-            );
-
         await interaction.reply({
             content:
                 "✅ Configuração do Leave atualizada!",
-            flags: MessageFlags.Ephemeral
+            flags:
+                MessageFlags.Ephemeral
         });
 
         return true;
@@ -1424,42 +1881,53 @@ const data =
             "Configura o sistema de saída do servidor"
         )
         .setDefaultMemberPermissions(
-            PermissionFlagsBits.ManageGuild
+            PermissionFlagsBits.ManageGuild.toString()
         )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName("configurar")
-                .setDescription(
-                    "Abrir o painel de configuração"
-                )
+        .setDMPermission(false)
+
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName("configurar")
+                    .setDescription(
+                        "Abrir o painel de configuração"
+                    )
         )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName("ativar")
-                .setDescription(
-                    "Ativar o sistema de Leave"
-                )
+
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName("ativar")
+                    .setDescription(
+                        "Ativar o sistema de Leave"
+                    )
         )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName("desativar")
-                .setDescription(
-                    "Desativar o sistema de Leave"
-                )
+
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName("desativar")
+                    .setDescription(
+                        "Desativar o sistema de Leave"
+                    )
         )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName("status")
-                .setDescription(
-                    "Ver o status do sistema"
-                )
+
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName("status")
+                    .setDescription(
+                        "Ver o status do sistema"
+                    )
         )
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName("teste")
-                .setDescription(
-                    "Testar a mensagem de saída"
-                )
+
+        .addSubcommand(
+            subcommand =>
+                subcommand
+                    .setName("teste")
+                    .setDescription(
+                        "Testar a mensagem de saída"
+                    )
         );
 
 
@@ -1467,7 +1935,21 @@ const data =
 // 🚪 EXECUTAR /LEAVE
 // =====================================================
 
-async function execute(interaction) {
+async function execute(
+    interaction
+) {
+
+    if (
+        !interaction.guild
+    ) {
+
+        return interaction.reply({
+            content:
+                "❌ Este comando só pode ser usado dentro de um servidor.",
+            flags:
+                MessageFlags.Ephemeral
+        });
+    }
 
     if (
         !interaction.memberPermissions?.has(
@@ -1478,7 +1960,8 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "❌ Você precisa da permissão **Gerenciar Servidor**.",
-            flags: MessageFlags.Ephemeral
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 
@@ -1490,27 +1973,42 @@ async function execute(interaction) {
             interaction.guild.id
         );
 
+
+    // =================================================
+    // ⚙️ CONFIGURAR
+    // =================================================
+
     if (
-        subcomando === "configurar"
+        subcomando ===
+        "configurar"
     ) {
 
         if (!config) {
 
             config =
                 await salvarLeaveConfig(
-                    interaction.guild.id
+                    interaction.guild.id,
+                    {}
                 );
         }
 
         return interaction.reply({
-            ...criarPainelLeave(config),
-            flags: MessageFlags.Ephemeral
+            ...criarPainelLeave(
+                config
+            ),
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 
 
+    // =================================================
+    // 🟢 ATIVAR
+    // =================================================
+
     if (
-        subcomando === "ativar"
+        subcomando ===
+        "ativar"
     ) {
 
         config =
@@ -1524,14 +2022,20 @@ async function execute(interaction) {
 
         return interaction.reply({
             content:
-                "✅ Sistema de Leave **ativado**!",
-            flags: MessageFlags.Ephemeral
+                "🟢 Sistema de Leave **ativado**!",
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 
 
+    // =================================================
+    // 🔴 DESATIVAR
+    // =================================================
+
     if (
-        subcomando === "desativar"
+        subcomando ===
+        "desativar"
     ) {
 
         config =
@@ -1546,13 +2050,19 @@ async function execute(interaction) {
         return interaction.reply({
             content:
                 "🔴 Sistema de Leave **desativado**!",
-            flags: MessageFlags.Ephemeral
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 
 
+    // =================================================
+    // 📊 STATUS
+    // =================================================
+
     if (
-        subcomando === "status"
+        subcomando ===
+        "status"
     ) {
 
         const status =
@@ -1581,13 +2091,19 @@ async function execute(interaction) {
                         ? "🟢 Ativado"
                         : "🔴 Desativado"
                 }`,
-            flags: MessageFlags.Ephemeral
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 
 
+    // =================================================
+    // 🧪 TESTE
+    // =================================================
+
     if (
-        subcomando === "teste"
+        subcomando ===
+        "teste"
     ) {
 
         if (!config) {
@@ -1595,7 +2111,8 @@ async function execute(interaction) {
             return interaction.reply({
                 content:
                     "❌ O sistema de Leave ainda não foi configurado.",
-                flags: MessageFlags.Ephemeral
+                flags:
+                    MessageFlags.Ephemeral
             });
         }
 
@@ -1629,13 +2146,35 @@ async function execute(interaction) {
             ];
         }
 
+        if (
+            !resposta.content &&
+            !resposta.embeds
+        ) {
+
+            return interaction.reply({
+                content:
+                    "⚠️ Não há conteúdo configurado para testar.",
+                flags:
+                    MessageFlags.Ephemeral
+            });
+        }
+
+        /*
+         * O teste é uma resposta efêmera da interação.
+         * Não é enviado para DM.
+         */
         return interaction.reply({
             ...resposta,
-            flags: MessageFlags.Ephemeral
+            flags:
+                MessageFlags.Ephemeral
         });
     }
 }
 
+
+// =====================================================
+// 🚪 EXPORTAR
+// =====================================================
 
 module.exports = {
     data,
