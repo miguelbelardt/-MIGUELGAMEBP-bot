@@ -517,6 +517,11 @@ async function mostrarPainel(interaction) {
     const configurado =
         Boolean(config.configurado);
 
+    const cargoPosRegistro =
+        config.cargo_registro_id
+            ? `<@&${config.cargo_registro_id}>`
+            : "Nenhum";
+
     const embed =
         new EmbedBuilder()
             .setTitle("📝 Sistema de Registro")
@@ -535,6 +540,7 @@ async function mostrarPainel(interaction) {
                             ? `<#${config.canal_id}>`
                             : "Não definido"
                     }`,
+                    `🎭 Cargo pós-registro: ${cargoPosRegistro}`,
                     "",
                     `🎨 Painel inicial: **${
                         config.painel_titulo
@@ -601,6 +607,14 @@ async function mostrarPainel(interaction) {
                     )
                     .setLabel("Botão Registrar")
                     .setEmoji("🔘")
+                    .setStyle(ButtonStyle.Secondary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_cargo_${interaction.guild.id}`
+                    )
+                    .setLabel("Cargo pós-registro")
+                    .setEmoji("🎭")
                     .setStyle(ButtonStyle.Secondary)
             );
 
@@ -815,6 +829,68 @@ async function abrirModalTextoBotaoPainel(
     modal.addComponents(
         new ActionRowBuilder()
             .addComponents(texto)
+    );
+
+    await interaction.showModal(modal);
+}
+
+// =====================================================
+// 🎭 MODAL CARGO PÓS-REGISTRO
+// =====================================================
+
+async function abrirModalCargoRegistro(
+    interaction,
+    guildId
+) {
+    if (
+        !podeConfigurar(interaction) ||
+        !pertenceAoServidor(interaction, guildId)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Você não tem permissão para configurar o registro.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const config =
+        await buscarConfiguracao(guildId);
+
+    if (!config) {
+        return interaction.reply({
+            content:
+                "❌ Configuração não encontrada.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `registro_modal_cargo_${guildId}`
+            )
+            .setTitle("🎭 Cargo pós-registro");
+
+    const cargo =
+        new TextInputBuilder()
+            .setCustomId("cargo")
+            .setLabel("ID do cargo")
+            .setPlaceholder(
+                "Deixe vazio para não dar nenhum cargo"
+            )
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setMaxLength(30);
+
+    if (config.cargo_registro_id) {
+        cargo.setValue(
+            String(config.cargo_registro_id)
+        );
+    }
+
+    modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(cargo)
     );
 
     await interaction.showModal(modal);
@@ -1585,6 +1661,62 @@ function obterCargoConfigurado(
 }
 
 // =====================================================
+// 🎭 VALIDAR SE O BOT CONSEGUE DAR O CARGO
+// =====================================================
+
+function verificarCargoDoBot(
+    interaction,
+    cargo
+) {
+    if (!cargo) {
+        return {
+            sucesso: true,
+            erro: null
+        };
+    }
+
+    const botMember =
+        interaction.guild.members.me;
+
+    if (!botMember) {
+        return {
+            sucesso: false,
+            erro:
+                "❌ Não consegui verificar as permissões do bot."
+        };
+    }
+
+    if (
+        !botMember.permissions.has(
+            PermissionFlagsBits.ManageRoles
+        )
+    ) {
+        return {
+            sucesso: false,
+            erro:
+                "❌ Eu não tenho a permissão **Gerenciar Cargos**."
+        };
+    }
+
+    if (
+        cargo.managed ||
+        cargo.position >=
+            botMember.roles.highest.position
+    ) {
+        return {
+            sucesso: false,
+            erro:
+                "❌ Não consigo adicionar esse cargo porque ele está acima ou no mesmo nível do meu maior cargo."
+        };
+    }
+
+    return {
+        sucesso: true,
+        erro: null
+    };
+}
+
+// =====================================================
 // 📢 PUBLICAR
 // =====================================================
 
@@ -2006,15 +2138,20 @@ async function processarBotaoRegistro(
         });
     }
 
-    let cargoRecebido = null;
+    // =================================================
+    // 🎭 CARGO DO BOTÃO
+    // =================================================
+
+    let cargoBotao = null;
+    let cargoBotaoRecebido = false;
 
     if (botao.cargo_id) {
-        const cargo =
+        cargoBotao =
             interaction.guild.roles.cache.get(
                 String(botao.cargo_id)
             );
 
-        if (!cargo) {
+        if (!cargoBotao) {
             return interaction.reply({
                 content:
                     "❌ O cargo configurado para este botão não existe mais.",
@@ -2022,54 +2159,89 @@ async function processarBotaoRegistro(
             });
         }
 
-        const membro =
-            await interaction.guild.members.fetch(
-                interaction.user.id
+        const verificacao =
+            verificarCargoDoBot(
+                interaction,
+                cargoBotao
             );
 
-        const botMember =
-            interaction.guild.members.me;
-
-        if (!botMember) {
+        if (!verificacao.sucesso) {
             return interaction.reply({
                 content:
-                    "❌ Não consegui verificar as permissões do bot.",
+                    verificacao.erro,
+                flags: EPHEMERAL
+            });
+        }
+    }
+
+    // =================================================
+    // 🎭 CARGO PÓS-REGISTRO GLOBAL
+    // =================================================
+
+    const configRegistro =
+        await buscarConfiguracao(
+            interaction.guild.id
+        );
+
+    let cargoPosRegistro = null;
+
+    if (
+        configRegistro &&
+        configRegistro.cargo_registro_id
+    ) {
+        cargoPosRegistro =
+            interaction.guild.roles.cache.get(
+                String(
+                    configRegistro.cargo_registro_id
+                )
+            );
+
+        if (!cargoPosRegistro) {
+            console.error(
+                `❌ O cargo pós-registro configurado (${configRegistro.cargo_registro_id}) não existe mais.`
+            );
+
+            return interaction.reply({
+                content:
+                    "❌ O cargo pós-registro configurado não existe mais. Um administrador precisa corrigir a configuração do registro.",
                 flags: EPHEMERAL
             });
         }
 
-        if (
-            !botMember.permissions.has(
-                PermissionFlagsBits.ManageRoles
-            )
-        ) {
+        const verificacao =
+            verificarCargoDoBot(
+                interaction,
+                cargoPosRegistro
+            );
+
+        if (!verificacao.sucesso) {
             return interaction.reply({
                 content:
-                    "❌ Eu não tenho a permissão **Gerenciar Cargos**.",
+                    `❌ Não consigo adicionar o cargo pós-registro configurado.\n\n${verificacao.erro}`,
                 flags: EPHEMERAL
             });
         }
+    }
 
-        if (
-            cargo.managed ||
-            cargo.position >=
-                botMember.roles.highest.position
-        ) {
-            return interaction.reply({
-                content:
-                    "❌ Não consigo adicionar esse cargo porque ele está acima ou no mesmo nível do meu maior cargo.",
-                flags: EPHEMERAL
-            });
-        }
+    const membro =
+        await interaction.guild.members.fetch(
+            interaction.user.id
+        );
 
+    // =================================================
+    // 🎭 DAR CARGO DO BOTÃO
+    // =================================================
+
+    if (cargoBotao) {
         try {
-            await membro.roles.add(cargo);
+            await membro.roles.add(
+                cargoBotao
+            );
 
-            cargoRecebido =
-                cargo.id;
+            cargoBotaoRecebido = true;
         } catch (erro) {
             console.error(
-                "❌ Erro ao dar cargo do registro:",
+                "❌ Erro ao dar cargo do botão de registro:",
                 erro
             );
 
@@ -2080,6 +2252,47 @@ async function processarBotaoRegistro(
             });
         }
     }
+
+    // =================================================
+    // 🎭 DAR CARGO PÓS-REGISTRO
+    // =================================================
+
+    let cargoPosRegistroRecebido = false;
+
+    if (cargoPosRegistro) {
+        try {
+            await membro.roles.add(
+                cargoPosRegistro
+            );
+
+            cargoPosRegistroRecebido = true;
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao dar cargo pós-registro:",
+                erro
+            );
+
+            return interaction.reply({
+                content:
+                    "❌ Não consegui adicionar o cargo pós-registro configurado.",
+                flags: EPHEMERAL
+            });
+        }
+    }
+
+    // =================================================
+    // 💾 SALVAR REGISTRO
+    // =================================================
+
+    // Mantém o cargo do botão como o cargo principal salvo.
+    // Se não houver cargo no botão, salva o cargo pós-registro.
+    const cargoRecebido =
+        cargoBotaoRecebido && cargoBotao
+            ? cargoBotao.id
+            : cargoPosRegistroRecebido &&
+              cargoPosRegistro
+                ? cargoPosRegistro.id
+                : null;
 
     try {
         await registrarUsuario(
@@ -2116,11 +2329,41 @@ async function processarBotaoRegistro(
         });
     }
 
-    await interaction.reply({
+    // =================================================
+    // ✅ MENSAGEM FINAL
+    // =================================================
+
+    const cargosRecebidos = [];
+
+    if (
+        cargoBotaoRecebido &&
+        cargoBotao
+    ) {
+        cargosRecebidos.push(
+            `<@&${cargoBotao.id}>`
+        );
+    }
+
+    if (
+        cargoPosRegistroRecebido &&
+        cargoPosRegistro
+    ) {
+        cargosRecebidos.push(
+            `<@&${cargoPosRegistro.id}>`
+        );
+    }
+
+    if (cargosRecebidos.length > 0) {
+        return interaction.reply({
+            content:
+                `✅ Registro concluído com sucesso!\n\n🎭 Cargos recebidos: ${cargosRecebidos.join(", ")}`,
+            flags: EPHEMERAL
+        });
+    }
+
+    return interaction.reply({
         content:
-            cargoRecebido
-                ? "✅ Registro concluído! Seu cargo foi adicionado."
-                : "✅ Registro concluído com sucesso!",
+            "✅ Registro concluído com sucesso!",
         flags: EPHEMERAL
     });
 }
@@ -2138,6 +2381,12 @@ async function atualizarPainelPrincipal(
 
     const config =
         await buscarConfiguracao(guildId);
+
+    const cargoPosRegistro =
+        config &&
+        config.cargo_registro_id
+            ? `<@&${config.cargo_registro_id}>`
+            : "Nenhum";
 
     const embed =
         new EmbedBuilder()
@@ -2157,6 +2406,7 @@ async function atualizarPainelPrincipal(
                             ? `<#${config.canal_id}>`
                             : "Não definido"
                     }`,
+                    `🎭 Cargo pós-registro: ${cargoPosRegistro}`,
                     "",
                     `🎨 Painel inicial: **${
                         config &&
@@ -2225,6 +2475,14 @@ async function atualizarPainelPrincipal(
                     )
                     .setLabel("Botão Registrar")
                     .setEmoji("🔘")
+                    .setStyle(ButtonStyle.Secondary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_cargo_${guildId}`
+                    )
+                    .setLabel("Cargo pós-registro")
+                    .setEmoji("🎭")
                     .setStyle(ButtonStyle.Secondary)
             );
 
@@ -2312,10 +2570,6 @@ async function handleInteraction(interaction) {
         // =================================================
         // 🔘 BOTÃO DE REGISTRO
         // =================================================
-        // IMPORTANTE:
-        // registro_botao_painel_ também começa com
-        // registro_botao_, então ele precisa ser excluído
-        // daqui para não ser tratado como botão de registro.
 
         if (
             interaction.isButton() &&
@@ -2429,9 +2683,11 @@ async function handleInteraction(interaction) {
             "registro_painel_inicial_",
             "registro_botao_painel_",
             "registro_canal_",
+            "registro_cargo_",
             "registro_selecionar_canal_",
             "registro_modal_painel_inicial_",
             "registro_modal_botao_painel_",
+            "registro_modal_cargo_",
             "registro_adicionar_pagina_",
             "registro_publicar_",
             "registro_excluir_",
@@ -2505,6 +2761,28 @@ async function handleInteraction(interaction) {
                 );
 
             return await abrirModalTextoBotaoPainel(
+                interaction,
+                guildId
+            );
+        }
+
+        // =================================================
+        // 🎭 CARGO PÓS-REGISTRO
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_cargo_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_cargo_",
+                    ""
+                );
+
+            return await abrirModalCargoRegistro(
                 interaction,
                 guildId
             );
@@ -3144,6 +3422,112 @@ async function handleInteraction(interaction) {
                     "✅ Texto do botão atualizado!",
                 flags: EPHEMERAL
             });
+
+            return;
+        }
+
+        // =================================================
+        // 🎭 MODAL CARGO PÓS-REGISTRO
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            customId.startsWith(
+                "registro_modal_cargo_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_modal_cargo_",
+                    ""
+                );
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const cargoTexto =
+                interaction.fields
+                    .getTextInputValue(
+                        "cargo"
+                    )
+                    .trim();
+
+            const cargoResultado =
+                obterCargoConfigurado(
+                    interaction,
+                    cargoTexto
+                );
+
+            if (cargoResultado.erro) {
+                return interaction.reply({
+                    content:
+                        cargoResultado.erro,
+                    flags: EPHEMERAL
+                });
+            }
+
+            // Se informou um cargo, verifica se o bot
+            // realmente consegue entregar esse cargo.
+            if (cargoResultado.id) {
+                const cargo =
+                    interaction.guild.roles.cache.get(
+                        String(
+                            cargoResultado.id
+                        )
+                    );
+
+                const verificacao =
+                    verificarCargoDoBot(
+                        interaction,
+                        cargo
+                    );
+
+                if (!verificacao.sucesso) {
+                    return interaction.reply({
+                        content:
+                            verificacao.erro,
+                        flags: EPHEMERAL
+                    });
+                }
+            }
+
+            await pool.query(
+                `
+                UPDATE registro_config
+                SET cargo_registro_id = $1,
+                    atualizado_em = $2
+                WHERE guild_id = $3
+                `,
+                [
+                    cargoResultado.id,
+                    Date.now(),
+                    guildId
+                ]
+            );
+
+            if (cargoResultado.id) {
+                await interaction.reply({
+                    content:
+                        `✅ Cargo pós-registro definido: <@&${cargoResultado.id}>`,
+                    flags: EPHEMERAL
+                });
+            } else {
+                await interaction.reply({
+                    content:
+                        "✅ Cargo pós-registro removido. Os usuários não receberão cargo automático.",
+                    flags: EPHEMERAL
+                });
+            }
 
             return;
         }
