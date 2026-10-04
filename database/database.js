@@ -158,7 +158,7 @@ async function inicializarBanco() {
     // 🚪 SISTEMA DE SAÍDA / LEAVE
     // =====================================================
 
-    await pool.query(`
+    await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS leave_config (
             guild_id VARCHAR(30) PRIMARY KEY,
 
@@ -277,6 +277,53 @@ async function inicializarBanco() {
     await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS adms (
             id VARCHAR(30) PRIMARY KEY
+        )
+    `);
+
+    // ================================
+    // 🎭 REACTION ROLE
+    // ================================
+
+    await mysqlPool.query(`
+        CREATE TABLE IF NOT EXISTS react_roles (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+
+            guild_id VARCHAR(30) NOT NULL,
+            mensagem_id VARCHAR(30) NOT NULL,
+            emoji VARCHAR(100) NOT NULL,
+            cargo_id VARCHAR(30) NOT NULL,
+
+            content TEXT,
+
+            embed_habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+            embed_titulo VARCHAR(256),
+            embed_descricao TEXT,
+            embed_cor VARCHAR(20),
+
+            footer_habilitado BOOLEAN NOT NULL DEFAULT FALSE,
+            footer_texto VARCHAR(2048),
+
+            imagem TEXT,
+            thumbnail TEXT,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            UNIQUE KEY react_role_unico (
+                guild_id,
+                mensagem_id,
+                emoji
+            ),
+
+            INDEX idx_react_roles_mensagem (
+                guild_id,
+                mensagem_id
+            )
         )
     `);
 
