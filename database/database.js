@@ -154,6 +154,46 @@ function agoraMs() {
 
 async function inicializarBanco() {
 
+    // =====================================================
+    // 🚪 SISTEMA DE SAÍDA / LEAVE
+    // =====================================================
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS leave_config (
+            guild_id VARCHAR(30) PRIMARY KEY,
+
+            habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+            canal_id VARCHAR(30),
+            content TEXT,
+
+            embed_habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+            embed_titulo VARCHAR(256),
+            embed_descricao TEXT,
+            embed_cor VARCHAR(20),
+
+            autor_habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+            autor_nome VARCHAR(256),
+            autor_icone TEXT,
+
+            thumbnail TEXT,
+            imagem TEXT,
+
+            footer_habilitado BOOLEAN NOT NULL DEFAULT TRUE,
+            footer_texto VARCHAR(2048),
+            footer_icone TEXT,
+
+            timestamp BOOLEAN NOT NULL DEFAULT TRUE,
+
+            criado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            ),
+
+            atualizado_em BIGINT NOT NULL DEFAULT (
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+            )
+        )
+    `);
+
     // ================================
     // 👤 USUÁRIOS
     // ================================
@@ -3914,6 +3954,362 @@ async function getTotalUsuariosRegistrados(
 }
 
 // =====================================================
+// 🚪 CONFIGURAÇÃO DO LEAVE
+// =====================================================
+
+function normalizarConfigLeave(
+    config = {}
+) {
+
+    const embed =
+        config.embed ||
+        {};
+
+    const autor =
+        embed.autor ||
+        config.autor ||
+        {};
+
+    const footer =
+        embed.footer ||
+        config.footer ||
+        {};
+
+    return {
+
+        habilitado:
+            config.habilitado ??
+            true,
+
+        canalId:
+            config.canalId ??
+            config.canal_id ??
+            null,
+
+        content:
+            config.content ??
+            "👋 {user} saiu do servidor. Até mais! 👋",
+
+        embedHabilitado:
+            embed.habilitado ??
+            config.embed_habilitado ??
+            true,
+
+        embedTitulo:
+            embed.titulo ??
+            config.embed_titulo ??
+            "👋 Até mais, {username}!",
+
+        embedDescricao:
+            embed.descricao ??
+            config.embed_descricao ??
+            "{user} saiu do servidor.\n\n" +
+            "Esperamos que tenha gostado do tempo por aqui! 💙",
+
+        embedCor:
+            embed.cor ??
+            config.embed_cor ??
+            "#ED4245",
+
+        autorHabilitado:
+            autor.habilitado ??
+            config.autor_habilitado ??
+            true,
+
+        autorNome:
+            autor.nome ??
+            config.autor_nome ??
+            "{username}",
+
+        autorIcone:
+            autor.icone ??
+            config.autor_icone ??
+            "{avatar}",
+
+        thumbnail:
+            embed.thumbnail ??
+            config.thumbnail ??
+            "{avatar}",
+
+        imagem:
+            embed.imagem ??
+            config.imagem ??
+            "{banner}",
+
+        footerHabilitado:
+            footer.habilitado ??
+            config.footer_habilitado ??
+            true,
+
+        footerTexto:
+            footer.texto ??
+            config.footer_texto ??
+            "Massa Com Chika • Até mais!",
+
+        footerIcone:
+            footer.icone ??
+            config.footer_icone ??
+            "{avatar}",
+
+        timestamp:
+            embed.timestamp ??
+            config.timestamp ??
+            true
+    };
+}
+
+
+// =====================================================
+// 🚪 BUSCAR CONFIGURAÇÃO DO LEAVE
+// =====================================================
+
+async function getLeaveConfig(
+    guildId
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM leave_config
+            WHERE guild_id = $1
+            `,
+            [guildId]
+        );
+
+    return (
+        resultado.rows[0] ||
+        null
+    );
+}
+
+
+// =====================================================
+// 🚪 SALVAR CONFIGURAÇÃO DO LEAVE
+// =====================================================
+
+async function salvarLeaveConfig(
+    guildId,
+    config = {}
+) {
+
+    const dados =
+        normalizarConfigLeave(
+            config
+        );
+
+    const agora =
+        agoraMs();
+
+    await pool.query(
+        `
+        INSERT INTO leave_config (
+            guild_id,
+            habilitado,
+            canal_id,
+            content,
+
+            embed_habilitado,
+            embed_titulo,
+            embed_descricao,
+            embed_cor,
+
+            autor_habilitado,
+            autor_nome,
+            autor_icone,
+
+            thumbnail,
+            imagem,
+
+            footer_habilitado,
+            footer_texto,
+            footer_icone,
+
+            timestamp,
+
+            criado_em,
+            atualizado_em
+        )
+        VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+
+            $5,
+            $6,
+            $7,
+            $8,
+
+            $9,
+            $10,
+            $11,
+
+            $12,
+            $13,
+
+            $14,
+            $15,
+            $16,
+
+            $17,
+
+            $18,
+            $18
+        )
+        ON DUPLICATE KEY UPDATE
+
+            habilitado =
+                VALUES(habilitado),
+
+            canal_id =
+                VALUES(canal_id),
+
+            content =
+                VALUES(content),
+
+            embed_habilitado =
+                VALUES(embed_habilitado),
+
+            embed_titulo =
+                VALUES(embed_titulo),
+
+            embed_descricao =
+                VALUES(embed_descricao),
+
+            embed_cor =
+                VALUES(embed_cor),
+
+            autor_habilitado =
+                VALUES(autor_habilitado),
+
+            autor_nome =
+                VALUES(autor_nome),
+
+            autor_icone =
+                VALUES(autor_icone),
+
+            thumbnail =
+                VALUES(thumbnail),
+
+            imagem =
+                VALUES(imagem),
+
+            footer_habilitado =
+                VALUES(footer_habilitado),
+
+            footer_texto =
+                VALUES(footer_texto),
+
+            footer_icone =
+                VALUES(footer_icone),
+
+            timestamp =
+                VALUES(timestamp),
+
+            atualizado_em =
+                VALUES(atualizado_em)
+        `,
+        [
+            guildId,
+
+            dados.habilitado
+                ? 1
+                : 0,
+
+            dados.canalId,
+
+            dados.content,
+
+            dados.embedHabilitado
+                ? 1
+                : 0,
+
+            dados.embedTitulo,
+
+            dados.embedDescricao,
+
+            dados.embedCor,
+
+            dados.autorHabilitado
+                ? 1
+                : 0,
+
+            dados.autorNome,
+
+            dados.autorIcone,
+
+            dados.thumbnail,
+
+            dados.imagem,
+
+            dados.footerHabilitado
+                ? 1
+                : 0,
+
+            dados.footerTexto,
+
+            dados.footerIcone,
+
+            dados.timestamp
+                ? 1
+                : 0,
+
+            agora
+        ]
+    );
+
+    return getLeaveConfig(
+        guildId
+    );
+}
+
+
+// =====================================================
+// 🚪 ATUALIZAR CANAL DO LEAVE
+// =====================================================
+
+async function atualizarCanalLeave(
+    guildId,
+    canalId
+) {
+
+    const config =
+        await getLeaveConfig(
+            guildId
+        );
+
+    if (!config) {
+
+        return salvarLeaveConfig(
+            guildId,
+            {
+                canalId
+            }
+        );
+    }
+
+    await pool.query(
+        `
+        UPDATE leave_config
+        SET
+            canal_id = $1,
+            atualizado_em = $2
+        WHERE guild_id = $3
+        `,
+        [
+            canalId,
+            agoraMs(),
+            guildId
+        ]
+    );
+
+    return getLeaveConfig(
+        guildId
+    );
+}
+
+// =====================================================
 // 📦 EXPORTAÇÕES
 // =====================================================
 
@@ -3955,6 +4351,11 @@ module.exports = {
     getJoinConfig,
     salvarJoinConfig,
     atualizarCanalJoin,
+
+    // 🚪 Saída / Leave
+    getLeaveConfig,
+    salvarLeaveConfig,
+    atualizarCanalLeave,
 
     // 🎨 Embeds
     criarEmbedBanco,
