@@ -2640,11 +2640,21 @@ client.on("messageReactionAdd", async (reaction, user) => {
             await reaction.fetch();
         }
 
-        if (typeof reactrole.handleReaction === "function") {
-            await reactrole.handleReaction(reaction, user, true);
+        if (
+            typeof reactrole.handleReaction === "function"
+        ) {
+            await reactrole.handleReaction(
+                reaction,
+                user,
+                true
+            );
         }
+
     } catch (erro) {
-        console.error("❌ Erro ao adicionar Reaction Role:", erro);
+        console.error(
+            "❌ Erro ao adicionar Reaction Role:",
+            erro
+        );
     }
 });
 
@@ -2656,11 +2666,101 @@ client.on("messageReactionRemove", async (reaction, user) => {
             await reaction.fetch();
         }
 
-        if (typeof reactrole.handleReaction === "function") {
-            await reactrole.handleReaction(reaction, user, false);
+        if (
+            typeof reactrole.handleReaction === "function"
+        ) {
+            await reactrole.handleReaction(
+                reaction,
+                user,
+                false
+            );
         }
+
     } catch (erro) {
-        console.error("❌ Erro ao remover Reaction Role:", erro);
+        console.error(
+            "❌ Erro ao remover Reaction Role:",
+            erro
+        );
+    }
+});
+
+// =====================================================
+// 🎭 REACTION ROLE - PAINEL
+// =====================================================
+
+client.on("interactionCreate", async interaction => {
+    try {
+
+        // =================================================
+        // ✏️ MODAL /reactrole editar
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            interaction.customId === "rr_modal_editar"
+        ) {
+            if (
+                typeof reactrole.tratarModalEditar ===
+                "function"
+            ) {
+                await reactrole.tratarModalEditar(
+                    interaction
+                );
+            }
+
+            return;
+        }
+
+        // =================================================
+        // 🖱️ BOTÕES / MODAIS / SELECTS DO PAINEL
+        // =================================================
+
+        if (
+            (
+                interaction.isButton() ||
+                interaction.isModalSubmit() ||
+                interaction.isChannelSelectMenu()
+            ) &&
+            interaction.customId.startsWith("rr_")
+        ) {
+            if (
+                typeof reactrole.tratarInteracao ===
+                "function"
+            ) {
+                await reactrole.tratarInteracao(
+                    interaction
+                );
+            }
+
+            return;
+        }
+
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao processar interação do Reaction Role:",
+            erro
+        );
+
+        try {
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({
+                    content:
+                        "❌ Ocorreu um erro ao processar o Reaction Role.",
+                    ephemeral: true
+                });
+            } else {
+                await interaction.reply({
+                    content:
+                        "❌ Ocorreu um erro ao processar o Reaction Role.",
+                    ephemeral: true
+                });
+            }
+        } catch (erroResposta) {
+            console.error(
+                "❌ Erro ao enviar resposta do Reaction Role:",
+                erroResposta
+            );
+        }
     }
 });
 
