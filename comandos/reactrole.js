@@ -56,6 +56,18 @@ const data = new SlashCommandBuilder()
 // 🛠️ GARANTIR TABELA
 // =====================================================
 
+// Colunas adicionadas depois da criação original da tabela.
+// São criadas automaticamente se ainda não existirem.
+const COLUNAS_EXTRAS = [
+    ["somente_reacoes", "BOOLEAN NOT NULL DEFAULT FALSE"],
+    ["embed_url", "TEXT NULL"],
+    ["embed_autor_nome", "VARCHAR(256) NULL"],
+    ["embed_autor_icone", "TEXT NULL"],
+    ["footer_icone", "TEXT NULL"],
+    ["embed_timestamp", "BOOLEAN NOT NULL DEFAULT FALSE"],
+    ["embed_campos", "TEXT NULL"]
+];
+
 let tabelaGarantida = false;
 
 async function garantirTabela() {
@@ -99,25 +111,25 @@ async function garantirTabela() {
         )
     `);
 
-    try {
-        const [colunas] =
-            await mysqlPool.query(`
-                SHOW COLUMNS
-                FROM react_role_configs
-                LIKE 'somente_reacoes'
-            `);
+    for (const [coluna, definicao] of COLUNAS_EXTRAS) {
+        try {
+            const [existe] =
+                await mysqlPool.query(
+                    "SHOW COLUMNS FROM react_role_configs LIKE ?",
+                    [coluna]
+                );
 
-        if (!colunas.length) {
-            await mysqlPool.query(`
-                ALTER TABLE react_role_configs
-                ADD COLUMN somente_reacoes BOOLEAN NOT NULL DEFAULT FALSE
-            `);
+            if (!existe.length) {
+                await mysqlPool.query(
+                    `ALTER TABLE react_role_configs ADD COLUMN ${coluna} ${definicao}`
+                );
+            }
+        } catch (erro) {
+            console.error(
+                `❌ Erro ao verificar a coluna ${coluna}:`,
+                erro
+            );
         }
-    } catch (erro) {
-        console.error(
-            "❌ Erro ao verificar coluna somente_reacoes:",
-            erro
-        );
     }
 
     tabelaGarantida = true;
@@ -142,17 +154,33 @@ function normalizarCor(cor) {
 }
 
 // =====================================================
+// 🔢 BOOLEAN DO MYSQL
+// =====================================================
+
+// O MySQL devolve BOOLEAN como 0/1 (número), não true/false.
+// Por isso nunca se compara com === true / === false.
+
+function sim(valor) {
+    return Boolean(Number(valor));
+}
+
+const REGEX_SIM = /^(s|sim|y|yes|1|true|on)/i;
+
+// =====================================================
 // 🎭 NORMALIZAR EMOJI
 // =====================================================
 
 function normalizarEmoji(emoji) {
     if (!emoji) return null;
 
-    if (
-        typeof emoji === "object" &&
-        emoji.id
-    ) {
-        return `${emoji.name}:${emoji.id}`;
+    if (typeof emoji === "object") {
+        if (emoji.id) {
+            return `${emoji.name}:${emoji.id}`;
+        }
+
+        return emoji.name
+            ? String(emoji.name).trim()
+            : null;
     }
 
     const texto =
@@ -160,7 +188,7 @@ function normalizarEmoji(emoji) {
 
     const customEmoji =
         texto.match(
-            /^<a?:([^:>]+):(\d+)>$/
+            /^<?a?:([^:>\s]+):(\d+)>?$/
         );
 
     if (customEmoji) {
@@ -168,6 +196,94 @@ function normalizarEmoji(emoji) {
     }
 
     return texto;
+}
+
+// =====================================================
+// 🔑 CHAVE DE COMPARAÇÃO DE EMOJI
+// =====================================================
+
+// Usada para COMPARAR emojis. Ignora o seletor de variação (FE0F),
+// que faz o mesmo emoji chegar com "bytes" diferentes (ex.: ❤ e ❤️),
+// e compara emojis customizados pelo ID.
+
+function chaveEmoji(emoji) {
+    const base =
+        normalizarEmoji(emoji);
+
+    if (!base) return "";
+
+    const custom =
+        base.match(/^[^:]+:(\d+)$/);
+
+    if (custom) {
+        return `custom:${custom[1]}`;
+    }
+
+    return base.replace(
+        /[\uFE0E\uFE0F]/g,
+        ""
+    );
+}
+
+// =====================================================
+// 📋 CAMPOS DO EMBED
+// =====================================================
+
+function parseCampos(texto) {
+    if (!texto) return [];
+
+    try {
+        const lista = JSON.parse(texto);
+
+        return Array.isArray(lista)
+            ? lista
+            : [];
+    } catch {
+        return [];
+    }
+}
+
+function camposParaTexto(texto) {
+    return parseCampos(texto)
+        .map(
+            campo =>
+                `${campo.nome} | ${campo.valor} | ${
+                    campo.inline ? "sim" : "não"
+                }`
+        )
+        .join("\n");
+}
+
+// Cada linha: Nome | Valor | sim/não (lado a lado)
+function textoParaCampos(texto) {
+    const campos = [];
+
+    for (const linha of String(texto || "").split("\n")) {
+        const partes =
+            linha
+                .split("|")
+                .map(parte => parte.trim());
+
+        if (
+            partes.length < 2 ||
+            !partes[0] ||
+            !partes[1]
+        ) {
+            continue;
+        }
+
+        campos.push({
+            nome: partes[0].slice(0, 256),
+            valor: partes[1].slice(0, 1024),
+            inline: partes[2]
+                ? REGEX_SIM.test(partes[2])
+                : false
+        });
+
+        if (campos.length >= 10) break;
+    }
+
+    return campos;
 }
 
 // =====================================================
@@ -311,6 +427,76 @@ async function buscarCargos(
 }
 
 // =====================================================
+// ✏️ ATUALIZAR CONFIGURAÇÃO
+// =====================================================
+
+async function atualizarConfig(
+    configId,
+    guildId,
+    colunas
+) {
+    const nomes =
+        Object.keys(colunas);
+
+    const sets =
+        nomes
+            .map(nome => `${nome} = ?`)
+            .join(", ");
+
+    await mysqlPool.query(
+        `
+        UPDATE react_role_configs
+        SET
+            ${sets},
+            atualizado_em =
+                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+        WHERE id = ?
+          AND guild_id = ?
+        `,
+        [
+            ...nomes.map(nome => colunas[nome]),
+            configId,
+            guildId
+        ]
+    );
+}
+
+// =====================================================
+// 🗑️ EXCLUIR CONFIGURAÇÃO DO BANCO
+// =====================================================
+
+async function excluirConfigDoBanco(
+    config,
+    guildId
+) {
+    if (config.mensagem_id) {
+        await mysqlPool.query(
+            `
+            DELETE FROM react_roles
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+            `,
+            [
+                guildId,
+                config.mensagem_id
+            ]
+        );
+    }
+
+    await mysqlPool.query(
+        `
+        DELETE FROM react_role_configs
+        WHERE id = ?
+          AND guild_id = ?
+        `,
+        [
+            config.id,
+            guildId
+        ]
+    );
+}
+
+// =====================================================
 // 🎭 SALVAR CARGO
 // =====================================================
 
@@ -323,6 +509,26 @@ async function salvarCargo({
 }) {
     const emojiNormalizado =
         normalizarEmoji(emoji);
+
+    // Evita duplicar o mesmo emoji escrito de formas diferentes.
+    const existentes =
+        await buscarCargos(
+            guildId,
+            mensagemId
+        );
+
+    for (const item of existentes) {
+        if (
+            chaveEmoji(item.emoji) ===
+                chaveEmoji(emojiNormalizado) &&
+            item.emoji !== emojiNormalizado
+        ) {
+            await mysqlPool.query(
+                "DELETE FROM react_roles WHERE id = ?",
+                [item.id]
+            );
+        }
+    }
 
     await mysqlPool.query(
         `
@@ -398,12 +604,12 @@ async function salvarCargo({
 
             config.content || null,
 
-            config.embed_habilitado !== false,
+            sim(config.embed_habilitado),
             config.embed_titulo || null,
             config.embed_descricao || null,
             config.embed_cor || null,
 
-            config.footer_habilitado === true,
+            sim(config.footer_habilitado),
             config.footer_texto || null,
 
             config.imagem || null,
@@ -421,29 +627,35 @@ async function removerCargoReacao(
     mensagemId,
     emoji
 ) {
-    const emojiNormalizado =
-        normalizarEmoji(emoji);
+    const chave =
+        chaveEmoji(emoji);
 
-    if (!emojiNormalizado) {
+    if (!chave) {
         return false;
     }
 
-    const [resultado] =
-        await mysqlPool.query(
-            `
-            DELETE FROM react_roles
-            WHERE guild_id = ?
-              AND mensagem_id = ?
-              AND emoji = ?
-            `,
-            [
-                guildId,
-                mensagemId,
-                emojiNormalizado
-            ]
+    const cargos =
+        await buscarCargos(
+            guildId,
+            mensagemId
         );
 
-    return resultado.affectedRows > 0;
+    const alvos =
+        cargos.filter(
+            cargo =>
+                chaveEmoji(cargo.emoji) === chave
+        );
+
+    if (!alvos.length) {
+        return false;
+    }
+
+    await mysqlPool.query(
+        "DELETE FROM react_roles WHERE id IN (?)",
+        [alvos.map(alvo => alvo.id)]
+    );
+
+    return true;
 }
 
 // =====================================================
@@ -484,12 +696,12 @@ async function sincronizarCargos(
         [
             config.content || null,
 
-            config.embed_habilitado !== false,
+            sim(config.embed_habilitado),
             config.embed_titulo || null,
             config.embed_descricao || null,
             config.embed_cor || null,
 
-            config.footer_habilitado === true,
+            sim(config.footer_habilitado),
             config.footer_texto || null,
 
             config.imagem || null,
@@ -506,19 +718,25 @@ async function sincronizarCargos(
 // =====================================================
 
 function criarEmbed(config) {
-    if (
-        config.embed_habilitado === false
-    ) {
+    if (!sim(config.embed_habilitado)) {
         return null;
     }
+
+    const campos =
+        parseCampos(config.embed_campos);
+
+    const rodapeAtivo =
+        sim(config.footer_habilitado) &&
+        config.footer_texto;
 
     if (
         !config.embed_titulo &&
         !config.embed_descricao &&
-        !config.embed_cor &&
-        !config.footer_texto &&
+        !config.embed_autor_nome &&
+        !campos.length &&
         !config.imagem &&
-        !config.thumbnail
+        !config.thumbnail &&
+        !rodapeAtivo
     ) {
         return null;
     }
@@ -529,6 +747,15 @@ function criarEmbed(config) {
     if (config.embed_titulo) {
         embed.setTitle(
             config.embed_titulo
+        );
+    }
+
+    if (
+        config.embed_titulo &&
+        config.embed_url
+    ) {
+        embed.setURL(
+            config.embed_url
         );
     }
 
@@ -544,14 +771,27 @@ function criarEmbed(config) {
         );
     }
 
-    if (
-        config.footer_habilitado &&
-        config.footer_texto
-    ) {
-        embed.setFooter({
-            text:
-                config.footer_texto
+    if (config.embed_autor_nome) {
+        embed.setAuthor({
+            name:
+                config.embed_autor_nome,
+
+            iconURL:
+                config.embed_autor_icone ||
+                undefined
         });
+    }
+
+    if (campos.length) {
+        embed.addFields(
+            campos
+                .slice(0, 25)
+                .map(campo => ({
+                    name: campo.nome,
+                    value: campo.valor,
+                    inline: Boolean(campo.inline)
+                }))
+        );
     }
 
     if (config.imagem) {
@@ -564,6 +804,21 @@ function criarEmbed(config) {
         embed.setThumbnail(
             config.thumbnail
         );
+    }
+
+    if (rodapeAtivo) {
+        embed.setFooter({
+            text:
+                config.footer_texto,
+
+            iconURL:
+                config.footer_icone ||
+                undefined
+        });
+    }
+
+    if (sim(config.embed_timestamp)) {
+        embed.setTimestamp();
     }
 
     return embed;
@@ -612,9 +867,11 @@ async function adicionarReacoes(
             const jaExiste =
                 mensagem.reactions.cache.find(
                     reaction =>
-                        normalizarEmoji(
+                        chaveEmoji(
                             reaction.emoji
-                        ) === item.emoji
+                        ) === chaveEmoji(
+                            item.emoji
+                        )
                 );
 
             if (!jaExiste) {
@@ -641,15 +898,15 @@ async function removerReacaoDaMensagem(
     emoji
 ) {
     try {
-        const emojiNormalizado =
-            normalizarEmoji(emoji);
+        const chave =
+            chaveEmoji(emoji);
 
         const reaction =
             mensagem.reactions.cache.find(
                 item =>
-                    normalizarEmoji(
+                    chaveEmoji(
                         item.emoji
-                    ) === emojiNormalizado
+                    ) === chave
             );
 
         if (reaction) {
@@ -707,6 +964,35 @@ async function localizarMensagem(
 }
 
 // =====================================================
+// 🧱 AUXILIARES DOS PAINÉIS
+// =====================================================
+
+function botao(
+    customId,
+    label,
+    emoji,
+    estilo,
+    desabilitado = false
+) {
+    return new ButtonBuilder()
+        .setCustomId(customId)
+        .setLabel(label)
+        .setEmoji(emoji)
+        .setStyle(estilo)
+        .setDisabled(desabilitado);
+}
+
+function linhaCargos(cargos) {
+    return cargos
+        .map(
+            cargo =>
+                `${cargo.emoji} → <@&${cargo.cargo_id}>`
+        )
+        .join("\n")
+        .slice(0, 1024);
+}
+
+// =====================================================
 // 📋 PAINEL DE ADICIONAR
 // =====================================================
 
@@ -714,6 +1000,12 @@ async function criarPainelAdicionar(
     config,
     cargos = []
 ) {
+    const ativo =
+        sim(config.habilitado);
+
+    const embedLigado =
+        sim(config.embed_habilitado);
+
     const painelEmbed =
         new EmbedBuilder()
             .setTitle(
@@ -742,13 +1034,15 @@ async function criarPainelAdicionar(
                     } configurado(s)`,
 
                     `🎨 **Embed:** ${
-                        config.embed_habilitado !== false
+                        embedLigado
                             ? "Ativado"
                             : "Desativado"
                     }`,
 
-                    `🟢 **Sistema:** ${
-                        config.habilitado !== false
+                    `${
+                        ativo ? "🟢" : "🔴"
+                    } **Sistema:** ${
+                        ativo
                             ? "Ativado"
                             : "Desativado"
                     }`
@@ -761,22 +1055,18 @@ async function criarPainelAdicionar(
                 "🎭 Cargos configurados",
 
             value:
-                cargos
-                    .map(
-                        cargo =>
-                            `${cargo.emoji} → <@&${cargo.cargo_id}>`
-                    )
-                    .join("\n")
-                    .slice(0, 1024)
+                linhaCargos(cargos)
         });
     }
+
+    const id = config.id;
 
     const canalRow =
         new ActionRowBuilder()
             .addComponents(
                 new ChannelSelectMenuBuilder()
                     .setCustomId(
-                        `rr_canal_${config.id}`
+                        `rr_canal_${id}`
                     )
                     .setPlaceholder(
                         "📢 Selecionar canal"
@@ -792,154 +1082,129 @@ async function criarPainelAdicionar(
     const row1 =
         new ActionRowBuilder()
             .addComponents(
+                botao(
+                    `rr_mensagem_${id}`,
+                    "Mensagem",
+                    "📨",
+                    ButtonStyle.Primary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_mensagem_${config.id}`
-                    )
-                    .setLabel(
-                        "Mensagem"
-                    )
-                    .setEmoji("📨")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
+                botao(
+                    `rr_embed_${id}`,
+                    "Embed",
+                    "🎨",
+                    ButtonStyle.Primary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_cargos_${config.id}`
-                    )
-                    .setLabel(
-                        "Cargos"
-                    )
-                    .setEmoji("🎭")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
+                botao(
+                    `rr_autor_${id}`,
+                    "Autor",
+                    "👤",
+                    ButtonStyle.Primary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_remover_${config.id}`
-                    )
-                    .setLabel(
-                        "Remover"
-                    )
-                    .setEmoji("🗑️")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    ),
+                botao(
+                    `rr_campos_${id}`,
+                    "Campos",
+                    "📋",
+                    ButtonStyle.Primary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_embed_${config.id}`
-                    )
-                    .setLabel(
-                        "Embed"
-                    )
-                    .setEmoji("🎨")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    )
+                botao(
+                    `rr_imagens_${id}`,
+                    "Imagens",
+                    "🖼️",
+                    ButtonStyle.Secondary
+                )
             );
 
     const row2 =
         new ActionRowBuilder()
             .addComponents(
+                botao(
+                    `rr_rodape_${id}`,
+                    "Rodapé",
+                    "📌",
+                    ButtonStyle.Secondary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_imagens_${config.id}`
-                    )
-                    .setLabel(
-                        "Imagens"
-                    )
-                    .setEmoji("🖼️")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    ),
+                botao(
+                    `rr_cargos_${id}`,
+                    "Cargos",
+                    "🎭",
+                    ButtonStyle.Primary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_rodape_${config.id}`
-                    )
-                    .setLabel(
-                        "Rodapé"
-                    )
-                    .setEmoji("📌")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    ),
+                botao(
+                    `rr_remover_${id}`,
+                    "Remover reação",
+                    "➖",
+                    ButtonStyle.Danger
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_enviar_${config.id}`
-                    )
-                    .setLabel(
-                        config.mensagem_id
-                            ? "Salvar"
-                            : "Enviar"
-                    )
-                    .setEmoji(
-                        config.mensagem_id
-                            ? "💾"
-                            : "📤"
-                    )
-                    .setStyle(
-                        ButtonStyle.Success
-                    )
+                botao(
+                    `rr_enviar_${id}`,
+                    config.mensagem_id
+                        ? "Salvar"
+                        : "Enviar",
+                    config.mensagem_id
+                        ? "💾"
+                        : "📤",
+                    ButtonStyle.Success
+                ),
+
+                botao(
+                    `rr_excluir_${id}`,
+                    "Excluir msg",
+                    "🗑️",
+                    ButtonStyle.Danger,
+                    !config.mensagem_id
+                )
             );
 
     const row3 =
         new ActionRowBuilder()
             .addComponents(
+                botao(
+                    `rr_ativar_${id}`,
+                    "Ativar",
+                    "🟢",
+                    ButtonStyle.Success,
+                    ativo
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_ativar_${config.id}`
-                    )
-                    .setLabel(
-                        "Ativar"
-                    )
-                    .setEmoji("🟢")
-                    .setStyle(
-                        ButtonStyle.Success
-                    ),
+                botao(
+                    `rr_desativar_${id}`,
+                    "Desativar",
+                    "🔴",
+                    ButtonStyle.Danger,
+                    !ativo
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_desativar_${config.id}`
-                    )
-                    .setLabel(
-                        "Desativar"
-                    )
-                    .setEmoji("🔴")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    ),
+                botao(
+                    `rr_embedtoggle_${id}`,
+                    embedLigado
+                        ? "Embed ON"
+                        : "Embed OFF",
+                    "🎨",
+                    embedLigado
+                        ? ButtonStyle.Success
+                        : ButtonStyle.Secondary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_testar_${config.id}`
-                    )
-                    .setLabel(
-                        "Testar"
-                    )
-                    .setEmoji("🧪")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    ),
+                botao(
+                    `rr_testar_${id}`,
+                    "Testar",
+                    "🧪",
+                    ButtonStyle.Secondary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_fechar_${config.id}`
-                    )
-                    .setLabel(
-                        "Fechar"
-                    )
-                    .setEmoji("❌")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
+                botao(
+                    `rr_fechar_${id}`,
+                    "Fechar",
+                    "❌",
+                    ButtonStyle.Danger
+                )
             );
 
     return {
@@ -962,6 +1227,9 @@ async function criarPainelEditar(
     config,
     cargos = []
 ) {
+    const ativo =
+        sim(config.habilitado);
+
     const painelEmbed =
         new EmbedBuilder()
             .setTitle(
@@ -986,8 +1254,10 @@ async function criarPainelEditar(
 
                     "🔒 **Modo:** somente emojis/reações",
 
-                    `🟢 **Sistema:** ${
-                        config.habilitado !== false
+                    `${
+                        ativo ? "🟢" : "🔴"
+                    } **Sistema:** ${
+                        ativo
                             ? "Ativado"
                             : "Desativado"
                     }`
@@ -1000,100 +1270,74 @@ async function criarPainelEditar(
                 "🎭 Cargos configurados",
 
             value:
-                cargos
-                    .map(
-                        cargo =>
-                            `${cargo.emoji} → <@&${cargo.cargo_id}>`
-                    )
-                    .join("\n")
-                    .slice(0, 1024)
+                linhaCargos(cargos)
         });
     }
+
+    const id = config.id;
 
     const row1 =
         new ActionRowBuilder()
             .addComponents(
+                botao(
+                    `rr_cargos_${id}`,
+                    "Cargos",
+                    "🎭",
+                    ButtonStyle.Primary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_cargos_${config.id}`
-                    )
-                    .setLabel(
-                        "Cargos / Emojis"
-                    )
-                    .setEmoji("🎭")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
+                botao(
+                    `rr_remover_${id}`,
+                    "Remover reação",
+                    "➖",
+                    ButtonStyle.Danger
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_remover_${config.id}`
-                    )
-                    .setLabel(
-                        "Remover"
-                    )
-                    .setEmoji("🗑️")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    ),
+                botao(
+                    `rr_testar_${id}`,
+                    "Aplicar",
+                    "🧪",
+                    ButtonStyle.Secondary
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_testar_${config.id}`
-                    )
-                    .setLabel(
-                        "Aplicar Reações"
-                    )
-                    .setEmoji("🧪")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    ),
+                botao(
+                    `rr_excluir_${id}`,
+                    "Excluir msg",
+                    "🗑️",
+                    ButtonStyle.Danger
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_ativar_${config.id}`
-                    )
-                    .setLabel(
-                        "Ativar"
-                    )
-                    .setEmoji("🟢")
-                    .setStyle(
-                        ButtonStyle.Success
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_desativar_${config.id}`
-                    )
-                    .setLabel(
-                        "Desativar"
-                    )
-                    .setEmoji("🔴")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
+                botao(
+                    `rr_fechar_${id}`,
+                    "Fechar",
+                    "❌",
+                    ButtonStyle.Danger
+                )
             );
 
     const row2 =
         new ActionRowBuilder()
             .addComponents(
+                botao(
+                    `rr_ativar_${id}`,
+                    "Ativar",
+                    "🟢",
+                    ButtonStyle.Success,
+                    ativo
+                ),
 
-                new ButtonBuilder()
-                    .setCustomId(
-                        `rr_fechar_${config.id}`
-                    )
-                    .setLabel(
-                        "Fechar"
-                    )
-                    .setEmoji("❌")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
+                botao(
+                    `rr_desativar_${id}`,
+                    "Desativar",
+                    "🔴",
+                    ButtonStyle.Danger,
+                    !ativo
+                )
             );
 
     return {
         embeds: [painelEmbed],
+
         components: [
             row1,
             row2
@@ -1124,6 +1368,101 @@ async function criarPainel(
         config,
         cargos
     );
+}
+
+// =====================================================
+// 🗑️ PAINEL DE CONFIRMAÇÃO DE EXCLUSÃO
+// =====================================================
+
+function criarPainelExclusao(config) {
+    const embed =
+        new EmbedBuilder()
+            .setTitle(
+                "🗑️ EXCLUIR MENSAGEM?"
+            )
+            .setColor(
+                "#FF4D4D"
+            )
+            .setDescription(
+                [
+                    `Isso vai **apagar a mensagem** \`${config.mensagem_id}\` ${
+                        config.canal_id
+                            ? `do canal <#${config.canal_id}>`
+                            : ""
+                    } e remover toda a configuração deste Reaction Role.`,
+
+                    "",
+
+                    "**Essa ação não pode ser desfeita.**"
+                ].join("\n")
+            );
+
+    const row =
+        new ActionRowBuilder()
+            .addComponents(
+                botao(
+                    `rr_confirmarexcluir_${config.id}`,
+                    "Excluir",
+                    "🗑️",
+                    ButtonStyle.Danger
+                ),
+
+                botao(
+                    `rr_cancelarexcluir_${config.id}`,
+                    "Cancelar",
+                    "↩️",
+                    ButtonStyle.Secondary
+                )
+            );
+
+    return {
+        embeds: [embed],
+        components: [row]
+    };
+}
+
+// =====================================================
+// 🔄 ATUALIZAR PAINEL NO LUGAR
+// =====================================================
+
+// Edita a MESMA mensagem do painel (não empilha mensagens novas).
+async function atualizarPainel(
+    interaction,
+    configId
+) {
+    const config =
+        await buscarConfig(
+            configId,
+            interaction.guild.id
+        );
+
+    if (!config) {
+        return interaction.update({
+            content:
+                "❌ Essa configuração não existe mais.",
+
+            embeds: [],
+
+            components: []
+        });
+    }
+
+    const cargos =
+        await buscarCargos(
+            interaction.guild.id,
+            config.mensagem_id
+        );
+
+    const painel =
+        await criarPainel(
+            config,
+            cargos
+        );
+
+    return interaction.update({
+        content: null,
+        ...painel
+    });
 }
 
 // =====================================================
@@ -1234,6 +1573,25 @@ function modalEmbed(config) {
                 config.embed_cor || ""
             );
 
+    const url =
+        new TextInputBuilder()
+            .setCustomId(
+                "url"
+            )
+            .setLabel(
+                "Link do título (opcional)"
+            )
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setPlaceholder(
+                "https://..."
+            )
+            .setValue(
+                config.embed_url || ""
+            );
+
     modal.addComponents(
         new ActionRowBuilder()
             .addComponents(titulo),
@@ -1242,7 +1600,10 @@ function modalEmbed(config) {
             .addComponents(descricao),
 
         new ActionRowBuilder()
-            .addComponents(cor)
+            .addComponents(cor),
+
+        new ActionRowBuilder()
+            .addComponents(url)
     );
 
     return modal;
@@ -1335,9 +1696,53 @@ function modalRodape(config) {
                 config.footer_texto || ""
             );
 
+    const icone =
+        new TextInputBuilder()
+            .setCustomId(
+                "icone"
+            )
+            .setLabel(
+                "Ícone do rodapé (URL)"
+            )
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setPlaceholder(
+                "https://..."
+            )
+            .setValue(
+                config.footer_icone || ""
+            );
+
+    const timestamp =
+        new TextInputBuilder()
+            .setCustomId(
+                "timestamp"
+            )
+            .setLabel(
+                "Mostrar data/hora? (sim/não)"
+            )
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setMaxLength(3)
+            .setValue(
+                sim(config.embed_timestamp)
+                    ? "sim"
+                    : "não"
+            );
+
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(rodape)
+            .addComponents(rodape),
+
+        new ActionRowBuilder()
+            .addComponents(icone),
+
+        new ActionRowBuilder()
+            .addComponents(timestamp)
     );
 
     return modal;
@@ -1395,6 +1800,111 @@ function modalCargo(config) {
 
         new ActionRowBuilder()
             .addComponents(cargo)
+    );
+
+    return modal;
+}
+
+// =====================================================
+// 👤 MODAL AUTOR
+// =====================================================
+
+function modalAutor(config) {
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `rr_modal_autor_${config.id}`
+            )
+            .setTitle(
+                "👤 Autor do Embed"
+            );
+
+    const nome =
+        new TextInputBuilder()
+            .setCustomId(
+                "nome"
+            )
+            .setLabel(
+                "Nome do autor"
+            )
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setMaxLength(256)
+            .setValue(
+                config.embed_autor_nome || ""
+            );
+
+    const icone =
+        new TextInputBuilder()
+            .setCustomId(
+                "icone"
+            )
+            .setLabel(
+                "Ícone do autor (URL)"
+            )
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(false)
+            .setPlaceholder(
+                "https://..."
+            )
+            .setValue(
+                config.embed_autor_icone || ""
+            );
+
+    modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(nome),
+
+        new ActionRowBuilder()
+            .addComponents(icone)
+    );
+
+    return modal;
+}
+
+// =====================================================
+// 📋 MODAL CAMPOS
+// =====================================================
+
+function modalCampos(config) {
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `rr_modal_campos_${config.id}`
+            )
+            .setTitle(
+                "📋 Campos do Embed"
+            );
+
+    const campos =
+        new TextInputBuilder()
+            .setCustomId(
+                "campos"
+            )
+            .setLabel(
+                "Um campo por linha (máx. 10)"
+            )
+            .setStyle(
+                TextInputStyle.Paragraph
+            )
+            .setRequired(false)
+            .setMaxLength(3000)
+            .setPlaceholder(
+                "Nome | Valor | sim (lado a lado) ou não"
+            )
+            .setValue(
+                camposParaTexto(
+                    config.embed_campos
+                )
+            );
+
+    modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(campos)
     );
 
     return modal;
@@ -1647,124 +2157,119 @@ async function handleReaction(
     adicionar
 ) {
     try {
-        if (!reaction.guild) return;
-        if (user.bot) return;
-
         /*
-         * IMPORTANTE:
-         * O sistema agora funciona somente quando
-         * o usuário ADICIONA uma reação.
-         *
-         * Se ele remover manualmente a reação,
-         * o cargo NÃO será removido.
-         *
-         * A própria reação é removida pelo bot
-         * depois que o cargo é alternado.
+         * O sistema funciona somente quando o usuário
+         * ADICIONA uma reação. Remover a reação (inclusive
+         * pelo próprio bot) não mexe no cargo.
          */
-        if (!adicionar) {
-            return;
-        }
+        if (!adicionar) return;
+
+        if (user.bot) return;
 
         if (reaction.partial) {
             await reaction.fetch();
         }
 
-        const guildId =
-            reaction.guild.id;
+        if (reaction.message.partial) {
+            await reaction.message.fetch();
+        }
+
+        // MessageReaction NÃO tem .guild — o servidor vem da mensagem.
+        const guild =
+            reaction.message.guild;
+
+        if (!guild) return;
 
         const mensagemId =
             reaction.message.id;
 
-        const emoji =
-            normalizarEmoji(
-                reaction.emoji
-            );
-
         const config =
             await buscarConfigMensagem(
-                guildId,
+                guild.id,
                 mensagemId
             );
 
         if (
             !config ||
-            config.habilitado === false
+            !sim(config.habilitado)
         ) {
             return;
         }
 
-        const [rows] =
-            await mysqlPool.query(
-                `
-                SELECT *
-                FROM react_roles
-                WHERE guild_id = ?
-                  AND mensagem_id = ?
-                  AND emoji = ?
-                LIMIT 1
-                `,
-                [
-                    guildId,
-                    mensagemId,
-                    emoji
-                ]
+        const cargos =
+            await buscarCargos(
+                guild.id,
+                mensagemId
             );
 
-        if (!rows.length) {
-            return;
-        }
-
-        const cargoId =
-            rows[0].cargo_id;
-
-        const membro =
-            await reaction.guild.members.fetch(
-                user.id
+        const chave =
+            chaveEmoji(
+                reaction.emoji
             );
 
-        const cargo =
-            await reaction.guild.roles.fetch(
-                cargoId
+        const item =
+            cargos.find(
+                cargo =>
+                    chaveEmoji(cargo.emoji) === chave
             );
 
-        if (!cargo) {
-            return;
-        }
-
-        if (!cargo.editable) {
-            console.error(
-                `❌ Não posso gerenciar o cargo ${cargo.name}.`
-            );
-
-            return;
-        }
+        // Emoji que não é do Reaction Role: não mexe em nada.
+        if (!item) return;
 
         // =================================================
         // 🔄 TOGGLE DO CARGO
         // =================================================
 
-        if (
-            membro.roles.cache.has(
-                cargo.id
-            )
-        ) {
-            await membro.roles.remove(
-                cargo,
-                "Reaction Role - Toggle"
-            );
+        try {
+            const membro =
+                await guild.members.fetch(
+                    user.id
+                );
 
-            console.log(
-                `🎭 Cargo ${cargo.name} removido de ${user.tag}.`
-            );
+            const cargo =
+                await guild.roles.fetch(
+                    item.cargo_id
+                );
 
-        } else {
-            await membro.roles.add(
-                cargo,
-                "Reaction Role - Toggle"
-            );
+            if (!cargo) {
+                console.error(
+                    `❌ O cargo ${item.cargo_id} não existe mais.`
+                );
 
-            console.log(
-                `🎭 Cargo ${cargo.name} dado para ${user.tag}.`
+            } else if (!cargo.editable) {
+                console.error(
+                    `❌ Não posso gerenciar o cargo ${cargo.name}. Coloque o cargo do bot acima dele.`
+                );
+
+            } else if (
+                membro.roles.cache.has(
+                    cargo.id
+                )
+            ) {
+                await membro.roles.remove(
+                    cargo,
+                    "Reaction Role - Toggle"
+                );
+
+                console.log(
+                    `🎭 Cargo ${cargo.name} removido de ${user.tag || user.id}.`
+                );
+
+            } else {
+                await membro.roles.add(
+                    cargo,
+                    "Reaction Role - Toggle"
+                );
+
+                console.log(
+                    `🎭 Cargo ${cargo.name} dado para ${user.tag || user.id}.`
+                );
+            }
+
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao alternar o cargo:",
+                erro
             );
         }
 
@@ -1778,7 +2283,7 @@ async function handleReaction(
             );
         } catch (erro) {
             console.error(
-                "❌ Não consegui remover a reação do usuário:",
+                "❌ Não consegui remover a reação do usuário (o bot tem Gerenciar Mensagens?):",
                 erro
             );
         }
@@ -1875,6 +2380,18 @@ async function tratarInteracao(
             await interaction.reply({
                 content:
                     "❌ O canal de uma mensagem existente não pode ser alterado aqui.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        if (config.mensagem_id) {
+            await interaction.reply({
+                content:
+                    "❌ A mensagem já foi enviada. Para mudar de canal, exclua a mensagem e crie outra.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -2029,6 +2546,188 @@ async function tratarInteracao(
         await interaction.showModal(
             modalRodape(config)
         );
+
+        return true;
+    }
+
+    // =================================================
+    // 👤 AUTOR / 📋 CAMPOS
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        (
+            acao === "autor" ||
+            acao === "campos"
+        )
+    ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ O Embed dessa mensagem não pode ser alterado por este painel.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        await interaction.showModal(
+            acao === "autor"
+                ? modalAutor(config)
+                : modalCampos(config)
+        );
+
+        return true;
+    }
+
+    // =================================================
+    // 🎨 EMBED ON / OFF
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        acao === "embedtoggle"
+    ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ O Embed dessa mensagem não pode ser alterado por este painel.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        await atualizarConfig(
+            config.id,
+            interaction.guild.id,
+            {
+                embed_habilitado:
+                    !sim(config.embed_habilitado)
+            }
+        );
+
+        await atualizarPainel(
+            interaction,
+            config.id
+        );
+
+        return true;
+    }
+
+    // =================================================
+    // 🗑️ EXCLUIR MENSAGEM DO CANAL
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        acao === "excluir"
+    ) {
+        if (!config.mensagem_id) {
+            await interaction.reply({
+                content:
+                    "❌ Ainda não existe uma mensagem para excluir.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        await interaction.update({
+            content: null,
+            ...criarPainelExclusao(config)
+        });
+
+        return true;
+    }
+
+    if (
+        interaction.isButton() &&
+        acao === "cancelarexcluir"
+    ) {
+        await atualizarPainel(
+            interaction,
+            config.id
+        );
+
+        return true;
+    }
+
+    if (
+        interaction.isButton() &&
+        acao === "confirmarexcluir"
+    ) {
+        await interaction.deferUpdate();
+
+        try {
+            if (
+                config.canal_id &&
+                config.mensagem_id
+            ) {
+                try {
+                    const canal =
+                        await interaction.guild.channels.fetch(
+                            config.canal_id
+                        );
+
+                    if (
+                        canal &&
+                        canal.isTextBased()
+                    ) {
+                        const mensagem =
+                            await canal.messages.fetch(
+                                config.mensagem_id
+                            );
+
+                        await mensagem.delete();
+                    }
+
+                } catch (erro) {
+                    // 10008 = a mensagem já não existe (tudo bem).
+                    // 10003 = o canal já não existe (tudo bem).
+                    if (
+                        erro.code !== 10008 &&
+                        erro.code !== 10003
+                    ) {
+                        throw erro;
+                    }
+                }
+            }
+
+            await excluirConfigDoBanco(
+                config,
+                interaction.guild.id
+            );
+
+            await interaction.editReply({
+                content:
+                    "🗑️ **Mensagem excluída e configuração removida.**",
+
+                embeds: [],
+
+                components: []
+            });
+
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao excluir a mensagem:",
+                erro
+            );
+
+            await interaction.followUp({
+                content:
+                    "❌ Não consegui excluir a mensagem. Verifique se o bot tem a permissão **Gerenciar Mensagens** no canal.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+        }
 
         return true;
     }
@@ -2197,6 +2896,11 @@ async function tratarInteracao(
             return true;
         }
 
+        await interaction.deferReply({
+            flags:
+                MessageFlags.Ephemeral
+        });
+
         try {
             const canal =
                 await interaction.guild.channels.fetch(
@@ -2229,12 +2933,9 @@ async function tratarInteracao(
                     cargos
                 );
 
-                await interaction.reply({
+                await interaction.editReply({
                     content:
-                        "🧪 **Reações aplicadas à mensagem existente com sucesso!**",
-
-                    flags:
-                        MessageFlags.Ephemeral
+                        "🧪 **Reações aplicadas à mensagem existente com sucesso!**"
                 });
 
                 return true;
@@ -2250,12 +2951,9 @@ async function tratarInteracao(
                 cargos
             );
 
-            await interaction.reply({
+            await interaction.editReply({
                 content:
-                    "🧪 **Reaction Role atualizado com sucesso!**",
-
-                flags:
-                    MessageFlags.Ephemeral
+                    "🧪 **Reaction Role atualizado com sucesso!**"
             });
 
         } catch (erro) {
@@ -2264,12 +2962,9 @@ async function tratarInteracao(
                 erro
             );
 
-            await interaction.reply({
+            await interaction.editReply({
                 content:
-                    "❌ Não consegui testar o Reaction Role. Verifique se a mensagem ainda existe.",
-
-                flags:
-                    MessageFlags.Ephemeral
+                    "❌ Não consegui testar o Reaction Role. Verifique se a mensagem ainda existe."
             });
         }
 
@@ -2284,6 +2979,9 @@ async function tratarInteracao(
         interaction.isButton() &&
         acao === "enviar"
     ) {
+        // Enviar a mensagem e reagir pode passar de 3s.
+        await interaction.deferUpdate();
+
         try {
             const resultado =
                 await enviarOuEditar(
@@ -2292,7 +2990,7 @@ async function tratarInteracao(
                 );
 
             if (resultado.erro) {
-                await interaction.reply({
+                await interaction.followUp({
                     content:
                         resultado.erro,
 
@@ -2321,9 +3019,10 @@ async function tratarInteracao(
                     cargos
                 );
 
-            await interaction.update(
-                painel
-            );
+            await interaction.editReply({
+                content: null,
+                ...painel
+            });
 
         } catch (erro) {
             console.error(
@@ -2331,15 +3030,13 @@ async function tratarInteracao(
                 erro
             );
 
-            if (!interaction.replied) {
-                await interaction.reply({
-                    content:
-                        "❌ Não consegui salvar o Reaction Role.",
+            await interaction.followUp({
+                content:
+                    "❌ Não consegui salvar o Reaction Role.",
 
-                    flags:
-                        MessageFlags.Ephemeral
-                });
-            }
+                flags:
+                    MessageFlags.Ephemeral
+            });
         }
 
         return true;
@@ -2468,6 +3165,23 @@ async function tratarInteracao(
                 return true;
             }
 
+            const url =
+                interaction.fields.getTextInputValue(
+                    "url"
+                ).trim();
+
+            if (!urlValida(url)) {
+                await interaction.reply({
+                    content:
+                        "❌ O link do título é inválido.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
@@ -2475,6 +3189,7 @@ async function tratarInteracao(
                     embed_titulo = ?,
                     embed_descricao = ?,
                     embed_cor = ?,
+                    embed_url = ?,
                     embed_habilitado = TRUE,
 
                     atualizado_em =
@@ -2487,6 +3202,7 @@ async function tratarInteracao(
                     titulo || null,
                     descricao || null,
                     cor,
+                    url || null,
                     config.id,
                     interaction.guild.id
                 ]
@@ -2579,12 +3295,38 @@ async function tratarInteracao(
                     "rodape"
                 ).trim();
 
+            const icone =
+                interaction.fields.getTextInputValue(
+                    "icone"
+                ).trim();
+
+            if (!urlValida(icone)) {
+                await interaction.reply({
+                    content:
+                        "❌ A URL do ícone do rodapé é inválida.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const timestamp =
+                REGEX_SIM.test(
+                    interaction.fields.getTextInputValue(
+                        "timestamp"
+                    ).trim()
+                );
+
             await mysqlPool.query(
                 `
                 UPDATE react_role_configs
                 SET
                     footer_texto = ?,
                     footer_habilitado = ?,
+                    footer_icone = ?,
+                    embed_timestamp = ?,
 
                     atualizado_em =
                         UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
@@ -2595,9 +3337,99 @@ async function tratarInteracao(
                 [
                     rodape || null,
                     rodape ? true : false,
+                    icone || null,
+                    timestamp,
                     config.id,
                     interaction.guild.id
                 ]
+            );
+        }
+
+        // =============================================
+        // 👤 AUTOR
+        // =============================================
+
+        if (tipo === "autor") {
+            if (somenteReacoes) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa mensagem está no modo somente reações.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const nome =
+                interaction.fields.getTextInputValue(
+                    "nome"
+                ).trim();
+
+            const icone =
+                interaction.fields.getTextInputValue(
+                    "icone"
+                ).trim();
+
+            if (!urlValida(icone)) {
+                await interaction.reply({
+                    content:
+                        "❌ A URL do ícone do autor é inválida.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            await atualizarConfig(
+                config.id,
+                interaction.guild.id,
+                {
+                    embed_autor_nome: nome || null,
+                    embed_autor_icone: icone || null,
+                    embed_habilitado: true
+                }
+            );
+        }
+
+        // =============================================
+        // 📋 CAMPOS
+        // =============================================
+
+        if (tipo === "campos") {
+            if (somenteReacoes) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa mensagem está no modo somente reações.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const campos =
+                textoParaCampos(
+                    interaction.fields.getTextInputValue(
+                        "campos"
+                    )
+                );
+
+            await atualizarConfig(
+                config.id,
+                interaction.guild.id,
+                {
+                    embed_campos:
+                        campos.length
+                            ? JSON.stringify(campos)
+                            : null,
+
+                    embed_habilitado: true
+                }
             );
         }
 
@@ -2874,12 +3706,25 @@ async function tratarInteracao(
                 cargos
             );
 
-        await interaction.reply({
-            ...painel,
+        // O modal veio de um botão do painel: edita o painel NO LUGAR
+        // (em vez de mandar outra mensagem e deixar a antiga).
+        if (
+            interaction.isFromMessage &&
+            interaction.isFromMessage()
+        ) {
+            await interaction.update({
+                content: null,
+                ...painel
+            });
 
-            flags:
-                MessageFlags.Ephemeral
-        });
+        } else {
+            await interaction.reply({
+                ...painel,
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+        }
 
         return true;
     }
