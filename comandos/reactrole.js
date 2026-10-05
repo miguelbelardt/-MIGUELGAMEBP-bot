@@ -22,14 +22,46 @@ const { mysqlPool } = require("../database/database");
 const data = new SlashCommandBuilder()
     .setName("reactrole")
     .setDescription(
-        "Abre o painel de configuração do Reaction Role."
+        "Sistema de configuração de Reaction Role."
     )
     .setDefaultMemberPermissions(
         PermissionFlagsBits.ManageGuild
+    )
+
+    // =================================================
+    // ➕ ADICIONAR
+    // =================================================
+
+    .addSubcommand(subcommand =>
+        subcommand
+            .setName("adicionar")
+            .setDescription(
+                "Cria uma nova mensagem de Reaction Role."
+            )
+    )
+
+    // =================================================
+    // ✏️ EDITAR
+    // =================================================
+
+    .addSubcommand(subcommand =>
+        subcommand
+            .setName("editar")
+            .setDescription(
+                "Configura Reaction Roles em uma mensagem existente."
+            )
+            .addStringOption(option =>
+                option
+                    .setName("mensagem")
+                    .setDescription(
+                        "ID da mensagem existente."
+                    )
+                    .setRequired(true)
+            )
     );
 
 // =====================================================
-// 🛠️ GARANTIR TABELA DE CONFIGURAÇÃO
+// 🛠️ GARANTIR TABELAS / COLUNAS
 // =====================================================
 
 let tabelaGarantida = false;
@@ -61,6 +93,8 @@ async function garantirTabela() {
 
             habilitado BOOLEAN NOT NULL DEFAULT TRUE,
 
+            somente_reacoes BOOLEAN NOT NULL DEFAULT FALSE,
+
             criado_em BIGINT NOT NULL DEFAULT (
                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
             ),
@@ -76,6 +110,35 @@ async function garantirTabela() {
             )
         )
     `);
+
+    // =================================================
+    // 🔧 GARANTIR COLUNA EM BANCO ANTIGO
+    // =================================================
+
+    try {
+        const [colunas] =
+            await mysqlPool.query(
+                `
+                SHOW COLUMNS
+                FROM react_role_configs
+                LIKE 'somente_reacoes'
+                `
+            );
+
+        if (!colunas.length) {
+            await mysqlPool.query(
+                `
+                ALTER TABLE react_role_configs
+                ADD COLUMN somente_reacoes BOOLEAN NOT NULL DEFAULT FALSE
+                `
+            );
+        }
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao verificar coluna somente_reacoes:",
+            erro
+        );
+    }
 
     tabelaGarantida = true;
 }
@@ -112,11 +175,13 @@ function normalizarEmoji(emoji) {
         return `${emoji.name}:${emoji.id}`;
     }
 
-    const texto = String(emoji).trim();
+    const texto =
+        String(emoji).trim();
 
-    const customEmoji = texto.match(
-        /^<a?:([^:>]+):(\d+)>$/
-    );
+    const customEmoji =
+        texto.match(
+            /^<a?:([^:>]+):(\d+)>$/
+        );
 
     if (customEmoji) {
         return `${customEmoji[1]}:${customEmoji[2]}`;
@@ -141,10 +206,23 @@ function urlValida(url) {
 }
 
 // =====================================================
+// 🔎 VALIDAR ID DISCORD
+// =====================================================
+
+function idDiscordValido(id) {
+    return /^\d{17,20}$/.test(
+        String(id || "").trim()
+    );
+}
+
+// =====================================================
 // 💾 CRIAR CONFIGURAÇÃO
 // =====================================================
 
-async function criarConfig(guildId) {
+async function criarConfig(
+    guildId,
+    somenteReacoes = false
+) {
     await garantirTabela();
 
     const [resultado] =
@@ -153,11 +231,15 @@ async function criarConfig(guildId) {
             INSERT INTO react_role_configs (
                 guild_id,
                 habilitado,
-                embed_habilitado
+                embed_habilitado,
+                somente_reacoes
             )
-            VALUES (?, TRUE, TRUE)
+            VALUES (?, TRUE, TRUE, ?)
             `,
-            [guildId]
+            [
+                guildId,
+                somenteReacoes
+            ]
         );
 
     return resultado.insertId;
@@ -218,68 +300,6 @@ async function buscarConfigMensagem(
         );
 
     return rows[0] || null;
-}
-
-// =====================================================
-// 💾 ATUALIZAR CONFIG
-// =====================================================
-
-async function atualizarConfig(
-    id,
-    guildId,
-    dados
-) {
-    await garantirTabela();
-
-    await mysqlPool.query(
-        `
-        UPDATE react_role_configs
-        SET
-            canal_id = ?,
-            mensagem_id = ?,
-            content = ?,
-
-            embed_habilitado = ?,
-            embed_titulo = ?,
-            embed_descricao = ?,
-            embed_cor = ?,
-
-            footer_habilitado = ?,
-            footer_texto = ?,
-
-            imagem = ?,
-            thumbnail = ?,
-
-            habilitado = ?,
-
-            atualizado_em =
-                UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-
-        WHERE id = ?
-          AND guild_id = ?
-        `,
-        [
-            dados.canal_id || null,
-            dados.mensagem_id || null,
-            dados.content || null,
-
-            dados.embed_habilitado !== false,
-            dados.embed_titulo || null,
-            dados.embed_descricao || null,
-            dados.embed_cor || null,
-
-            dados.footer_habilitado === true,
-            dados.footer_texto || null,
-
-            dados.imagem || null,
-            dados.thumbnail || null,
-
-            dados.habilitado !== false,
-
-            id,
-            guildId
-        ]
-    );
 }
 
 // =====================================================
@@ -587,11 +607,87 @@ async function aplicarMensagem(
 
     await mensagem.edit({
         content,
+
         embeds:
             embed
                 ? [embed]
                 : []
     });
+}
+
+// =====================================================
+// 🎭 ADICIONAR REAÇÕES SALVAS
+// =====================================================
+
+async function adicionarReacoes(
+    mensagem,
+    cargos
+) {
+    for (const item of cargos) {
+        try {
+            const jaExiste =
+                mensagem.reactions.cache.find(
+                    reaction =>
+                        normalizarEmoji(
+                            reaction.emoji
+                        ) === item.emoji
+                );
+
+            if (!jaExiste) {
+                await mensagem.react(
+                    item.emoji
+                );
+            }
+
+        } catch (erro) {
+            console.error(
+                `❌ Não consegui adicionar o emoji ${item.emoji}:`,
+                erro
+            );
+        }
+    }
+}
+
+// =====================================================
+// 🔎 LOCALIZAR MENSAGEM PELO ID
+// =====================================================
+
+async function localizarMensagem(
+    guild,
+    mensagemId
+) {
+    const canais =
+        guild.channels.cache.filter(
+            canal =>
+                canal.isTextBased() &&
+                (
+                    canal.type ===
+                        ChannelType.GuildText ||
+                    canal.type ===
+                        ChannelType.GuildAnnouncement
+                )
+        );
+
+    for (const [, canal] of canais) {
+        try {
+            const mensagem =
+                await canal.messages.fetch(
+                    mensagemId
+                );
+
+            if (mensagem) {
+                return {
+                    mensagem,
+                    canal
+                };
+            }
+
+        } catch {
+            // Mensagem não está neste canal.
+        }
+    }
+
+    return null;
 }
 
 // =====================================================
@@ -602,10 +698,16 @@ async function criarPainel(
     config,
     cargos = []
 ) {
-    const embed =
+    const somenteReacoes =
+        config.somente_reacoes === true ||
+        config.somente_reacoes === 1;
+
+    const painelEmbed =
         new EmbedBuilder()
             .setTitle(
-                "🎭 CONFIGURAÇÃO DO REACTION ROLE"
+                somenteReacoes
+                    ? "🎭 REACTION ROLE — MENSAGEM EXISTENTE"
+                    : "🎭 CONFIGURAÇÃO DO REACTION ROLE"
             )
             .setColor(
                 config.embed_cor ||
@@ -629,11 +731,13 @@ async function criarPainel(
                         cargos.length
                     } configurado(s)`,
 
-                    `🎨 **Embed:** ${
-                        config.embed_habilitado !== false
-                            ? "Ativado"
-                            : "Desativado"
-                    }`,
+                    somenteReacoes
+                        ? "🔒 **Modo:** somente emojis/reactions"
+                        : `🎨 **Embed:** ${
+                            config.embed_habilitado !== false
+                                ? "Ativado"
+                                : "Desativado"
+                        }`,
 
                     `🟢 **Sistema:** ${
                         config.habilitado !== false
@@ -644,7 +748,7 @@ async function criarPainel(
             );
 
     if (cargos.length) {
-        embed.addFields({
+        painelEmbed.addFields({
             name:
                 "🎭 Cargos configurados",
 
@@ -660,7 +764,83 @@ async function criarPainel(
     }
 
     // =================================================
-    // 📢 CANAL
+    // 🔒 PAINEL DE MENSAGEM EXISTENTE
+    // =================================================
+
+    if (somenteReacoes) {
+        const row1 =
+            new ActionRowBuilder()
+                .addComponents(
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `rr_cargos_${config.id}`
+                        )
+                        .setLabel(
+                            "Cargos / Emojis"
+                        )
+                        .setEmoji("🎭")
+                        .setStyle(
+                            ButtonStyle.Primary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `rr_testar_${config.id}`
+                        )
+                        .setLabel(
+                            "Aplicar Reações"
+                        )
+                        .setEmoji("🧪")
+                        .setStyle(
+                            ButtonStyle.Secondary
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `rr_ativar_${config.id}`
+                        )
+                        .setLabel(
+                            "Ativar"
+                        )
+                        .setEmoji("🟢")
+                        .setStyle(
+                            ButtonStyle.Success
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `rr_desativar_${config.id}`
+                        )
+                        .setLabel(
+                            "Desativar"
+                        )
+                        .setEmoji("🔴")
+                        .setStyle(
+                            ButtonStyle.Danger
+                        ),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `rr_fechar_${config.id}`
+                        )
+                        .setLabel(
+                            "Fechar"
+                        )
+                        .setEmoji("❌")
+                        .setStyle(
+                            ButtonStyle.Danger
+                        )
+                );
+
+        return {
+            embeds: [painelEmbed],
+            components: [row1]
+        };
+    }
+
+    // =================================================
+    // 📢 PAINEL COMPLETO
     // =================================================
 
     const canalRow =
@@ -680,10 +860,6 @@ async function criarPainel(
                     .setMinValues(1)
                     .setMaxValues(1)
             );
-
-    // =================================================
-    // 🔧 PRIMEIRA LINHA
-    // =================================================
 
     const row1 =
         new ActionRowBuilder()
@@ -725,10 +901,6 @@ async function criarPainel(
                         ButtonStyle.Primary
                     )
             );
-
-    // =================================================
-    // 🖼️ SEGUNDA LINHA
-    // =================================================
 
     const row2 =
         new ActionRowBuilder()
@@ -776,10 +948,6 @@ async function criarPainel(
                         ButtonStyle.Success
                     )
             );
-
-    // =================================================
-    // ⚙️ TERCEIRA LINHA
-    // =================================================
 
     const row3 =
         new ActionRowBuilder()
@@ -835,7 +1003,7 @@ async function criarPainel(
             );
 
     return {
-        embeds: [embed],
+        embeds: [painelEmbed],
 
         components: [
             canalRow,
@@ -1086,7 +1254,7 @@ function modalCargo(config) {
                 `rr_modal_cargo_${config.id}`
             )
             .setTitle(
-                "🎭 Adicionar Cargo"
+                "🎭 Adicionar Cargo / Emoji"
             );
 
     const emoji =
@@ -1144,6 +1312,74 @@ async function enviarOuEditar(
     interaction,
     config
 ) {
+    // =================================================
+    // 🔒 MODO SOMENTE REAÇÕES
+    // =================================================
+
+    if (
+        config.somente_reacoes === true ||
+        config.somente_reacoes === 1
+    ) {
+        if (!config.canal_id) {
+            return {
+                erro:
+                    "❌ Não encontrei o canal da mensagem."
+            };
+        }
+
+        try {
+            const canal =
+                await interaction.guild.channels.fetch(
+                    config.canal_id
+                );
+
+            if (
+                !canal ||
+                !canal.isTextBased()
+            ) {
+                return {
+                    erro:
+                        "❌ O canal da mensagem é inválido."
+                };
+            }
+
+            const mensagem =
+                await canal.messages.fetch(
+                    config.mensagem_id
+                );
+
+            const cargos =
+                await buscarCargos(
+                    interaction.guild.id,
+                    config.mensagem_id
+                );
+
+            await adicionarReacoes(
+                mensagem,
+                cargos
+            );
+
+            return {
+                mensagem
+            };
+
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao aplicar reações na mensagem existente:",
+                erro
+            );
+
+            return {
+                erro:
+                    "❌ Não consegui acessar a mensagem existente."
+            };
+        }
+    }
+
+    // =================================================
+    // 📢 VERIFICAR CANAL
+    // =================================================
+
     if (!config.canal_id) {
         return {
             erro:
@@ -1182,7 +1418,7 @@ async function enviarOuEditar(
     let mensagem;
 
     // =================================================
-    // ✏️ EDITAR MENSAGEM EXISTENTE
+    // ✏️ EDITAR MENSAGEM DO SISTEMA
     // =================================================
 
     if (config.mensagem_id) {
@@ -1226,6 +1462,7 @@ async function enviarOuEditar(
                             ? [embed]
                             : []
                 });
+
         } catch (erro) {
             console.error(
                 "❌ Erro ao enviar mensagem do Reaction Role:",
@@ -1269,21 +1506,13 @@ async function enviarOuEditar(
             config.mensagem_id
         );
 
-    for (const item of cargos) {
-        try {
-            await mensagem.react(
-                item.emoji
-            );
-        } catch (erro) {
-            console.error(
-                `❌ Não consegui adicionar o emoji ${item.emoji}:`,
-                erro
-            );
-        }
-    }
+    await adicionarReacoes(
+        mensagem,
+        cargos
+    );
 
     // =================================================
-    // 🔄 SINCRONIZAR CONFIG
+    // 🔄 SINCRONIZAR
     // =================================================
 
     await sincronizarCargos(
@@ -1504,6 +1733,10 @@ async function tratarInteracao(
         return true;
     }
 
+    const somenteReacoes =
+        config.somente_reacoes === true ||
+        config.somente_reacoes === 1;
+
     // =================================================
     // 📢 CANAL
     // =================================================
@@ -1512,6 +1745,18 @@ async function tratarInteracao(
         interaction.isChannelSelectMenu() &&
         acao === "canal"
     ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ Essa configuração é de uma mensagem existente. O canal não pode ser alterado por aqui.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         const canalId =
             interaction.values[0];
 
@@ -1562,6 +1807,18 @@ async function tratarInteracao(
         interaction.isButton() &&
         acao === "mensagem"
     ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ O modo **editar** não altera a mensagem existente. Ele serve somente para configurar os emojis e cargos.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         await interaction.showModal(
             modalMensagem(config)
         );
@@ -1577,6 +1834,18 @@ async function tratarInteracao(
         interaction.isButton() &&
         acao === "embed"
     ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ O modo **editar** não altera o Embed da mensagem existente.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         await interaction.showModal(
             modalEmbed(config)
         );
@@ -1592,6 +1861,18 @@ async function tratarInteracao(
         interaction.isButton() &&
         acao === "imagens"
     ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ O modo **editar** não altera imagens da mensagem existente.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         await interaction.showModal(
             modalImagens(config)
         );
@@ -1607,6 +1888,18 @@ async function tratarInteracao(
         interaction.isButton() &&
         acao === "rodape"
     ) {
+        if (somenteReacoes) {
+            await interaction.reply({
+                content:
+                    "❌ O modo **editar** não altera o rodapé da mensagem existente.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         await interaction.showModal(
             modalRodape(config)
         );
@@ -1625,7 +1918,7 @@ async function tratarInteracao(
         if (!config.mensagem_id) {
             await interaction.reply({
                 content:
-                    "❌ Primeiro clique em **📤 Enviar** para criar a mensagem. Depois você poderá adicionar os cargos.",
+                    "❌ Primeiro envie a mensagem.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -1732,7 +2025,7 @@ async function tratarInteracao(
     }
 
     // =================================================
-    // 🧪 TESTAR
+    // 🧪 TESTAR / APLICAR REAÇÕES
     // =================================================
 
     if (
@@ -1771,9 +2064,45 @@ async function tratarInteracao(
                     config.mensagem_id
                 );
 
+            const cargos =
+                await buscarCargos(
+                    interaction.guild.id,
+                    config.mensagem_id
+                );
+
+            // =========================================
+            // 🔒 MENSAGEM EXISTENTE
+            // =========================================
+
+            if (somenteReacoes) {
+                await adicionarReacoes(
+                    mensagem,
+                    cargos
+                );
+
+                await interaction.reply({
+                    content:
+                        "🧪 **Reações aplicadas à mensagem existente com sucesso!**",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            // =========================================
+            // 📤 MENSAGEM DO SISTEMA
+            // =========================================
+
             await aplicarMensagem(
                 mensagem,
                 config
+            );
+
+            await adicionarReacoes(
+                mensagem,
+                cargos
             );
 
             await interaction.reply({
@@ -1907,6 +2236,18 @@ async function tratarInteracao(
         // =============================================
 
         if (tipo === "mensagem") {
+            if (somenteReacoes) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa mensagem está no modo somente reações.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
             const content =
                 interaction.fields.getTextInputValue(
                     "content"
@@ -1935,6 +2276,18 @@ async function tratarInteracao(
         // =============================================
 
         if (tipo === "embed") {
+            if (somenteReacoes) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa mensagem está no modo somente reações.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
             const titulo =
                 interaction.fields.getTextInputValue(
                     "titulo"
@@ -2001,6 +2354,18 @@ async function tratarInteracao(
         // =============================================
 
         if (tipo === "imagens") {
+            if (somenteReacoes) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa mensagem está no modo somente reações.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
             const imagem =
                 interaction.fields.getTextInputValue(
                     "imagem"
@@ -2054,6 +2419,18 @@ async function tratarInteracao(
         // =============================================
 
         if (tipo === "rodape") {
+            if (somenteReacoes) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa mensagem está no modo somente reações.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
             const rodape =
                 interaction.fields.getTextInputValue(
                     "rodape"
@@ -2090,7 +2467,7 @@ async function tratarInteracao(
             if (!config.mensagem_id) {
                 await interaction.reply({
                     content:
-                        "❌ Envie a mensagem primeiro.",
+                        "❌ Primeiro envie ou selecione uma mensagem.",
 
                     flags:
                         MessageFlags.Ephemeral
@@ -2108,6 +2485,18 @@ async function tratarInteracao(
                 interaction.fields.getTextInputValue(
                     "cargo"
                 ).trim();
+
+            if (!idDiscordValido(cargoId)) {
+                await interaction.reply({
+                    content:
+                        "❌ O ID do cargo não é válido.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
 
             const cargo =
                 await interaction.guild.roles.fetch(
@@ -2176,9 +2565,14 @@ async function tratarInteracao(
                     );
 
                 try {
+                    // =================================
+                    // 🎭 ADICIONAR REAÇÃO
+                    // =================================
+
                     await mensagem.react(
                         emojiNormalizado
                     );
+
                 } catch (erro) {
                     console.error(
                         "❌ Erro ao adicionar reação:",
@@ -2195,6 +2589,10 @@ async function tratarInteracao(
 
                     return true;
                 }
+
+                // =====================================
+                // 💾 SALVAR RELAÇÃO EMOJI → CARGO
+                // =====================================
 
                 await salvarCargo({
                     guildId:
@@ -2287,6 +2685,7 @@ async function execute(interaction) {
 
     try {
         await garantirTabela();
+
     } catch (erro) {
         console.error(
             "❌ Erro ao verificar tabela do Reaction Role:",
@@ -2303,29 +2702,295 @@ async function execute(interaction) {
     }
 
     try {
+        const subcomando =
+            interaction.options.getSubcommand();
+
         // =================================================
-        // 🆕 CRIAR UMA NOVA CONFIGURAÇÃO
+        // ➕ ADICIONAR
         // =================================================
 
-        const configId =
-            await criarConfig(
-                interaction.guild.id
-            );
+        if (
+            subcomando === "adicionar"
+        ) {
+            const configId =
+                await criarConfig(
+                    interaction.guild.id,
+                    false
+                );
 
-        const config =
-            await buscarConfig(
-                configId,
-                interaction.guild.id
-            );
+            const config =
+                await buscarConfig(
+                    configId,
+                    interaction.guild.id
+                );
 
-        const painel =
-            await criarPainel(
-                config,
-                []
-            );
+            const painel =
+                await criarPainel(
+                    config,
+                    []
+                );
+
+            return interaction.reply({
+                ...painel,
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+        }
+
+        // =================================================
+        // ✏️ EDITAR MENSAGEM EXISTENTE
+        // =================================================
+
+        if (
+            subcomando === "editar"
+        ) {
+            const mensagemId =
+                interaction.options
+                    .getString(
+                        "mensagem"
+                    )
+                    .trim();
+
+            if (
+                !idDiscordValido(
+                    mensagemId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ O ID da mensagem não é válido.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            // =============================================
+            // 🔎 PROCURAR CONFIG EXISTENTE
+            // =============================================
+
+            let config =
+                await buscarConfigMensagem(
+                    interaction.guild.id,
+                    mensagemId
+                );
+
+            // =============================================
+            // 🔎 PROCURAR A MENSAGEM NO SERVIDOR
+            // =============================================
+
+            let encontrada =
+                null;
+
+            if (config) {
+                try {
+                    if (config.canal_id) {
+                        const canal =
+                            await interaction.guild.channels.fetch(
+                                config.canal_id
+                            );
+
+                        if (
+                            canal &&
+                            canal.isTextBased()
+                        ) {
+                            const mensagem =
+                                await canal.messages.fetch(
+                                    mensagemId
+                                );
+
+                            encontrada = {
+                                mensagem,
+                                canal
+                            };
+                        }
+                    }
+                } catch {
+                    encontrada = null;
+                }
+            }
+
+            // =============================================
+            // 🔎 SE NÃO ACHOU, PROCURA PELOS CANAIS
+            // =============================================
+
+            if (!encontrada) {
+                encontrada =
+                    await localizarMensagem(
+                        interaction.guild,
+                        mensagemId
+                    );
+            }
+
+            if (!encontrada) {
+                return interaction.reply({
+                    content:
+                        "❌ Não consegui encontrar essa mensagem em nenhum canal de texto acessível ao bot.\n\nVerifique se o ID está correto e se o bot possui acesso ao canal.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            // =============================================
+            // 🤖 VERIFICAR AUTOR DA MENSAGEM
+            // =============================================
+
+            const mensagemDoBot =
+                encontrada.mensagem.author &&
+                encontrada.mensagem.author.id ===
+                    interaction.client.user.id;
+
+            // =============================================
+            // 🆕 CRIAR CONFIG PARA MENSAGEM EXISTENTE
+            // =============================================
+
+            if (!config) {
+                const configId =
+                    await criarConfig(
+                        interaction.guild.id,
+                        !mensagemDoBot
+                    );
+
+                await mysqlPool.query(
+                    `
+                    UPDATE react_role_configs
+                    SET
+                        canal_id = ?,
+                        mensagem_id = ?,
+                        somente_reacoes = ?,
+                        atualizado_em =
+                            UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+                    WHERE id = ?
+                      AND guild_id = ?
+                    `,
+                    [
+                        encontrada.canal.id,
+                        mensagemId,
+                        mensagemDoBot ? false : true,
+                        configId,
+                        interaction.guild.id
+                    ]
+                );
+
+                config =
+                    await buscarConfig(
+                        configId,
+                        interaction.guild.id
+                    );
+            }
+
+            // =============================================
+            // 🤖 MENSAGEM DO PRÓPRIO BOT
+            // =============================================
+            //
+            // Abre o painel completo, permitindo editar:
+            // conteúdo, embed, imagens, rodapé,
+            // emojis e cargos.
+            //
+            // =============================================
+
+            if (mensagemDoBot) {
+                await mysqlPool.query(
+                    `
+                    UPDATE react_role_configs
+                    SET
+                        canal_id = ?,
+                        mensagem_id = ?,
+                        somente_reacoes = FALSE,
+                        atualizado_em =
+                            UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+                    WHERE id = ?
+                      AND guild_id = ?
+                    `,
+                    [
+                        encontrada.canal.id,
+                        mensagemId,
+                        config.id,
+                        interaction.guild.id
+                    ]
+                );
+
+                config.canal_id =
+                    encontrada.canal.id;
+
+                config.mensagem_id =
+                    mensagemId;
+
+                config.somente_reacoes = 0;
+            }
+
+            // =============================================
+            // 👤 MENSAGEM DE OUTRA PESSOA / OUTRO BOT
+            // =============================================
+            //
+            // Não permite editar a mensagem original.
+            // Somente emojis e cargos poderão ser configurados.
+            //
+            // =============================================
+
+            else {
+                await mysqlPool.query(
+                    `
+                    UPDATE react_role_configs
+                    SET
+                        canal_id = ?,
+                        mensagem_id = ?,
+                        somente_reacoes = TRUE,
+                        atualizado_em =
+                            UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+                    WHERE id = ?
+                      AND guild_id = ?
+                    `,
+                    [
+                        encontrada.canal.id,
+                        mensagemId,
+                        config.id,
+                        interaction.guild.id
+                    ]
+                );
+
+                config.canal_id =
+                    encontrada.canal.id;
+
+                config.mensagem_id =
+                    mensagemId;
+
+                config.somente_reacoes = 1;
+            }
+
+            // =============================================
+            // 🎭 BUSCAR CARGOS
+            // =============================================
+
+            const cargos =
+                await buscarCargos(
+                    interaction.guild.id,
+                    mensagemId
+                );
+
+            // =============================================
+            // 📋 ABRIR PAINEL
+            // =============================================
+
+            const painel =
+                await criarPainel(
+                    config,
+                    cargos
+                );
+
+            return interaction.reply({
+                ...painel,
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+        }
 
         return interaction.reply({
-            ...painel,
+            content:
+                "❌ Subcomando inválido.",
 
             flags:
                 MessageFlags.Ephemeral
@@ -2350,37 +3015,6 @@ async function execute(interaction) {
 }
 
 // =====================================================
-// 📝 MODAL ESPECIAL
-// =====================================================
-//
-// Mantido apenas por compatibilidade caso o index.js
-// ainda tente chamar essa função.
-//
-// O sistema novo NÃO utiliza mais esse modal.
-// =====================================================
-
-async function tratarModalEditar(
-    interaction
-) {
-    if (
-        interaction.customId !==
-        "rr_modal_editar"
-    ) {
-        return false;
-    }
-
-    await interaction.reply({
-        content:
-            "❌ Essa função foi removida. Use **/reactrole** para abrir o novo painel.",
-
-        flags:
-            MessageFlags.Ephemeral
-    });
-
-    return true;
-}
-
-// =====================================================
 // 📦 EXPORT
 // =====================================================
 
@@ -2388,6 +3022,5 @@ module.exports = {
     data,
     execute,
     handleReaction,
-    tratarInteracao,
-    tratarModalEditar
+    tratarInteracao
 };
