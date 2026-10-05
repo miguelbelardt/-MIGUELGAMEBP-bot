@@ -36,7 +36,7 @@ const data = new SlashCommandBuilder()
         subcommand
             .setName("adicionar")
             .setDescription(
-                "Cria uma nova mensagem de Reaction Role."
+                "Abre o painel para criar um novo Reaction Role."
             )
     )
 
@@ -48,7 +48,7 @@ const data = new SlashCommandBuilder()
         subcommand
             .setName("editar")
             .setDescription(
-                "Configura Reaction Roles em uma mensagem existente."
+                "Abre o painel de uma mensagem existente."
             )
             .addStringOption(option =>
                 option
@@ -61,7 +61,7 @@ const data = new SlashCommandBuilder()
     );
 
 // =====================================================
-// 🛠️ GARANTIR TABELAS / COLUNAS
+// 🛠️ GARANTIR TABELA
 // =====================================================
 
 let tabelaGarantida = false;
@@ -110,10 +110,6 @@ async function garantirTabela() {
             )
         )
     `);
-
-    // =================================================
-    // 🔧 GARANTIR COLUNA EM BANCO ANTIGO
-    // =================================================
 
     try {
         const [colunas] =
@@ -488,36 +484,6 @@ async function sincronizarCargos(
 }
 
 // =====================================================
-// 🗑️ REMOVER CARGO
-// =====================================================
-
-async function removerCargo(
-    guildId,
-    mensagemId,
-    emoji
-) {
-    const emojiNormalizado =
-        normalizarEmoji(emoji);
-
-    const [resultado] =
-        await mysqlPool.query(
-            `
-            DELETE FROM react_roles
-            WHERE guild_id = ?
-              AND mensagem_id = ?
-              AND emoji = ?
-            `,
-            [
-                guildId,
-                mensagemId,
-                emojiNormalizado
-            ]
-        );
-
-    return resultado.affectedRows > 0;
-}
-
-// =====================================================
 // 🎨 CRIAR EMBED
 // =====================================================
 
@@ -649,7 +615,7 @@ async function adicionarReacoes(
 }
 
 // =====================================================
-// 🔎 LOCALIZAR MENSAGEM PELO ID
+// 🔎 LOCALIZAR MENSAGEM
 // =====================================================
 
 async function localizarMensagem(
@@ -683,7 +649,7 @@ async function localizarMensagem(
             }
 
         } catch {
-            // Mensagem não está neste canal.
+            // Continua procurando.
         }
     }
 
@@ -691,23 +657,17 @@ async function localizarMensagem(
 }
 
 // =====================================================
-// 📋 CRIAR PAINEL
+// 📋 PAINEL DE ADICIONAR
 // =====================================================
 
-async function criarPainel(
+async function criarPainelAdicionar(
     config,
     cargos = []
 ) {
-    const somenteReacoes =
-        config.somente_reacoes === true ||
-        config.somente_reacoes === 1;
-
     const painelEmbed =
         new EmbedBuilder()
             .setTitle(
-                somenteReacoes
-                    ? "🎭 REACTION ROLE — MENSAGEM EXISTENTE"
-                    : "🎭 CONFIGURAÇÃO DO REACTION ROLE"
+                "🎭 CONFIGURAÇÃO DO REACTION ROLE"
             )
             .setColor(
                 config.embed_cor ||
@@ -731,13 +691,11 @@ async function criarPainel(
                         cargos.length
                     } configurado(s)`,
 
-                    somenteReacoes
-                        ? "🔒 **Modo:** somente emojis/reactions"
-                        : `🎨 **Embed:** ${
-                            config.embed_habilitado !== false
-                                ? "Ativado"
-                                : "Desativado"
-                        }`,
+                    `🎨 **Embed:** ${
+                        config.embed_habilitado !== false
+                            ? "Ativado"
+                            : "Desativado"
+                    }`,
 
                     `🟢 **Sistema:** ${
                         config.habilitado !== false
@@ -762,86 +720,6 @@ async function criarPainel(
                     .slice(0, 1024)
         });
     }
-
-    // =================================================
-    // 🔒 PAINEL DE MENSAGEM EXISTENTE
-    // =================================================
-
-    if (somenteReacoes) {
-        const row1 =
-            new ActionRowBuilder()
-                .addComponents(
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `rr_cargos_${config.id}`
-                        )
-                        .setLabel(
-                            "Cargos / Emojis"
-                        )
-                        .setEmoji("🎭")
-                        .setStyle(
-                            ButtonStyle.Primary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `rr_testar_${config.id}`
-                        )
-                        .setLabel(
-                            "Aplicar Reações"
-                        )
-                        .setEmoji("🧪")
-                        .setStyle(
-                            ButtonStyle.Secondary
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `rr_ativar_${config.id}`
-                        )
-                        .setLabel(
-                            "Ativar"
-                        )
-                        .setEmoji("🟢")
-                        .setStyle(
-                            ButtonStyle.Success
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `rr_desativar_${config.id}`
-                        )
-                        .setLabel(
-                            "Desativar"
-                        )
-                        .setEmoji("🔴")
-                        .setStyle(
-                            ButtonStyle.Danger
-                        ),
-
-                    new ButtonBuilder()
-                        .setCustomId(
-                            `rr_fechar_${config.id}`
-                        )
-                        .setLabel(
-                            "Fechar"
-                        )
-                        .setEmoji("❌")
-                        .setStyle(
-                            ButtonStyle.Danger
-                        )
-                );
-
-        return {
-            embeds: [painelEmbed],
-            components: [row1]
-        };
-    }
-
-    // =================================================
-    // 📢 PAINEL COMPLETO
-    // =================================================
 
     const canalRow =
         new ActionRowBuilder()
@@ -1015,6 +893,158 @@ async function criarPainel(
 }
 
 // =====================================================
+// 📋 PAINEL DE EDITAR
+// =====================================================
+
+async function criarPainelEditar(
+    config,
+    cargos = []
+) {
+    const painelEmbed =
+        new EmbedBuilder()
+            .setTitle(
+                "🎭 REACTION ROLE — MENSAGEM EXISTENTE"
+            )
+            .setColor(
+                "#00A8FF"
+            )
+            .setDescription(
+                [
+                    `📢 **Canal:** ${
+                        config.canal_id
+                            ? `<#${config.canal_id}>`
+                            : "Desconhecido"
+                    }`,
+
+                    `📨 **Mensagem:** \`${config.mensagem_id}\``,
+
+                    `🎭 **Cargos:** ${
+                        cargos.length
+                    } configurado(s)`,
+
+                    "🔒 **Modo:** somente emojis/reações",
+
+                    `🟢 **Sistema:** ${
+                        config.habilitado !== false
+                            ? "Ativado"
+                            : "Desativado"
+                    }`
+                ].join("\n")
+            );
+
+    if (cargos.length) {
+        painelEmbed.addFields({
+            name:
+                "🎭 Cargos configurados",
+
+            value:
+                cargos
+                    .map(
+                        cargo =>
+                            `${cargo.emoji} → <@&${cargo.cargo_id}>`
+                    )
+                    .join("\n")
+                    .slice(0, 1024)
+        });
+    }
+
+    const row =
+        new ActionRowBuilder()
+            .addComponents(
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_cargos_${config.id}`
+                    )
+                    .setLabel(
+                        "Cargos / Emojis"
+                    )
+                    .setEmoji("🎭")
+                    .setStyle(
+                        ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_testar_${config.id}`
+                    )
+                    .setLabel(
+                        "Aplicar Reações"
+                    )
+                    .setEmoji("🧪")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_ativar_${config.id}`
+                    )
+                    .setLabel(
+                        "Ativar"
+                    )
+                    .setEmoji("🟢")
+                    .setStyle(
+                        ButtonStyle.Success
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_desativar_${config.id}`
+                    )
+                    .setLabel(
+                        "Desativar"
+                    )
+                    .setEmoji("🔴")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_fechar_${config.id}`
+                    )
+                    .setLabel(
+                        "Fechar"
+                    )
+                    .setEmoji("❌")
+                    .setStyle(
+                        ButtonStyle.Danger
+                    )
+            );
+
+    return {
+        embeds: [painelEmbed],
+        components: [row]
+    };
+}
+
+// =====================================================
+// 📋 CRIAR PAINEL
+// =====================================================
+
+async function criarPainel(
+    config,
+    cargos = []
+) {
+    const somenteReacoes =
+        config.somente_reacoes === true ||
+        config.somente_reacoes === 1;
+
+    if (somenteReacoes) {
+        return criarPainelEditar(
+            config,
+            cargos
+        );
+    }
+
+    return criarPainelAdicionar(
+        config,
+        cargos
+    );
+}
+
+// =====================================================
 // 📨 MODAL MENSAGEM
 // =====================================================
 
@@ -1124,19 +1154,13 @@ function modalEmbed(config) {
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(
-                titulo
-            ),
+            .addComponents(titulo),
 
         new ActionRowBuilder()
-            .addComponents(
-                descricao
-            ),
+            .addComponents(descricao),
 
         new ActionRowBuilder()
-            .addComponents(
-                cor
-            )
+            .addComponents(cor)
     );
 
     return modal;
@@ -1190,14 +1214,10 @@ function modalImagens(config) {
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(
-                imagem
-            ),
+            .addComponents(imagem),
 
         new ActionRowBuilder()
-            .addComponents(
-                thumbnail
-            )
+            .addComponents(thumbnail)
     );
 
     return modal;
@@ -1235,9 +1255,7 @@ function modalRodape(config) {
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(
-                rodape
-            )
+            .addComponents(rodape)
     );
 
     return modal;
@@ -1291,14 +1309,10 @@ function modalCargo(config) {
 
     modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(
-                emoji
-            ),
+            .addComponents(emoji),
 
         new ActionRowBuilder()
-            .addComponents(
-                cargo
-            )
+            .addComponents(cargo)
     );
 
     return modal;
@@ -1312,10 +1326,6 @@ async function enviarOuEditar(
     interaction,
     config
 ) {
-    // =================================================
-    // 🔒 MODO SOMENTE REAÇÕES
-    // =================================================
-
     if (
         config.somente_reacoes === true ||
         config.somente_reacoes === 1
@@ -1365,7 +1375,7 @@ async function enviarOuEditar(
 
         } catch (erro) {
             console.error(
-                "❌ Erro ao aplicar reações na mensagem existente:",
+                "❌ Erro ao aplicar reações:",
                 erro
             );
 
@@ -1375,10 +1385,6 @@ async function enviarOuEditar(
             };
         }
     }
-
-    // =================================================
-    // 📢 VERIFICAR CANAL
-    // =================================================
 
     if (!config.canal_id) {
         return {
@@ -1396,7 +1402,7 @@ async function enviarOuEditar(
     ) {
         return {
             erro:
-                "❌ Configure pelo menos um conteúdo na **📨 Mensagem** ou um **🎨 Embed** antes de enviar."
+                "❌ Configure pelo menos uma **Mensagem** ou um **Embed** antes de enviar."
         };
     }
 
@@ -1417,10 +1423,6 @@ async function enviarOuEditar(
 
     let mensagem;
 
-    // =================================================
-    // ✏️ EDITAR MENSAGEM DO SISTEMA
-    // =================================================
-
     if (config.mensagem_id) {
         try {
             mensagem =
@@ -1435,22 +1437,17 @@ async function enviarOuEditar(
 
         } catch (erro) {
             console.error(
-                "❌ Erro ao encontrar/editar mensagem:",
+                "❌ Erro ao editar mensagem:",
                 erro
             );
 
             return {
                 erro:
-                    "❌ Não consegui encontrar ou editar a mensagem configurada nesse canal."
+                    "❌ Não consegui encontrar ou editar a mensagem configurada."
             };
         }
-    }
 
-    // =================================================
-    // 📤 CRIAR NOVA MENSAGEM
-    // =================================================
-
-    else {
+    } else {
         try {
             mensagem =
                 await canal.send({
@@ -1465,13 +1462,13 @@ async function enviarOuEditar(
 
         } catch (erro) {
             console.error(
-                "❌ Erro ao enviar mensagem do Reaction Role:",
+                "❌ Erro ao enviar mensagem:",
                 erro
             );
 
             return {
                 erro:
-                    "❌ Não consegui enviar a mensagem. Verifique as permissões do bot no canal."
+                    "❌ Não consegui enviar a mensagem. Verifique as permissões do bot."
             };
         }
 
@@ -1496,10 +1493,6 @@ async function enviarOuEditar(
             mensagem.id;
     }
 
-    // =================================================
-    // 🎭 ADICIONAR REAÇÕES
-    // =================================================
-
     const cargos =
         await buscarCargos(
             interaction.guild.id,
@@ -1510,10 +1503,6 @@ async function enviarOuEditar(
         mensagem,
         cargos
     );
-
-    // =================================================
-    // 🔄 SINCRONIZAR
-    // =================================================
 
     await sincronizarCargos(
         interaction.guild.id,
@@ -1602,10 +1591,6 @@ async function handleReaction(
             );
 
         if (!cargo) {
-            console.error(
-                `❌ Cargo ${cargoId} não encontrado.`
-            );
-
             return;
         }
 
@@ -1632,6 +1617,7 @@ async function handleReaction(
                     `🎭 Cargo ${cargo.name} dado para ${user.tag}.`
                 );
             }
+
         } else {
             if (
                 membro.roles.cache.has(
@@ -1681,10 +1667,6 @@ async function tratarInteracao(
         return false;
     }
 
-    // =================================================
-    // 🔐 SEGURANÇA
-    // =================================================
-
     if (
         !interaction.memberPermissions ||
         !interaction.memberPermissions.has(
@@ -1710,10 +1692,6 @@ async function tratarInteracao(
 
     const configId =
         partes[partes.length - 1];
-
-    // =================================================
-    // 🔎 BUSCAR CONFIG
-    // =================================================
 
     const config =
         await buscarConfig(
@@ -1748,7 +1726,7 @@ async function tratarInteracao(
         if (somenteReacoes) {
             await interaction.reply({
                 content:
-                    "❌ Essa configuração é de uma mensagem existente. O canal não pode ser alterado por aqui.",
+                    "❌ O canal de uma mensagem existente não pode ser alterado aqui.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -1810,7 +1788,7 @@ async function tratarInteracao(
         if (somenteReacoes) {
             await interaction.reply({
                 content:
-                    "❌ O modo **editar** não altera a mensagem existente. Ele serve somente para configurar os emojis e cargos.",
+                    "❌ Essa é uma mensagem existente. O conteúdo dela não pode ser alterado por este painel.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -1837,7 +1815,7 @@ async function tratarInteracao(
         if (somenteReacoes) {
             await interaction.reply({
                 content:
-                    "❌ O modo **editar** não altera o Embed da mensagem existente.",
+                    "❌ O Embed dessa mensagem não pode ser alterado por este painel.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -1864,7 +1842,7 @@ async function tratarInteracao(
         if (somenteReacoes) {
             await interaction.reply({
                 content:
-                    "❌ O modo **editar** não altera imagens da mensagem existente.",
+                    "❌ As imagens dessa mensagem não podem ser alteradas por este painel.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -1891,7 +1869,7 @@ async function tratarInteracao(
         if (somenteReacoes) {
             await interaction.reply({
                 content:
-                    "❌ O modo **editar** não altera o rodapé da mensagem existente.",
+                    "❌ O rodapé dessa mensagem não pode ser alterado por este painel.",
 
                 flags:
                     MessageFlags.Ephemeral
@@ -2025,7 +2003,7 @@ async function tratarInteracao(
     }
 
     // =================================================
-    // 🧪 TESTAR / APLICAR REAÇÕES
+    // 🧪 TESTAR
     // =================================================
 
     if (
@@ -2070,10 +2048,6 @@ async function tratarInteracao(
                     config.mensagem_id
                 );
 
-            // =========================================
-            // 🔒 MENSAGEM EXISTENTE
-            // =========================================
-
             if (somenteReacoes) {
                 await adicionarReacoes(
                     mensagem,
@@ -2090,10 +2064,6 @@ async function tratarInteracao(
 
                 return true;
             }
-
-            // =========================================
-            // 📤 MENSAGEM DO SISTEMA
-            // =========================================
 
             await aplicarMensagem(
                 mensagem,
@@ -2182,7 +2152,7 @@ async function tratarInteracao(
 
         } catch (erro) {
             console.error(
-                "❌ Erro ao enviar/editar Reaction Role:",
+                "❌ Erro ao salvar Reaction Role:",
                 erro
             );
 
@@ -2342,7 +2312,6 @@ async function tratarInteracao(
                     titulo || null,
                     descricao || null,
                     cor,
-
                     config.id,
                     interaction.guild.id
                 ]
@@ -2407,7 +2376,6 @@ async function tratarInteracao(
                 [
                     imagem || null,
                     thumbnail || null,
-
                     config.id,
                     interaction.guild.id
                 ]
@@ -2452,7 +2420,6 @@ async function tratarInteracao(
                 [
                     rodape || null,
                     rodape ? true : false,
-
                     config.id,
                     interaction.guild.id
                 ]
@@ -2565,10 +2532,6 @@ async function tratarInteracao(
                     );
 
                 try {
-                    // =================================
-                    // 🎭 ADICIONAR REAÇÃO
-                    // =================================
-
                     await mensagem.react(
                         emojiNormalizado
                     );
@@ -2589,10 +2552,6 @@ async function tratarInteracao(
 
                     return true;
                 }
-
-                // =====================================
-                // 💾 SALVAR RELAÇÃO EMOJI → CARGO
-                // =====================================
 
                 await salvarCargo({
                     guildId:
@@ -2686,22 +2645,6 @@ async function execute(interaction) {
     try {
         await garantirTabela();
 
-    } catch (erro) {
-        console.error(
-            "❌ Erro ao verificar tabela do Reaction Role:",
-            erro
-        );
-
-        return interaction.reply({
-            content:
-                "❌ Não consegui preparar o banco de dados do Reaction Role.",
-
-            flags:
-                MessageFlags.Ephemeral
-        });
-    }
-
-    try {
         const subcomando =
             interaction.options.getSubcommand();
 
@@ -2725,7 +2668,7 @@ async function execute(interaction) {
                 );
 
             const painel =
-                await criarPainel(
+                await criarPainelAdicionar(
                     config,
                     []
                 );
@@ -2739,7 +2682,7 @@ async function execute(interaction) {
         }
 
         // =================================================
-        // ✏️ EDITAR MENSAGEM EXISTENTE
+        // ✏️ EDITAR
         // =================================================
 
         if (
@@ -2767,7 +2710,7 @@ async function execute(interaction) {
             }
 
             // =============================================
-            // 🔎 PROCURAR CONFIG EXISTENTE
+            // 🔎 PROCURAR CONFIG
             // =============================================
 
             let config =
@@ -2777,43 +2720,36 @@ async function execute(interaction) {
                 );
 
             // =============================================
-            // 🔎 PROCURAR A MENSAGEM NO SERVIDOR
+            // 🔎 PROCURAR MENSAGEM
             // =============================================
 
-            let encontrada =
-                null;
+            let encontrada = null;
 
-            if (config) {
+            if (config && config.canal_id) {
                 try {
-                    if (config.canal_id) {
-                        const canal =
-                            await interaction.guild.channels.fetch(
-                                config.canal_id
+                    const canal =
+                        await interaction.guild.channels.fetch(
+                            config.canal_id
+                        );
+
+                    if (
+                        canal &&
+                        canal.isTextBased()
+                    ) {
+                        const mensagem =
+                            await canal.messages.fetch(
+                                mensagemId
                             );
 
-                        if (
-                            canal &&
-                            canal.isTextBased()
-                        ) {
-                            const mensagem =
-                                await canal.messages.fetch(
-                                    mensagemId
-                                );
-
-                            encontrada = {
-                                mensagem,
-                                canal
-                            };
-                        }
+                        encontrada = {
+                            mensagem,
+                            canal
+                        };
                     }
                 } catch {
                     encontrada = null;
                 }
             }
-
-            // =============================================
-            // 🔎 SE NÃO ACHOU, PROCURA PELOS CANAIS
-            // =============================================
 
             if (!encontrada) {
                 encontrada =
@@ -2826,7 +2762,7 @@ async function execute(interaction) {
             if (!encontrada) {
                 return interaction.reply({
                     content:
-                        "❌ Não consegui encontrar essa mensagem em nenhum canal de texto acessível ao bot.\n\nVerifique se o ID está correto e se o bot possui acesso ao canal.",
+                        "❌ Não consegui encontrar essa mensagem em nenhum canal acessível ao bot.",
 
                     flags:
                         MessageFlags.Ephemeral
@@ -2834,7 +2770,7 @@ async function execute(interaction) {
             }
 
             // =============================================
-            // 🤖 VERIFICAR AUTOR DA MENSAGEM
+            // 🤖 VERIFICAR SE É DO PRÓPRIO BOT
             // =============================================
 
             const mensagemDoBot =
@@ -2843,7 +2779,7 @@ async function execute(interaction) {
                     interaction.client.user.id;
 
             // =============================================
-            // 🆕 CRIAR CONFIG PARA MENSAGEM EXISTENTE
+            // 🆕 CRIAR CONFIG
             // =============================================
 
             if (!config) {
@@ -2882,13 +2818,7 @@ async function execute(interaction) {
             }
 
             // =============================================
-            // 🤖 MENSAGEM DO PRÓPRIO BOT
-            // =============================================
-            //
-            // Abre o painel completo, permitindo editar:
-            // conteúdo, embed, imagens, rodapé,
-            // emojis e cargos.
-            //
+            // 🤖 MENSAGEM DO BOT
             // =============================================
 
             if (mensagemDoBot) {
@@ -2919,50 +2849,58 @@ async function execute(interaction) {
                     mensagemId;
 
                 config.somente_reacoes = 0;
+
+                const cargos =
+                    await buscarCargos(
+                        interaction.guild.id,
+                        mensagemId
+                    );
+
+                const painel =
+                    await criarPainelAdicionar(
+                        config,
+                        cargos
+                    );
+
+                return interaction.reply({
+                    ...painel,
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
             }
 
             // =============================================
-            // 👤 MENSAGEM DE OUTRA PESSOA / OUTRO BOT
-            // =============================================
-            //
-            // Não permite editar a mensagem original.
-            // Somente emojis e cargos poderão ser configurados.
-            //
+            // 👤 OUTRA PESSOA / OUTRO BOT
             // =============================================
 
-            else {
-                await mysqlPool.query(
-                    `
-                    UPDATE react_role_configs
-                    SET
-                        canal_id = ?,
-                        mensagem_id = ?,
-                        somente_reacoes = TRUE,
-                        atualizado_em =
-                            UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
-                    WHERE id = ?
-                      AND guild_id = ?
-                    `,
-                    [
-                        encontrada.canal.id,
-                        mensagemId,
-                        config.id,
-                        interaction.guild.id
-                    ]
-                );
+            await mysqlPool.query(
+                `
+                UPDATE react_role_configs
+                SET
+                    canal_id = ?,
+                    mensagem_id = ?,
+                    somente_reacoes = TRUE,
+                    atualizado_em =
+                        UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000
+                WHERE id = ?
+                  AND guild_id = ?
+                `,
+                [
+                    encontrada.canal.id,
+                    mensagemId,
+                    config.id,
+                    interaction.guild.id
+                ]
+            );
 
-                config.canal_id =
-                    encontrada.canal.id;
+            config.canal_id =
+                encontrada.canal.id;
 
-                config.mensagem_id =
-                    mensagemId;
+            config.mensagem_id =
+                mensagemId;
 
-                config.somente_reacoes = 1;
-            }
-
-            // =============================================
-            // 🎭 BUSCAR CARGOS
-            // =============================================
+            config.somente_reacoes = 1;
 
             const cargos =
                 await buscarCargos(
@@ -2970,12 +2908,8 @@ async function execute(interaction) {
                     mensagemId
                 );
 
-            // =============================================
-            // 📋 ABRIR PAINEL
-            // =============================================
-
             const painel =
-                await criarPainel(
+                await criarPainelEditar(
                     config,
                     cargos
                 );
