@@ -28,10 +28,6 @@ const data = new SlashCommandBuilder()
         PermissionFlagsBits.ManageGuild
     )
 
-    // =================================================
-    // ➕ ADICIONAR
-    // =================================================
-
     .addSubcommand(subcommand =>
         subcommand
             .setName("adicionar")
@@ -39,10 +35,6 @@ const data = new SlashCommandBuilder()
                 "Abre o painel para criar um novo Reaction Role."
             )
     )
-
-    // =================================================
-    // ✏️ EDITAR
-    // =================================================
 
     .addSubcommand(subcommand =>
         subcommand
@@ -72,12 +64,9 @@ async function garantirTabela() {
     await mysqlPool.query(`
         CREATE TABLE IF NOT EXISTS react_role_configs (
             id BIGINT AUTO_INCREMENT PRIMARY KEY,
-
             guild_id VARCHAR(30) NOT NULL,
-
             canal_id VARCHAR(30),
             mensagem_id VARCHAR(30),
-
             content TEXT,
 
             embed_habilitado BOOLEAN NOT NULL DEFAULT TRUE,
@@ -92,7 +81,6 @@ async function garantirTabela() {
             thumbnail TEXT,
 
             habilitado BOOLEAN NOT NULL DEFAULT TRUE,
-
             somente_reacoes BOOLEAN NOT NULL DEFAULT FALSE,
 
             criado_em BIGINT NOT NULL DEFAULT (
@@ -113,21 +101,17 @@ async function garantirTabela() {
 
     try {
         const [colunas] =
-            await mysqlPool.query(
-                `
+            await mysqlPool.query(`
                 SHOW COLUMNS
                 FROM react_role_configs
                 LIKE 'somente_reacoes'
-                `
-            );
+            `);
 
         if (!colunas.length) {
-            await mysqlPool.query(
-                `
+            await mysqlPool.query(`
                 ALTER TABLE react_role_configs
                 ADD COLUMN somente_reacoes BOOLEAN NOT NULL DEFAULT FALSE
-                `
-            );
+            `);
         }
     } catch (erro) {
         console.error(
@@ -429,6 +413,40 @@ async function salvarCargo({
 }
 
 // =====================================================
+// 🗑️ REMOVER CARGO / REAÇÃO
+// =====================================================
+
+async function removerCargoReacao(
+    guildId,
+    mensagemId,
+    emoji
+) {
+    const emojiNormalizado =
+        normalizarEmoji(emoji);
+
+    if (!emojiNormalizado) {
+        return false;
+    }
+
+    const [resultado] =
+        await mysqlPool.query(
+            `
+            DELETE FROM react_roles
+            WHERE guild_id = ?
+              AND mensagem_id = ?
+              AND emoji = ?
+            `,
+            [
+                guildId,
+                mensagemId,
+                emojiNormalizado
+            ]
+        );
+
+    return resultado.affectedRows > 0;
+}
+
+// =====================================================
 // 🧹 SINCRONIZAR CONFIGURAÇÃO NOS CARGOS
 // =====================================================
 
@@ -615,6 +633,38 @@ async function adicionarReacoes(
 }
 
 // =====================================================
+// 🗑️ REMOVER REAÇÃO DA MENSAGEM
+// =====================================================
+
+async function removerReacaoDaMensagem(
+    mensagem,
+    emoji
+) {
+    try {
+        const emojiNormalizado =
+            normalizarEmoji(emoji);
+
+        const reaction =
+            mensagem.reactions.cache.find(
+                item =>
+                    normalizarEmoji(
+                        item.emoji
+                    ) === emojiNormalizado
+            );
+
+        if (reaction) {
+            await reaction.remove();
+        }
+
+    } catch (erro) {
+        console.error(
+            "❌ Não consegui remover a reação da mensagem:",
+            erro
+        );
+    }
+}
+
+// =====================================================
 // 🔎 LOCALIZAR MENSAGEM
 // =====================================================
 
@@ -765,6 +815,18 @@ async function criarPainelAdicionar(
                     .setEmoji("🎭")
                     .setStyle(
                         ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_remover_${config.id}`
+                    )
+                    .setLabel(
+                        "Remover"
+                    )
+                    .setEmoji("🗑️")
+                    .setStyle(
+                        ButtonStyle.Danger
                     ),
 
                 new ButtonBuilder()
@@ -948,7 +1010,7 @@ async function criarPainelEditar(
         });
     }
 
-    const row =
+    const row1 =
         new ActionRowBuilder()
             .addComponents(
 
@@ -962,6 +1024,18 @@ async function criarPainelEditar(
                     .setEmoji("🎭")
                     .setStyle(
                         ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `rr_remover_${config.id}`
+                    )
+                    .setLabel(
+                        "Remover"
+                    )
+                    .setEmoji("🗑️")
+                    .setStyle(
+                        ButtonStyle.Danger
                     ),
 
                 new ButtonBuilder()
@@ -998,7 +1072,12 @@ async function criarPainelEditar(
                     .setEmoji("🔴")
                     .setStyle(
                         ButtonStyle.Danger
-                    ),
+                    )
+            );
+
+    const row2 =
+        new ActionRowBuilder()
+            .addComponents(
 
                 new ButtonBuilder()
                     .setCustomId(
@@ -1015,7 +1094,10 @@ async function criarPainelEditar(
 
     return {
         embeds: [painelEmbed],
-        components: [row]
+        components: [
+            row1,
+            row2
+        ]
     };
 }
 
@@ -1319,6 +1401,46 @@ function modalCargo(config) {
 }
 
 // =====================================================
+// 🗑️ MODAL REMOVER REAÇÃO
+// =====================================================
+
+function modalRemoverReacao(config) {
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `rr_modal_remover_${config.id}`
+            )
+            .setTitle(
+                "🗑️ Remover Reação"
+            );
+
+    const emoji =
+        new TextInputBuilder()
+            .setCustomId(
+                "emoji"
+            )
+            .setLabel(
+                "Emoji da reação"
+            )
+            .setStyle(
+                TextInputStyle.Short
+            )
+            .setRequired(true)
+            .setPlaceholder(
+                "😀 ou <:nome:123456789>"
+            );
+
+    modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(
+                emoji
+            )
+    );
+
+    return modal;
+}
+
+// =====================================================
 // 📨 ENVIAR / EDITAR MENSAGEM
 // =====================================================
 
@@ -1528,6 +1650,21 @@ async function handleReaction(
         if (!reaction.guild) return;
         if (user.bot) return;
 
+        /*
+         * IMPORTANTE:
+         * O sistema agora funciona somente quando
+         * o usuário ADICIONA uma reação.
+         *
+         * Se ele remover manualmente a reação,
+         * o cargo NÃO será removido.
+         *
+         * A própria reação é removida pelo bot
+         * depois que o cargo é alternado.
+         */
+        if (!adicionar) {
+            return;
+        }
+
         if (reaction.partial) {
             await reaction.fetch();
         }
@@ -1602,37 +1739,48 @@ async function handleReaction(
             return;
         }
 
-        if (adicionar) {
-            if (
-                !membro.roles.cache.has(
-                    cargo.id
-                )
-            ) {
-                await membro.roles.add(
-                    cargo,
-                    "Reaction Role"
-                );
+        // =================================================
+        // 🔄 TOGGLE DO CARGO
+        // =================================================
 
-                console.log(
-                    `🎭 Cargo ${cargo.name} dado para ${user.tag}.`
-                );
-            }
+        if (
+            membro.roles.cache.has(
+                cargo.id
+            )
+        ) {
+            await membro.roles.remove(
+                cargo,
+                "Reaction Role - Toggle"
+            );
+
+            console.log(
+                `🎭 Cargo ${cargo.name} removido de ${user.tag}.`
+            );
 
         } else {
-            if (
-                membro.roles.cache.has(
-                    cargo.id
-                )
-            ) {
-                await membro.roles.remove(
-                    cargo,
-                    "Reaction Role"
-                );
+            await membro.roles.add(
+                cargo,
+                "Reaction Role - Toggle"
+            );
 
-                console.log(
-                    `🎭 Cargo ${cargo.name} removido de ${user.tag}.`
-                );
-            }
+            console.log(
+                `🎭 Cargo ${cargo.name} dado para ${user.tag}.`
+            );
+        }
+
+        // =================================================
+        // 🧹 REMOVER A REAÇÃO DO USUÁRIO
+        // =================================================
+
+        try {
+            await reaction.users.remove(
+                user.id
+            );
+        } catch (erro) {
+            console.error(
+                "❌ Não consegui remover a reação do usuário:",
+                erro
+            );
         }
 
     } catch (erro) {
@@ -1907,6 +2055,33 @@ async function tratarInteracao(
 
         await interaction.showModal(
             modalCargo(config)
+        );
+
+        return true;
+    }
+
+    // =================================================
+    // 🗑️ REMOVER REAÇÃO
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        acao === "remover"
+    ) {
+        if (!config.mensagem_id) {
+            await interaction.reply({
+                content:
+                    "❌ Ainda não existe uma mensagem configurada.",
+
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        await interaction.showModal(
+            modalRemoverReacao(config)
         );
 
         return true;
@@ -2588,6 +2763,96 @@ async function tratarInteracao(
         }
 
         // =============================================
+        // 🗑️ REMOVER REAÇÃO
+        // =============================================
+
+        if (tipo === "remover") {
+            if (!config.mensagem_id) {
+                await interaction.reply({
+                    content:
+                        "❌ Essa configuração ainda não possui uma mensagem.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const emoji =
+                interaction.fields.getTextInputValue(
+                    "emoji"
+                ).trim();
+
+            const emojiNormalizado =
+                normalizarEmoji(
+                    emoji
+                );
+
+            if (!emojiNormalizado) {
+                await interaction.reply({
+                    content:
+                        "❌ Emoji inválido.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const removido =
+                await removerCargoReacao(
+                    interaction.guild.id,
+                    config.mensagem_id,
+                    emojiNormalizado
+                );
+
+            if (!removido) {
+                await interaction.reply({
+                    content:
+                        `❌ Não encontrei a reação **${emojiNormalizado}** configurada neste painel.`,
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            try {
+                const canal =
+                    await interaction.guild.channels.fetch(
+                        config.canal_id
+                    );
+
+                if (
+                    canal &&
+                    canal.isTextBased()
+                ) {
+                    const mensagem =
+                        await canal.messages.fetch(
+                            config.mensagem_id
+                        );
+
+                    await removerReacaoDaMensagem(
+                        mensagem,
+                        emojiNormalizado
+                    );
+                }
+            } catch (erro) {
+                console.error(
+                    "❌ Não consegui remover a reação da mensagem:",
+                    erro
+                );
+            }
+
+            console.log(
+                `🗑️ Reação ${emojiNormalizado} removida do Reaction Role ${config.mensagem_id}.`
+            );
+        }
+
+        // =============================================
         // 🔄 ATUALIZAR PAINEL
         // =============================================
 
@@ -2709,19 +2974,11 @@ async function execute(interaction) {
                 });
             }
 
-            // =============================================
-            // 🔎 PROCURAR CONFIG
-            // =============================================
-
             let config =
                 await buscarConfigMensagem(
                     interaction.guild.id,
                     mensagemId
                 );
-
-            // =============================================
-            // 🔎 PROCURAR MENSAGEM
-            // =============================================
 
             let encontrada = null;
 
@@ -2769,18 +3026,10 @@ async function execute(interaction) {
                 });
             }
 
-            // =============================================
-            // 🤖 VERIFICAR SE É DO PRÓPRIO BOT
-            // =============================================
-
             const mensagemDoBot =
                 encontrada.mensagem.author &&
                 encontrada.mensagem.author.id ===
                     interaction.client.user.id;
-
-            // =============================================
-            // 🆕 CRIAR CONFIG
-            // =============================================
 
             if (!config) {
                 const configId =
@@ -2817,9 +3066,9 @@ async function execute(interaction) {
                     );
             }
 
-            // =============================================
+            // =================================================
             // 🤖 MENSAGEM DO BOT
-            // =============================================
+            // =================================================
 
             if (mensagemDoBot) {
                 await mysqlPool.query(
@@ -2870,9 +3119,9 @@ async function execute(interaction) {
                 });
             }
 
-            // =============================================
+            // =================================================
             // 👤 OUTRA PESSOA / OUTRO BOT
-            // =============================================
+            // =================================================
 
             await mysqlPool.query(
                 `
