@@ -8,7 +8,9 @@ const {
     AttachmentBuilder,
     AuditLogEvent,
     MessageFlags,
-    Partials
+    Partials,
+    ActivityType,
+    Events
 } = require("discord.js");
 
 const http = require("http");
@@ -93,10 +95,40 @@ const TEMPO_CACHE_MENSAGEM = 10 * 60 * 1000;
 const TEMPO_AGRUPAMENTO = 1000;
 
 // =====================================================
+// 🟡 STATUS DO BOT
+// =====================================================
+
+// Tempo que o bot fica Ausente ("Iniciando") depois de ficar pronto.
+const TEMPO_STATUS_INICIANDO = 15 * 1000;
+
+// A cada quantos ms o status normal alterna entre servidores/comandos.
+const INTERVALO_STATUS = 5 * 1000;
+
+// Status enviado JÁ NO LOGIN (opção `presence` do Client).
+// Sem isso o bot aparece Online e sem atividade até o "ready", que
+// pode demorar (o discord.js espera todos os servidores carregarem).
+const STATUS_INICIANDO = {
+    status: "idle",
+
+    activities: [
+        {
+            name:
+                "🔄 Iniciando o bot...",
+
+            type:
+                ActivityType.Playing
+        }
+    ]
+};
+
+// =====================================================
 // 🤖 CLIENTE DISCORD
 // =====================================================
 
 const client = new Client({
+    presence:
+        STATUS_INICIANDO,
+
     partials: [
         Partials.Message,
         Partials.Channel,
@@ -1006,8 +1038,10 @@ client.on(
                 return;
             }
 
+            // Mensagem antiga fora do cache chega sem autor.
             if (
-                mensagemNova.author?.bot
+                !mensagemNova.author ||
+                mensagemNova.author.bot
             ) {
                 return;
             }
@@ -2161,8 +2195,52 @@ async function registrarComandos() {
 
 let intervaloStatus = null;
 
+// Fica true quando o bot termina a inicialização e entra no status normal.
+let statusNormalAtivo = false;
+
+// Último status enviado ao Discord (usado para reaplicar após reconexão).
+let presencaAtual =
+    STATUS_INICIANDO;
+
+function esperar(ms) {
+
+    return new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                ms
+            )
+    );
+}
+
+async function definirPresenca(
+    presenca
+) {
+
+    presencaAtual =
+        presenca;
+
+    try {
+
+        await client.user.setPresence(
+            presenca
+        );
+
+        return true;
+
+    } catch (erro) {
+
+        console.error(
+            "❌ Erro ao atualizar o status:",
+            erro
+        );
+
+        return false;
+    }
+}
+
 client.once(
-    "clientReady",
+    Events.ClientReady,
     async () => {
 
         console.log(
@@ -2173,39 +2251,19 @@ client.once(
         // 🟡 STATUS DE INICIALIZAÇÃO
         // =================================================
 
-        const atualizarStatusInicializacao =
-            async () => {
+        // O Discord já recebeu esse status no login (opção `presence`
+        // do Client). Aqui só confirmamos UMA vez — reenviar a cada
+        // segundo deixa o status piscando/dessincronizado.
+        if (
+            await definirPresenca(
+                STATUS_INICIANDO
+            )
+        ) {
 
-                try {
-
-                    await client.user.setPresence({
-                        status: "idle",
-
-                        activities: [
-                            {
-                                name:
-                                    "🔄 Iniciando o bot...",
-
-                                type: 0
-                            }
-                        ]
-                    });
-
-                    console.log(
-                        "🟡 Status sincronizado: Ausente — 🔄 Iniciando o bot..."
-                    );
-
-                } catch (erro) {
-
-                    console.error(
-                        "❌ Erro ao atualizar status de inicialização:",
-                        erro
-                    );
-                }
-            };
-
-        // Aplica o status imediatamente
-        await atualizarStatusInicializacao();
+            console.log(
+                "🟡 Status sincronizado: Ausente — 🔄 Iniciando o bot..."
+            );
+        }
 
         // =================================================
         // 🔔 SISTEMA AUTOMÁTICO DO DAILY
@@ -2263,30 +2321,25 @@ client.once(
         // ⏳ 15 SEGUNDOS AUSENTE
         // =================================================
 
+        const segundosIniciando =
+            TEMPO_STATUS_INICIANDO / 1000;
+
         console.log(
-            "⏳ Bot ficará Ausente durante 15 segundos..."
+            `⏳ Bot ficará Ausente durante ${segundosIniciando} segundos...`
         );
 
         for (
             let segundo = 1;
-            segundo <= 15;
+            segundo <= segundosIniciando;
             segundo++
         ) {
 
-            await new Promise(
-                resolve =>
-                    setTimeout(
-                        resolve,
-                        1000
-                    )
+            await esperar(
+                1000
             );
 
-            // Garante que o Discord continue mostrando
-            // o mesmo status durante a inicialização.
-            await atualizarStatusInicializacao();
-
             console.log(
-                `🟡 Status: Ausente — ${segundo}/15`
+                `🟡 Status: Ausente — ${segundo}/${segundosIniciando}`
             );
         }
 
@@ -2322,18 +2375,24 @@ client.once(
                             `📋 Tenho ${comandos} comandos disponíveis!`;
                     }
 
-                    await client.user.setPresence({
-                        status: "online",
+                    const atualizou =
+                        await definirPresenca({
+                            status: "online",
 
-                        activities: [
-                            {
-                                name:
-                                    texto,
+                            activities: [
+                                {
+                                    name:
+                                        texto,
 
-                                type: 0
-                            }
-                        ]
-                    });
+                                    type:
+                                        ActivityType.Playing
+                                }
+                            ]
+                        });
+
+                    if (!atualizou) {
+                        return;
+                    }
 
                     console.log(
                         `🟢 Status sincronizado: Online — ${texto}`
@@ -2367,12 +2426,43 @@ client.once(
         // Primeiro status online imediatamente
         await atualizarStatus();
 
-        // Depois alterna a cada 5 segundos
+        // Depois alterna no intervalo definido
         intervaloStatus =
             setInterval(
                 atualizarStatus,
-                5000
+                INTERVALO_STATUS
             );
+
+        statusNormalAtivo =
+            true;
+    }
+);
+
+// =====================================================
+// 🔄 REAPLICAR STATUS APÓS RECONEXÃO
+// =====================================================
+
+// Se o Discord abrir uma sessão nova, ele volta com o status do
+// login ("Iniciando"). Reaplica o status atual para não ficar
+// Ausente por engano até o próximo ciclo.
+client.on(
+    Events.ShardReady,
+    async () => {
+
+        if (!statusNormalAtivo) {
+            return;
+        }
+
+        if (
+            await definirPresenca(
+                presencaAtual
+            )
+        ) {
+
+            console.log(
+                "🔄 Status reaplicado após reconexão."
+            );
+        }
     }
 );
 
@@ -2658,58 +2748,12 @@ client.on("messageReactionAdd", async (reaction, user) => {
     }
 });
 
-client.on("messageReactionRemove", async (reaction, user) => {
-    try {
-        if (user.bot) return;
-
-        if (reaction.partial) {
-            await reaction.fetch();
-        }
-
-        if (
-            typeof reactrole.handleReaction === "function"
-        ) {
-            await reactrole.handleReaction(
-                reaction,
-                user,
-                false
-            );
-        }
-
-    } catch (erro) {
-        console.error(
-            "❌ Erro ao remover Reaction Role:",
-            erro
-        );
-    }
-});
-
 // =====================================================
 // 🎭 REACTION ROLE - PAINEL
 // =====================================================
 
 client.on("interactionCreate", async interaction => {
     try {
-
-        // =================================================
-        // ✏️ MODAL /reactrole editar
-        // =================================================
-
-        if (
-            interaction.isModalSubmit() &&
-            interaction.customId === "rr_modal_editar"
-        ) {
-            if (
-                typeof reactrole.tratarModalEditar ===
-                "function"
-            ) {
-                await reactrole.tratarModalEditar(
-                    interaction
-                );
-            }
-
-            return;
-        }
 
         // =================================================
         // 🖱️ BOTÕES / MODAIS / SELECTS DO PAINEL
@@ -2746,13 +2790,13 @@ client.on("interactionCreate", async interaction => {
                 await interaction.followUp({
                     content:
                         "❌ Ocorreu um erro ao processar o Reaction Role.",
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             } else {
                 await interaction.reply({
                     content:
                         "❌ Ocorreu um erro ao processar o Reaction Role.",
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
         } catch (erroResposta) {
