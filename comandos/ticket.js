@@ -260,6 +260,38 @@ async function inicializarTickets() {
         SET contador_tickets = 0
         WHERE contador_tickets IS NULL
     `);
+
+    // Colunas extras do embed (link do título, link do autor,
+    // horário e campos). Só cria se ainda não existirem.
+    const colunasModeloResult = await pool.query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'ticket_modelos'
+    `);
+
+    const colunasModelo =
+        colunasModeloResult.rows.map(
+            coluna => coluna.COLUMN_NAME
+        );
+
+    const colunasExtrasModelo = {
+        titulo_url: "TEXT",
+        autor_url: "TEXT",
+        mostrar_horario: "BOOLEAN NOT NULL DEFAULT FALSE",
+        campos: "TEXT"
+    };
+
+    for (const [coluna, definicao] of Object.entries(colunasExtrasModelo)) {
+
+        if (!colunasModelo.includes(coluna)) {
+
+            await pool.query(`
+                ALTER TABLE ticket_modelos
+                ADD COLUMN ${coluna} ${definicao}
+            `);
+        }
+    }
 }
 
 // ================================
@@ -314,6 +346,66 @@ function formatarDataHora(timestamp) {
 }
 
 // ================================
+// 🧾 CAMPOS DO EMBED
+// ================================
+
+// Formato salvo (uma linha por campo):
+//   Nome | Valor | sim   (sim = lado a lado, vazio/nao = linha inteira)
+// Use \n dentro do valor para quebrar linha.
+
+const MAX_CAMPOS_TICKET = 10;
+
+function textoParaCampos(texto) {
+
+    if (!texto || typeof texto !== "string") {
+        return [];
+    }
+
+    const campos = [];
+
+    for (const linha of texto.split("\n")) {
+
+        if (campos.length >= MAX_CAMPOS_TICKET) {
+            break;
+        }
+
+        const partes =
+            linha.split("|").map(
+                parte => parte.trim()
+            );
+
+        if (partes.length < 2 || !partes[0] || !partes[1]) {
+            continue;
+        }
+
+        campos.push({
+            name: partes[0].slice(0, 256),
+
+            value:
+                partes[1]
+                    .replace(/\\n/g, "\n")
+                    .slice(0, 1024),
+
+            inline:
+                /^(sim|s|true|1|yes)$/i.test(
+                    partes[2] || ""
+                )
+        });
+    }
+
+    return campos;
+}
+
+function camposParaTexto(campos) {
+
+    return campos
+        .map(campo =>
+            `${campo.name} | ${campo.value.replace(/\n/g, "\\n")} | ${campo.inline ? "sim" : "nao"}`
+        )
+        .join("\n");
+}
+
+// ================================
 // 🎨 EMBED DO TICKET
 // ================================
 
@@ -347,6 +439,12 @@ function criarEmbedTicket(modelo) {
             modelo.titulo
         );
 
+        if (urlValida(modelo.titulo_url)) {
+
+            embed.setURL(
+                modelo.titulo_url
+            );
+        }
     }
 
     if (modelo.descricao) {
@@ -370,6 +468,12 @@ function criarEmbedTicket(modelo) {
 
             autor.iconURL =
                 modelo.autor_icone;
+        }
+
+        if (urlValida(modelo.autor_url)) {
+
+            autor.url =
+                modelo.autor_url;
         }
 
         embed.setAuthor(
@@ -415,6 +519,30 @@ function criarEmbedTicket(modelo) {
         embed.setFooter(
             rodape
         );
+    }
+
+    const campos =
+        textoParaCampos(
+            modelo.campos
+        );
+
+    if (campos.length) {
+
+        embed.addFields(
+            campos
+        );
+    }
+
+    // MySQL devolve BOOLEAN como 0/1
+    if (
+        Boolean(
+            Number(
+                modelo.mostrar_horario
+            )
+        )
+    ) {
+
+        embed.setTimestamp();
     }
 
     return embed;
@@ -1108,6 +1236,193 @@ function criarModalPersonalizacao(
 }
 
 // ================================
+// 🔗 MODAL LINKS E ÍCONES
+// ================================
+
+function criarModalLinks(
+    modelo
+) {
+
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `ticket_modal_links_${modelo.id}`
+            )
+            .setTitle(
+                "🔗 Links e ícones"
+            );
+
+    const campo = (
+        id,
+        label,
+        valor
+    ) =>
+        new ActionRowBuilder()
+            .addComponents(
+                new TextInputBuilder()
+                    .setCustomId(id)
+                    .setLabel(label)
+                    .setPlaceholder("https://...")
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setValue(valor || "")
+                    .setMaxLength(1000)
+            );
+
+    modal.addComponents(
+        campo("titulo_url", "Link do título", modelo.titulo_url),
+        campo("autor_icone", "Ícone do autor (URL)", modelo.autor_icone),
+        campo("autor_url", "Link do autor", modelo.autor_url),
+        campo("rodape_icone", "Ícone do rodapé (URL)", modelo.rodape_icone)
+    );
+
+    return modal;
+}
+
+// ================================
+// 🧾 MODAL CAMPOS
+// ================================
+
+function criarModalCampos(
+    modelo
+) {
+
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `ticket_modal_campos_${modelo.id}`
+            )
+            .setTitle(
+                "🧾 Campos do embed"
+            );
+
+    const campos =
+        new TextInputBuilder()
+            .setCustomId("campos")
+            .setLabel(`Nome | Valor | sim (lado a lado) — máx. ${MAX_CAMPOS_TICKET}`)
+            .setPlaceholder("Horário | Seg a Sex, 9h às 18h | sim")
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false)
+            .setValue(modelo.campos || "")
+            .setMaxLength(4000);
+
+    modal.addComponents(
+        new ActionRowBuilder()
+            .addComponents(campos)
+    );
+
+    return modal;
+}
+
+// ================================
+// 🔁 RESPONDER ATUALIZANDO O PAINEL
+// ================================
+
+// Se o modal veio de um botão do painel, edita a MESMA mensagem
+// (em vez de mandar um painel novo a cada edição).
+async function responderPainel(
+    interaction,
+    payload
+) {
+
+    if (
+        typeof interaction.isFromMessage === "function" &&
+        interaction.isFromMessage()
+    ) {
+
+        const { flags, ...resto } = payload;
+
+        return interaction.update(
+            resto
+        );
+    }
+
+    return interaction.reply(
+        payload
+    );
+}
+
+// Depois de salvar no banco: atualiza o painel publicado (se for
+// o modelo em uso) e redesenha o painel de configuração no lugar.
+async function finalizarEdicaoModelo(
+    interaction,
+    id
+) {
+
+    const resultado =
+        await pool.query(
+            `
+            SELECT *
+            FROM ticket_modelos
+            WHERE id = $1
+            AND guild_id = $2
+            `,
+            [
+                id,
+                interaction.guildId
+            ]
+        );
+
+    if (
+        !resultado.rows.length
+    ) {
+
+        await interaction.reply({
+            content:
+                "❌ Esse modelo de ticket não existe.",
+
+            flags:
+                MessageFlags.Ephemeral
+        });
+
+        return true;
+    }
+
+    const configResult =
+        await pool.query(
+            `
+            SELECT *
+            FROM ticket_config
+            WHERE guild_id = $1
+            `,
+            [
+                interaction.guildId
+            ]
+        );
+
+    const config =
+        configResult.rows[0] || null;
+
+    if (
+        config &&
+        String(config.modelo_id) ===
+        String(id)
+    ) {
+
+        await atualizarPainelPublicado(
+            interaction.guild,
+            resultado.rows[0],
+            config
+        );
+    }
+
+    await responderPainel(
+        interaction,
+        criarPainelModelo(
+            resultado.rows[0],
+            obterConfiguracaoPendente(
+                interaction.guildId,
+                interaction.user.id,
+                id,
+                config
+            )
+        )
+    );
+
+    return true;
+}
+
+// ================================
 // 🎯 PAINEL DO MODELO
 // ================================
 
@@ -1119,6 +1434,13 @@ function criarPainelModelo(
     const contadorAtivo =
         Boolean(
             config?.contador_nome
+        );
+
+    const horarioAtivo =
+        Boolean(
+            Number(
+                modelo.mostrar_horario
+            )
         );
 
     const embed =
@@ -1229,6 +1551,52 @@ function criarPainelModelo(
                     )
                     .setStyle(
                         ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `ticket_links_${modelo.id}`
+                    )
+                    .setLabel(
+                        "Links e ícones"
+                    )
+                    .setEmoji(
+                        "🔗"
+                    )
+                    .setStyle(
+                        ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `ticket_campos_${modelo.id}`
+                    )
+                    .setLabel(
+                        "Campos"
+                    )
+                    .setEmoji(
+                        "🧾"
+                    )
+                    .setStyle(
+                        ButtonStyle.Primary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `ticket_horario_${modelo.id}`
+                    )
+                    .setLabel(
+                        horarioAtivo
+                            ? "Horário: Ativado"
+                            : "Horário: Desativado"
+                    )
+                    .setEmoji(
+                        "🕐"
+                    )
+                    .setStyle(
+                        horarioAtivo
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
                     )
             );
 
@@ -2397,6 +2765,167 @@ module.exports = {
             await interaction.showModal(
                 criarModalPersonalizacao(
                     resultado.rows[0]
+                )
+            );
+
+            return true;
+        }
+
+        // ================================
+        // 🔗 LINKS E ÍCONES / 🧾 CAMPOS
+        // ================================
+
+        if (
+            interaction.customId.startsWith("ticket_links_") ||
+            interaction.customId.startsWith("ticket_campos_")
+        ) {
+
+            const abrirLinks =
+                interaction.customId.startsWith(
+                    "ticket_links_"
+                );
+
+            const id =
+                interaction.customId.replace(
+                    abrirLinks
+                        ? "ticket_links_"
+                        : "ticket_campos_",
+                    ""
+                );
+
+            const resultado =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        id,
+                        interaction.guildId
+                    ]
+                );
+
+            if (
+                !resultado.rows.length
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Esse modelo de ticket não existe.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            await interaction.showModal(
+                abrirLinks
+                    ? criarModalLinks(resultado.rows[0])
+                    : criarModalCampos(resultado.rows[0])
+            );
+
+            return true;
+        }
+
+        // ================================
+        // 🕐 ALTERNAR HORÁRIO NO EMBED
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_horario_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_horario_",
+                    ""
+                );
+
+            await pool.query(
+                `
+                UPDATE ticket_modelos
+                SET mostrar_horario = NOT mostrar_horario
+                WHERE id = $1
+                AND guild_id = $2
+                `,
+                [
+                    id,
+                    interaction.guildId
+                ]
+            );
+
+            const modeloResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_modelos
+                    WHERE id = $1
+                    AND guild_id = $2
+                    `,
+                    [
+                        id,
+                        interaction.guildId
+                    ]
+                );
+
+            if (
+                !modeloResult.rows.length
+            ) {
+
+                await interaction.reply({
+                    content:
+                        "❌ Esse modelo de ticket não existe.",
+
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+
+                return true;
+            }
+
+            const configResult =
+                await pool.query(
+                    `
+                    SELECT *
+                    FROM ticket_config
+                    WHERE guild_id = $1
+                    `,
+                    [
+                        interaction.guildId
+                    ]
+                );
+
+            const configBanco =
+                configResult.rows[0] || null;
+
+            if (
+                configBanco &&
+                String(configBanco.modelo_id) ===
+                String(id)
+            ) {
+
+                await atualizarPainelPublicado(
+                    interaction.guild,
+                    modeloResult.rows[0],
+                    configBanco
+                );
+            }
+
+            await interaction.update(
+                criarPainelModelo(
+                    modeloResult.rows[0],
+                    obterConfiguracaoPendente(
+                        interaction.guildId,
+                        interaction.user.id,
+                        id,
+                        configBanco
+                    )
                 )
             );
 
@@ -3639,7 +4168,8 @@ module.exports = {
                 );
             }
 
-            await interaction.reply(
+            await responderPainel(
+                interaction,
                 criarPainelModelo(
                     resultado.rows[0],
                     obterConfiguracaoPendente(
@@ -3756,7 +4286,8 @@ module.exports = {
                 );
             }
 
-            await interaction.reply(
+            await responderPainel(
+                interaction,
                 criarPainelModelo(
                     resultado.rows[0],
                     obterConfiguracaoPendente(
@@ -3769,6 +4300,127 @@ module.exports = {
             );
 
             return true;
+        }
+
+        // ================================
+        // 🔗 LINKS E ÍCONES
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_modal_links_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_modal_links_",
+                    ""
+                );
+
+            const nomesCampos = {
+                titulo_url: "Link do título",
+                autor_icone: "Ícone do autor",
+                autor_url: "Link do autor",
+                rodape_icone: "Ícone do rodapé"
+            };
+
+            const valores = {};
+
+            for (const campo of Object.keys(nomesCampos)) {
+
+                const valor =
+                    interaction.fields
+                        .getTextInputValue(campo)
+                        .trim();
+
+                if (valor && !urlValida(valor)) {
+
+                    await interaction.reply({
+                        content:
+                            `❌ **${nomesCampos[campo]}** precisa ser um link válido começando com http:// ou https://`,
+
+                        flags:
+                            MessageFlags.Ephemeral
+                    });
+
+                    return true;
+                }
+
+                valores[campo] =
+                    valor || null;
+            }
+
+            await pool.query(
+                `
+                UPDATE ticket_modelos
+                SET
+                    titulo_url = $1,
+                    autor_icone = $2,
+                    autor_url = $3,
+                    rodape_icone = $4
+                WHERE id = $5
+                AND guild_id = $6
+                `,
+                [
+                    valores.titulo_url,
+                    valores.autor_icone,
+                    valores.autor_url,
+                    valores.rodape_icone,
+                    id,
+                    interaction.guildId
+                ]
+            );
+
+            return await finalizarEdicaoModelo(
+                interaction,
+                id
+            );
+        }
+
+        // ================================
+        // 🧾 CAMPOS
+        // ================================
+
+        if (
+            interaction.customId.startsWith(
+                "ticket_modal_campos_"
+            )
+        ) {
+
+            const id =
+                interaction.customId.replace(
+                    "ticket_modal_campos_",
+                    ""
+                );
+
+            // Salva já normalizado: só o que foi aceito de verdade
+            const camposTexto =
+                camposParaTexto(
+                    textoParaCampos(
+                        interaction.fields
+                            .getTextInputValue("campos")
+                    )
+                );
+
+            await pool.query(
+                `
+                UPDATE ticket_modelos
+                SET campos = $1
+                WHERE id = $2
+                AND guild_id = $3
+                `,
+                [
+                    camposTexto || null,
+                    id,
+                    interaction.guildId
+                ]
+            );
+
+            return await finalizarEdicaoModelo(
+                interaction,
+                id
+            );
         }
 
         return false;
