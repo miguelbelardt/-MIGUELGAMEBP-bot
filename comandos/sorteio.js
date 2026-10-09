@@ -99,6 +99,31 @@ async function prepararBanco() {
             "BIGINT"
         );
 
+        await garantirColunaSorteios(
+            "autor_nome",
+            "VARCHAR(256)"
+        );
+
+        await garantirColunaSorteios(
+            "autor_icone",
+            "TEXT"
+        );
+
+        await garantirColunaSorteios(
+            "rodape",
+            "VARCHAR(2048)"
+        );
+
+        await garantirColunaSorteios(
+            "rodape_icone",
+            "TEXT"
+        );
+
+        await garantirColunaSorteios(
+            "premio",
+            "VARCHAR(1024)"
+        );
+
         console.log(
             "💾 Banco de sorteios preparado."
         );
@@ -135,6 +160,12 @@ function criarConfig(
 
         imagem: null,
         thumbnail: null,
+
+        autor: null,
+        autorIcone: null,
+        rodape: null,
+        rodapeIcone: null,
+        premio: null,
 
         data: null,
         horario: null,
@@ -179,6 +210,21 @@ function criarConfigDoSorteio(
 
     config.thumbnail =
         sorteio.thumbnail || null;
+
+    config.autor =
+        sorteio.autor_nome || null;
+
+    config.autorIcone =
+        sorteio.autor_icone || null;
+
+    config.rodape =
+        sorteio.rodape || null;
+
+    config.rodapeIcone =
+        sorteio.rodape_icone || null;
+
+    config.premio =
+        sorteio.premio || null;
 
     config.vencedores =
         Math.min(
@@ -246,6 +292,52 @@ function normalizarCor(
     return parseInt(
         valor,
         16
+    );
+}
+
+// ================================
+// 🔗 URL / DADOS EXTRAS
+// ================================
+
+function validarURL(url) {
+    try {
+        const resultado = new URL(url);
+
+        // O Discord só aceita http/https em imagens e ícones.
+        return (
+            resultado.protocol === "http:" ||
+            resultado.protocol === "https:"
+        );
+    } catch {
+        return false;
+    }
+}
+
+async function salvarExtrasSorteio(
+    id,
+    guildId,
+    config
+) {
+    await pool.query(
+        `
+        UPDATE sorteios
+        SET autor_nome = $1,
+            autor_icone = $2,
+            rodape = $3,
+            rodape_icone = $4,
+            premio = $5
+        WHERE id = $6
+          AND guild_id = $7
+        `,
+        [
+            config.autor || null,
+            config.autorIcone || null,
+            config.rodape || null,
+            config.rodapeIcone || null,
+            config.premio || null,
+            id,
+            guildId
+        ]
     );
 }
 
@@ -403,6 +495,23 @@ function criarPainelSorteio(
                     )
                     .setDisabled(
                         encerrado
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `sorteio_aparencia_${usuarioId}`
+                    )
+                    .setLabel(
+                        "Aparência"
+                    )
+                    .setEmoji(
+                        "🎨"
+                    )
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    )
+                    .setDisabled(
+                        encerrado
                     )
             ),
 
@@ -498,6 +607,27 @@ function criarEmbedPainel(
                         : "❌ Não definido"
             },
             {
+                name: "🎁 Prêmio",
+                value:
+                    config.premio ||
+                    "❌ Não definido",
+                inline: true
+            },
+            {
+                name: "✍️ Autor",
+                value:
+                    config.autor ||
+                    "❌ Não definido",
+                inline: true
+            },
+            {
+                name: "📝 Rodapé",
+                value:
+                    config.rodape ||
+                    "Padrão",
+                inline: true
+            },
+            {
                 name: "📌 Status",
                 value:
                     encerrado
@@ -554,6 +684,41 @@ function criarEmbedPreview(
             });
 
     // ================================
+    // 🎁 PRÊMIO
+    // ================================
+
+    if (config.premio) {
+        embed.addFields({
+            name: "🎁 Prêmio",
+            value:
+                config.premio,
+            inline: true
+        });
+    }
+
+    // ================================
+    // ✍️ AUTOR
+    // ================================
+
+    if (config.autor) {
+        const autor = {
+            name: config.autor
+        };
+
+        if (
+            config.autorIcone &&
+            validarURL(config.autorIcone)
+        ) {
+            autor.iconURL =
+                config.autorIcone;
+        }
+
+        embed.setAuthor(
+            autor
+        );
+    }
+
+    // ================================
     // 🆔 ID DO SORTEIO
     // ================================
 
@@ -593,12 +758,31 @@ function criarEmbedPreview(
         );
     }
 
-    embed.setFooter({
+    // Rodapé personalizado; se o sorteio acabou, o aviso de
+    // encerrado sempre tem prioridade.
+    const rodape = {
         text:
             encerrado
                 ? "🔴 Este sorteio foi encerrado."
-                : "🎉 Clique no botão abaixo para participar!"
-    });
+                : (
+                    config.rodape ||
+                    "🎉 Clique no botão abaixo para participar!"
+                )
+    };
+
+    if (
+        !encerrado &&
+        config.rodape &&
+        config.rodapeIcone &&
+        validarURL(config.rodapeIcone)
+    ) {
+        rodape.iconURL =
+            config.rodapeIcone;
+    }
+
+    embed.setFooter(
+        rodape
+    );
 
     return embed;
 }
@@ -956,6 +1140,44 @@ async function atualizarPainelCriacao(
     }
 }
 
+// Painel é uma mensagem efêmera: ela NÃO pode ser buscada no canal.
+// Por isso o modal que veio de um botão do painel responde com
+// update, que edita a própria mensagem.
+async function atualizarPainelModal(
+    interaction,
+    config
+) {
+    if (
+        typeof interaction.isFromMessage === "function" &&
+        interaction.isFromMessage()
+    ) {
+        return interaction.update({
+            embeds: [
+                criarEmbedPainel(
+                    config
+                )
+            ],
+            components:
+                criarPainelSorteio(
+                    config.usuarioId,
+                    Boolean(
+                        config.sorteioId
+                    ),
+                    Boolean(
+                        config.sorteioEncerrado
+                    )
+                )
+        });
+    }
+
+    return interaction.reply({
+        content:
+            "✅ Atualizado!",
+        flags:
+            MessageFlags.Ephemeral
+    });
+}
+
 // ================================
 // 🗄️ CRIAR SORTEIO
 // ================================
@@ -1191,6 +1413,21 @@ async function atualizarMensagemSorteio(
                 Boolean(
                     sorteio.mostrar_participantes
                 ),
+
+            autor:
+                sorteio.autor_nome,
+
+            autorIcone:
+                sorteio.autor_icone,
+
+            rodape:
+                sorteio.rodape,
+
+            rodapeIcone:
+                sorteio.rodape_icone,
+
+            premio:
+                sorteio.premio,
 
             data:
                 data.data,
@@ -1736,10 +1973,27 @@ async function finalizarSorteio(
                     }
                 );
 
+        if (sorteio.premio) {
+            embed.addFields({
+                name:
+                    "🎁 Prêmio",
+                value:
+                    sorteio.premio
+            });
+        }
+
+        // Menção só dentro do embed NÃO notifica ninguém,
+        // então vai também no texto da mensagem.
         await canal.send({
+            content:
+                `🎉 Parabéns ${mencoes}!`,
             embeds: [
                 embed
-            ]
+            ],
+            allowedMentions: {
+                users:
+                    vencedores
+            }
         });
 
     } catch (erro) {
@@ -2182,6 +2436,7 @@ module.exports = {
             "sorteio_canal",
             "sorteio_vencedores",
             "sorteio_data",
+            "sorteio_aparencia",
             "sorteio_participantes",
             "sorteio_preview",
             "sorteio_enviar",
@@ -2391,6 +2646,106 @@ module.exports = {
                                                 ? "5865F2"
                                                 : ""
                                         )
+                                    )
+                            )
+                )
+            );
+
+            return interaction.showModal(
+                modal
+            );
+        }
+
+        if (
+            tipo ===
+            "sorteio_aparencia"
+        ) {
+
+            if (
+                config.sorteioId
+            ) {
+                const sorteio =
+                    await verificarCriador(
+                        interaction,
+                        config.sorteioId
+                    );
+
+                if (!sorteio) {
+                    return;
+                }
+            }
+
+            const modal =
+                new ModalBuilder()
+                    .setCustomId(
+                        "sorteio_modal_aparencia"
+                    )
+                    .setTitle(
+                        "🎨 Aparência do sorteio"
+                    );
+
+            const camposAparencia = [
+                [
+                    "premio",
+                    "Prêmio",
+                    config.premio,
+                    1024
+                ],
+                [
+                    "autor",
+                    "Autor (nome no topo do embed)",
+                    config.autor,
+                    256
+                ],
+                [
+                    "autor_icone",
+                    "Ícone do autor (link)",
+                    config.autorIcone,
+                    1000
+                ],
+                [
+                    "rodape",
+                    "Rodapé",
+                    config.rodape,
+                    2048
+                ],
+                [
+                    "rodape_icone",
+                    "Ícone do rodapé (link)",
+                    config.rodapeIcone,
+                    1000
+                ]
+            ];
+
+            modal.addComponents(
+                ...camposAparencia.map(
+                    ([
+                        id,
+                        label,
+                        valor,
+                        max
+                    ]) =>
+                        new ActionRowBuilder()
+                            .addComponents(
+                                new TextInputBuilder()
+                                    .setCustomId(
+                                        id
+                                    )
+                                    .setLabel(
+                                        label
+                                    )
+                                    .setStyle(
+                                        TextInputStyle.Short
+                                    )
+                                    .setRequired(
+                                        false
+                                    )
+                                    .setMaxLength(
+                                        max
+                                    )
+                                    .setValue(
+                                        valor ||
+                                        ""
                                     )
                             )
                 )
@@ -2816,6 +3171,12 @@ module.exports = {
                         ]
                     );
 
+                    await salvarExtrasSorteio(
+                        config.sorteioId,
+                        config.guildId,
+                        config
+                    );
+
                     await atualizarMensagemSorteio(
                         interaction.client,
                         config.sorteioId
@@ -2878,6 +3239,12 @@ module.exports = {
 
                 config.sorteioEncerrado =
                     false;
+
+                await salvarExtrasSorteio(
+                    sorteio.id,
+                    config.guildId,
+                    config
+                );
 
                 const mensagem =
                     await canal.send({
@@ -3033,30 +3400,42 @@ module.exports = {
                 cor ||
                 "5865F2";
 
-            config.imagem =
+            const imagem =
                 interaction.fields
                     .getTextInputValue(
                         "imagem"
                     )
-                    .trim() ||
-                null;
+                    .trim();
 
-            config.thumbnail =
+            const thumbnail =
                 interaction.fields
                     .getTextInputValue(
                         "thumbnail"
                     )
-                    .trim() ||
-                null;
+                    .trim();
 
-            await interaction.deferUpdate();
+            if (
+                (imagem && !validarURL(imagem)) ||
+                (thumbnail && !validarURL(thumbnail))
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ A imagem e a thumbnail precisam ser links começando com http:// ou https://",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
 
-            await atualizarPainelCriacao(
-                interaction.client,
+            config.imagem =
+                imagem || null;
+
+            config.thumbnail =
+                thumbnail || null;
+
+            return atualizarPainelModal(
+                interaction,
                 config
             );
-
-            return;
         }
 
         if (
@@ -3154,14 +3533,60 @@ module.exports = {
             config.horario =
                 horario;
 
-            await interaction.deferUpdate();
-
-            await atualizarPainelCriacao(
-                interaction.client,
+            return atualizarPainelModal(
+                interaction,
                 config
             );
+        }
 
-            return;
+        if (
+            interaction.customId ===
+            "sorteio_modal_aparencia"
+        ) {
+            const ler = campo =>
+                interaction.fields
+                    .getTextInputValue(
+                        campo
+                    )
+                    .trim();
+
+            const autorIcone =
+                ler("autor_icone");
+
+            const rodapeIcone =
+                ler("rodape_icone");
+
+            if (
+                (autorIcone && !validarURL(autorIcone)) ||
+                (rodapeIcone && !validarURL(rodapeIcone))
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Os ícones precisam ser links começando com http:// ou https://",
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            config.premio =
+                ler("premio") || null;
+
+            config.autor =
+                ler("autor") || null;
+
+            config.autorIcone =
+                autorIcone || null;
+
+            config.rodape =
+                ler("rodape") || null;
+
+            config.rodapeIcone =
+                rodapeIcone || null;
+
+            return atualizarPainelModal(
+                interaction,
+                config
+            );
         }
     },
 
