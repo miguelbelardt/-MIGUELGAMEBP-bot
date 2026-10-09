@@ -16,7 +16,8 @@ const {
 const {
     getJoinConfig,
     salvarJoinConfig,
-    atualizarCanalJoin
+    atualizarCanalJoin,
+    mysqlPool
 } = require("../database/database");
 
 // =====================================================
@@ -117,6 +118,193 @@ function estaAtivado(valor) {
 }
 
 // =====================================================
+// 🔘 LER "SIM/NÃO" DIGITADO (aceita variações)
+// =====================================================
+
+function lerSimNao(texto, padrao = true) {
+    const valor =
+        String(texto ?? "")
+            .trim()
+            .toLowerCase();
+
+    if (!valor) {
+        return padrao;
+    }
+
+    return !/^(n|nao|não|no|off|0|false|desativado|desligado)$/.test(
+        valor
+    );
+}
+
+// =====================================================
+// 🔗 LINKS
+// =====================================================
+
+function validarURL(url) {
+    try {
+        const resultado = new URL(url);
+
+        return (
+            resultado.protocol === "http:" ||
+            resultado.protocol === "https:"
+        );
+    } catch {
+        return false;
+    }
+}
+
+// Ícones e imagens aceitam link ou as variáveis {avatar} / {banner}
+function urlOuVariavel(valor) {
+    return (
+        !valor ||
+        validarURL(valor) ||
+        /^\{(avatar|banner)\}$/i.test(valor)
+    );
+}
+
+// =====================================================
+// 🧾 CAMPOS DO EMBED
+// =====================================================
+
+// Uma linha por campo:  Nome | Valor | sim   (sim = lado a lado)
+// Use \n dentro do valor para quebrar linha. Aceita variáveis.
+
+const MAX_CAMPOS_JOIN = 10;
+
+function textoParaCampos(texto) {
+    if (!texto || typeof texto !== "string") {
+        return [];
+    }
+
+    const campos = [];
+
+    for (const linha of texto.split("\n")) {
+        if (campos.length >= MAX_CAMPOS_JOIN) {
+            break;
+        }
+
+        const partes =
+            linha.split("|").map(
+                parte => parte.trim()
+            );
+
+        if (partes.length < 2 || !partes[0] || !partes[1]) {
+            continue;
+        }
+
+        campos.push({
+            name: partes[0].slice(0, 256),
+
+            value:
+                partes[1]
+                    .replace(/\\n/g, "\n")
+                    .slice(0, 1024),
+
+            inline:
+                /^(sim|s|true|1|yes)$/i.test(
+                    partes[2] || ""
+                )
+        });
+    }
+
+    return campos;
+}
+
+function camposParaTexto(campos) {
+    return campos
+        .map(campo =>
+            `${campo.name} | ${campo.value.replace(/\n/g, "\\n")} | ${campo.inline ? "sim" : "nao"}`
+        )
+        .join("\n");
+}
+
+// =====================================================
+// 💾 COLUNAS EXTRAS (link do título, link do autor, campos)
+// =====================================================
+
+// O database.js não conhece essas colunas: o próprio join.js
+// cria (se faltarem) e salva depois do save normal.
+
+let promessaColunasExtras = null;
+
+function garantirColunasExtrasJoin() {
+    if (!promessaColunasExtras) {
+        promessaColunasExtras = (async () => {
+            const [colunas] = await mysqlPool.query(
+                "SHOW COLUMNS FROM join_config"
+            );
+
+            const existentes = colunas.map(
+                coluna => coluna.Field
+            );
+
+            const extras = {
+                titulo_url: "TEXT",
+                autor_url: "TEXT",
+                campos: "TEXT"
+            };
+
+            for (const [coluna, definicao] of Object.entries(extras)) {
+                if (!existentes.includes(coluna)) {
+                    await mysqlPool.query(
+                        `ALTER TABLE join_config ADD COLUMN ${coluna} ${definicao}`
+                    );
+                }
+            }
+        })().catch(erro => {
+            promessaColunasExtras = null;
+
+            console.error(
+                "❌ Erro ao preparar colunas extras do join:",
+                erro
+            );
+        });
+    }
+
+    return promessaColunasExtras;
+}
+
+async function salvarExtrasJoin(guildId, extras) {
+    try {
+        await garantirColunasExtrasJoin();
+
+        const permitidas = [
+            "titulo_url",
+            "autor_url",
+            "campos"
+        ];
+
+        const colunas =
+            Object.keys(extras).filter(
+                coluna => permitidas.includes(coluna)
+            );
+
+        if (!colunas.length) {
+            return;
+        }
+
+        await mysqlPool.query(
+            `
+            UPDATE join_config
+            SET ${colunas.map(coluna => `${coluna} = ?`).join(", ")}
+            WHERE guild_id = ?
+            `,
+            [
+                ...colunas.map(
+                    coluna => extras[coluna] || null
+                ),
+                guildId
+            ]
+        );
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao salvar dados extras do join:",
+            erro
+        );
+    }
+}
+
+// =====================================================
 // 👤 PEGAR DADOS DO USUÁRIO
 // =====================================================
 
@@ -191,6 +379,16 @@ function criarEmbedBoasVindas(
 
         if (titulo) {
             embed.setTitle(titulo);
+
+            const tituloUrl =
+                substituirVariaveis(
+                    configBanco.titulo_url,
+                    dados
+                );
+
+            if (validarURL(tituloUrl)) {
+                embed.setURL(tituloUrl);
+            }
         }
     }
 
@@ -261,6 +459,17 @@ function criarEmbedBoasVindas(
             ) {
                 autor.iconURL =
                     iconeAutor;
+            }
+
+            const autorUrl =
+                substituirVariaveis(
+                    configBanco.autor_url,
+                    dados
+                );
+
+            if (validarURL(autorUrl)) {
+                autor.url =
+                    autorUrl;
             }
 
             embed.setAuthor(autor);
@@ -342,6 +551,42 @@ function criarEmbedBoasVindas(
         }
 
         embed.setFooter(footer);
+    }
+
+    // =================================================
+    // 🧾 CAMPOS
+    // =================================================
+
+    const campos =
+        textoParaCampos(
+            configBanco.campos
+        )
+            .map(campo => ({
+                name:
+                    substituirVariaveis(
+                        campo.name,
+                        dados
+                    ).slice(0, 256),
+
+                value:
+                    substituirVariaveis(
+                        campo.value,
+                        dados
+                    ).slice(0, 1024),
+
+                inline:
+                    campo.inline
+            }))
+            .filter(
+                campo =>
+                    campo.name &&
+                    campo.value
+            );
+
+    if (campos.length) {
+        embed.addFields(
+            campos
+        );
     }
 
     // =================================================
@@ -551,21 +796,47 @@ async function pegarDadosTeste(interaction) {
 // 🧩 PAINEL DE CONFIGURAÇÃO
 // =====================================================
 
-function criarPainelJoin(config = {}) {
+function tamanhoEmbed(embed) {
+    const d = embed.data || {};
+
+    return (
+        (d.title || "").length +
+        (d.description || "").length +
+        (d.author?.name || "").length +
+        (d.footer?.text || "").length +
+        (d.fields || []).reduce(
+            (total, campo) =>
+                total +
+                campo.name.length +
+                campo.value.length,
+            0
+        )
+    );
+}
+
+function criarPainelJoin(
+    config = {},
+    previa = null,
+    textoMensagem = ""
+) {
+    const qtdCampos =
+        textoParaCampos(
+            config.campos
+        ).length;
+
+    const estado = valor =>
+        estaAtivado(valor)
+            ? "🟢 Ativado"
+            : "🔴 Desativado";
+
     const embed =
         new EmbedBuilder()
             .setTitle("👋 Configuração de Boas-vindas")
             .setDescription(
                 "Use os botões abaixo para configurar o sistema de boas-vindas.\n\n" +
-                "📢 **Canal:** selecione onde as mensagens serão enviadas.\n" +
-                "📝 **Mensagem:** configure o content.\n" +
-                "🎨 **Embed:** configure título, descrição e cor.\n" +
-                "👤 **Autor:** configure nome e ícone do autor.\n" +
-                "🖼️ **Imagens:** configure thumbnail e imagem.\n" +
-                "📌 **Rodapé:** configure texto e ícone.\n" +
-                "⚙️ **Opções:** configure embed e timestamp.\n" +
-                "🟢 **Ativar / 🔴 Desativar:** controle o sistema diretamente pelo painel.\n\n" +
-                "As variáveis disponíveis continuam funcionando."
+                "📝 **Mensagem**, 🎨 **Embed**, 👤 **Autor**, 🖼️ **Imagens**, 📌 **Rodapé** e 🧾 **Campos** abrem formulários.\n" +
+                "Os botões **ON/OFF** ligam e desligam cada parte do embed.\n\n" +
+                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`"
             )
             .setColor(
                 converterCor(
@@ -575,18 +846,12 @@ function criarPainelJoin(config = {}) {
             .addFields(
                 {
                     name: "⚙️ Sistema",
-                    value:
-                        estaAtivado(config.habilitado)
-                            ? "🟢 Ativado"
-                            : "🔴 Desativado",
+                    value: estado(config.habilitado),
                     inline: true
                 },
                 {
                     name: "🎨 Embed",
-                    value:
-                        estaAtivado(config.embed_habilitado)
-                            ? "🟢 Ativado"
-                            : "🔴 Desativado",
+                    value: estado(config.embed_habilitado),
                     inline: true
                 },
                 {
@@ -595,6 +860,37 @@ function criarPainelJoin(config = {}) {
                         config.canal_id
                             ? `<#${config.canal_id}>`
                             : "❌ Não configurado",
+                    inline: true
+                },
+                {
+                    name: "👤 Autor",
+                    value: estado(config.autor_habilitado),
+                    inline: true
+                },
+                {
+                    name: "📌 Rodapé",
+                    value: estado(config.footer_habilitado),
+                    inline: true
+                },
+                {
+                    name: "⏰ Horário",
+                    value: estado(config.timestamp),
+                    inline: true
+                },
+                {
+                    name: "🧾 Campos",
+                    value:
+                        qtdCampos
+                            ? `${qtdCampos} campo(s)`
+                            : "Nenhum",
+                    inline: true
+                },
+                {
+                    name: "🔗 Link do título",
+                    value:
+                        config.titulo_url
+                            ? "✅ Definido"
+                            : "❌ Nenhum",
                     inline: true
                 }
             );
@@ -618,146 +914,181 @@ function criarPainelJoin(config = {}) {
                 canalSelect
             );
 
+    const botao = (
+        id,
+        label,
+        emoji,
+        estilo = ButtonStyle.Primary
+    ) =>
+        new ButtonBuilder()
+            .setCustomId(id)
+            .setLabel(label)
+            .setEmoji(emoji)
+            .setStyle(estilo);
+
+    const alternar = (
+        id,
+        nome,
+        emoji,
+        valor
+    ) =>
+        botao(
+            id,
+            `${nome}: ${estaAtivado(valor) ? "ON" : "OFF"}`,
+            emoji,
+            estaAtivado(valor)
+                ? ButtonStyle.Success
+                : ButtonStyle.Secondary
+        );
+
     const row1 =
         new ActionRowBuilder()
             .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_mensagem"
-                    )
-                    .setLabel("Mensagem")
-                    .setEmoji("📝")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_embed"
-                    )
-                    .setLabel("Embed")
-                    .setEmoji("🎨")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_autor"
-                    )
-                    .setLabel("Autor")
-                    .setEmoji("👤")
-                    .setStyle(
-                        ButtonStyle.Primary
-                    )
+                botao("join_config_mensagem", "Mensagem", "📝"),
+                botao("join_config_embed", "Embed", "🎨"),
+                botao("join_config_autor", "Autor", "👤"),
+                botao("join_config_imagens", "Imagens", "🖼️"),
+                botao("join_config_footer", "Rodapé", "📌")
             );
 
     const row2 =
         new ActionRowBuilder()
             .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_imagens"
-                    )
-                    .setLabel("Imagens")
-                    .setEmoji("🖼️")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_footer"
-                    )
-                    .setLabel("Rodapé")
-                    .setEmoji("📌")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_opcoes"
-                    )
-                    .setLabel("Opções")
-                    .setEmoji("⚙️")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    )
+                botao(
+                    "join_config_campos",
+                    "Campos",
+                    "🧾",
+                    ButtonStyle.Primary
+                ),
+                alternar("join_toggle_embed", "Embed", "🎨", config.embed_habilitado),
+                alternar("join_toggle_autor", "Autor", "👤", config.autor_habilitado),
+                alternar("join_toggle_footer", "Rodapé", "📌", config.footer_habilitado),
+                alternar("join_toggle_timestamp", "Horário", "⏰", config.timestamp)
             );
-
-    // =================================================
-    // 🟢🔴 CONTROLE DO SISTEMA
-    // =================================================
 
     const row3 =
         new ActionRowBuilder()
             .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_ativar"
-                    )
-                    .setLabel("Ativar")
-                    .setEmoji("🟢")
-                    .setStyle(
-                        ButtonStyle.Success
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_desativar"
-                    )
-                    .setLabel("Desativar")
-                    .setEmoji("🔴")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_status"
-                    )
-                    .setLabel("Status")
-                    .setEmoji("📊")
-                    .setStyle(
-                        ButtonStyle.Secondary
-                    )
-            );
-
-    const row4 =
-        new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_teste"
-                    )
-                    .setLabel("Testar")
-                    .setEmoji("🧪")
-                    .setStyle(
-                        ButtonStyle.Success
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        "join_config_fechar"
-                    )
-                    .setLabel("Fechar")
-                    .setEmoji("❌")
-                    .setStyle(
-                        ButtonStyle.Danger
-                    )
+                botao("join_config_ativar", "Ativar", "🟢", ButtonStyle.Success),
+                botao("join_config_desativar", "Desativar", "🔴", ButtonStyle.Danger),
+                botao("join_config_status", "Status", "📊", ButtonStyle.Secondary),
+                botao("join_config_teste", "Testar", "🧪", ButtonStyle.Success),
+                botao("join_config_fechar", "Fechar", "❌", ButtonStyle.Danger)
             );
 
     return {
-        embeds: [embed],
+        content: textoMensagem,
+        embeds:
+            previa
+                ? [previa, embed]
+                : [embed],
         components: [
             rowCanal,
             row1,
             row2,
-            row3,
-            row4
+            row3
         ]
     };
+}
+
+// Monta o painel com a prévia ao vivo do embed (dados do próprio
+// administrador no lugar do novo membro) e o texto da mensagem.
+async function montarPainelJoin(
+    interaction,
+    config = {}
+) {
+    let previa = null;
+    let textoMensagem = "";
+
+    try {
+        const dados =
+            await pegarDadosTeste(
+                interaction
+            );
+
+        const embedPrevia =
+            criarEmbedBoasVindas(
+                config,
+                dados
+            );
+
+        // Soma de todos os embeds da mensagem: máx. 6000 caracteres
+        if (
+            embedPrevia &&
+            tamanhoEmbed(embedPrevia) <= 4500
+        ) {
+            previa = embedPrevia;
+        }
+
+        if (config.content) {
+            textoMensagem =
+                (
+                    "📝 **Mensagem de boas-vindas:**\n" +
+                    substituirVariaveis(
+                        config.content,
+                        dados
+                    )
+                ).slice(0, 1900);
+        }
+    } catch (erro) {
+        console.error(
+            "⚠️ Prévia do painel ignorada:",
+            erro.message
+        );
+    }
+
+    return criarPainelJoin(
+        config,
+        previa,
+        textoMensagem
+    );
+}
+
+// Atualiza o painel NO LUGAR (botão/menu/modal do painel) em vez de
+// mandar uma mensagem solta de confirmação.
+async function responderPainelJoin(
+    interaction
+) {
+    const config =
+        (
+            await getJoinConfig(
+                interaction.guild.id
+            )
+        ) || {};
+
+    const painel =
+        await montarPainelJoin(
+            interaction,
+            config
+        );
+
+    const doPainel =
+        (
+            typeof interaction.isFromMessage === "function" &&
+            interaction.isFromMessage()
+        ) ||
+        (
+            typeof interaction.isButton === "function" &&
+            interaction.isButton()
+        ) ||
+        (
+            typeof interaction.isChannelSelectMenu === "function" &&
+            interaction.isChannelSelectMenu()
+        );
+
+    if (doPainel) {
+        await interaction.update(
+            painel
+        );
+    } else {
+        await interaction.reply({
+            ...painel,
+            flags:
+                MessageFlags.Ephemeral
+        });
+    }
+
+    return true;
 }
 
 // =====================================================
@@ -851,6 +1182,18 @@ function criarModalEmbed(config) {
             )
             .setMaxLength(20);
 
+    const tituloUrl =
+        new TextInputBuilder()
+            .setCustomId("titulo_url")
+            .setLabel("Link do título (clicável)")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setPlaceholder("https://...")
+            .setValue(
+                config.titulo_url || ""
+            )
+            .setMaxLength(1000);
+
     modal.addComponents(
         new ActionRowBuilder()
             .addComponents(titulo),
@@ -859,7 +1202,10 @@ function criarModalEmbed(config) {
             .addComponents(descricao),
 
         new ActionRowBuilder()
-            .addComponents(cor)
+            .addComponents(cor),
+
+        new ActionRowBuilder()
+            .addComponents(tituloUrl)
     );
 
     return modal;
@@ -893,7 +1239,7 @@ function criarModalAutor(config) {
     const icone =
         new TextInputBuilder()
             .setCustomId("icone")
-            .setLabel("Ícone do autor")
+            .setLabel("Ícone do autor (link ou {avatar})")
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setValue(
@@ -901,20 +1247,17 @@ function criarModalAutor(config) {
             )
             .setMaxLength(1000);
 
-    const habilitado =
+    const autorUrl =
         new TextInputBuilder()
-            .setCustomId("habilitado")
-            .setLabel("Autor ativado? (sim/não)")
+            .setCustomId("autor_url")
+            .setLabel("Link do autor (clicável)")
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
+            .setPlaceholder("https://...")
             .setValue(
-                estaAtivado(
-                    config.autor_habilitado
-                )
-                    ? "sim"
-                    : "não"
+                config.autor_url || ""
             )
-            .setMaxLength(5);
+            .setMaxLength(1000);
 
     modal.addComponents(
         new ActionRowBuilder()
@@ -924,7 +1267,7 @@ function criarModalAutor(config) {
             .addComponents(icone),
 
         new ActionRowBuilder()
-            .addComponents(habilitado)
+            .addComponents(autorUrl)
     );
 
     return modal;
@@ -1005,7 +1348,7 @@ function criarModalFooter(config) {
     const icone =
         new TextInputBuilder()
             .setCustomId("icone")
-            .setLabel("Ícone do rodapé")
+            .setLabel("Ícone do rodapé (link ou {avatar})")
             .setStyle(TextInputStyle.Short)
             .setRequired(false)
             .setValue(
@@ -1013,30 +1356,50 @@ function criarModalFooter(config) {
             )
             .setMaxLength(1000);
 
-    const habilitado =
-        new TextInputBuilder()
-            .setCustomId("habilitado")
-            .setLabel("Rodapé ativado? (sim/não)")
-            .setStyle(TextInputStyle.Short)
-            .setRequired(false)
-            .setValue(
-                estaAtivado(
-                    config.footer_habilitado
-                )
-                    ? "sim"
-                    : "não"
-            )
-            .setMaxLength(5);
-
     modal.addComponents(
         new ActionRowBuilder()
             .addComponents(texto),
 
         new ActionRowBuilder()
-            .addComponents(icone),
+            .addComponents(icone)
+    );
 
+    return modal;
+}
+
+// =====================================================
+// 🧾 MODAL - CAMPOS
+// =====================================================
+
+function criarModalCampos(config) {
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                "join_modal_campos"
+            )
+            .setTitle(
+                "🧾 Campos do embed"
+            );
+
+    const campos =
+        new TextInputBuilder()
+            .setCustomId("campos")
+            .setLabel(
+                `Nome | Valor | sim (lado a lado) — máx. ${MAX_CAMPOS_JOIN}`
+            )
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(false)
+            .setPlaceholder(
+                "Membro | #{members} | sim"
+            )
+            .setValue(
+                config.campos || ""
+            )
+            .setMaxLength(4000);
+
+    modal.addComponents(
         new ActionRowBuilder()
-            .addComponents(habilitado)
+            .addComponents(campos)
     );
 
     return modal;
@@ -1412,8 +1775,20 @@ async function execute(interaction) {
                     );
             }
 
+            await garantirColunasExtrasJoin();
+
+            config =
+                await getJoinConfig(
+                    guildId
+                );
+
             await interaction.reply({
-                ...criarPainelJoin(config),
+                ...(
+                    await montarPainelJoin(
+                        interaction,
+                        config || {}
+                    )
+                ),
                 flags:
                     MessageFlags.Ephemeral
             });
@@ -1584,6 +1959,8 @@ async function tratarInteracao(interaction) {
     const id =
         interaction.customId || "";
 
+    await garantirColunasExtrasJoin();
+
     // =================================================
     // 📢 SELECIONAR CANAL
     // =================================================
@@ -1611,14 +1988,9 @@ async function tratarInteracao(interaction) {
             canal.id
         );
 
-        await interaction.reply({
-            content:
-                `✅ Canal de boas-vindas definido para ${canal}.`,
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -1754,6 +2126,69 @@ async function tratarInteracao(interaction) {
     }
 
     // =================================================
+    // 🧾 CAMPOS
+    // =================================================
+
+    if (
+        interaction.isButton() &&
+        id === "join_config_campos"
+    ) {
+        const config =
+            await getJoinConfig(
+                interaction.guild.id
+            );
+
+        await interaction.showModal(
+            criarModalCampos(
+                config || {}
+            )
+        );
+
+        return true;
+    }
+
+    // =================================================
+    // 🔘 LIGAR / DESLIGAR PARTES DO EMBED
+    // =================================================
+
+    const alternadores = {
+        join_toggle_embed: "embed_habilitado",
+        join_toggle_autor: "autor_habilitado",
+        join_toggle_footer: "footer_habilitado",
+        join_toggle_timestamp: "timestamp"
+    };
+
+    if (
+        interaction.isButton() &&
+        alternadores[id]
+    ) {
+        const campo =
+            alternadores[id];
+
+        const config =
+            (
+                await getJoinConfig(
+                    interaction.guild.id
+                )
+            ) || {};
+
+        await salvarJoinConfig(
+            interaction.guild.id,
+            {
+                ...config,
+                [campo]:
+                    !estaAtivado(
+                        config[campo]
+                    )
+            }
+        );
+
+        return responderPainelJoin(
+            interaction
+        );
+    }
+
+    // =================================================
     // 🟢 ATIVAR PELO PAINEL
     // =================================================
 
@@ -1774,14 +2209,9 @@ async function tratarInteracao(interaction) {
             }
         );
 
-        await interaction.reply({
-            content:
-                "🟢 Sistema de boas-vindas ativado pelo painel!",
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -1805,14 +2235,9 @@ async function tratarInteracao(interaction) {
             }
         );
 
-        await interaction.reply({
-            content:
-                "🔴 Sistema de boas-vindas desativado pelo painel!",
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -1887,14 +2312,9 @@ async function tratarInteracao(interaction) {
             }
         );
 
-        await interaction.reply({
-            content:
-                "✅ Mensagem de boas-vindas atualizada!",
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -1905,6 +2325,27 @@ async function tratarInteracao(interaction) {
         interaction.isModalSubmit() &&
         id === "join_modal_embed"
     ) {
+        const tituloUrl =
+            interaction.fields
+                .getTextInputValue(
+                    "titulo_url"
+                )
+                .trim();
+
+        if (
+            tituloUrl &&
+            !validarURL(tituloUrl)
+        ) {
+            await interaction.reply({
+                content:
+                    "❌ O link do título precisa começar com http:// ou https://",
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         const config =
             await getJoinConfig(
                 interaction.guild.id
@@ -1929,14 +2370,16 @@ async function tratarInteracao(interaction) {
             }
         );
 
-        await interaction.reply({
-            content:
-                "✅ Configuração do embed atualizada!",
-            flags:
-                MessageFlags.Ephemeral
-        });
+        await salvarExtrasJoin(
+            interaction.guild.id,
+            {
+                titulo_url: tituloUrl
+            }
+        );
 
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -1947,44 +2390,74 @@ async function tratarInteracao(interaction) {
         interaction.isModalSubmit() &&
         id === "join_modal_autor"
     ) {
+        const nome =
+            interaction.fields
+                .getTextInputValue(
+                    "nome"
+                )
+                .trim();
+
+        const icone =
+            interaction.fields
+                .getTextInputValue(
+                    "icone"
+                )
+                .trim();
+
+        const autorUrl =
+            interaction.fields
+                .getTextInputValue(
+                    "autor_url"
+                )
+                .trim();
+
+        if (
+            !urlOuVariavel(icone) ||
+            (autorUrl && !validarURL(autorUrl))
+        ) {
+            await interaction.reply({
+                content:
+                    "❌ Os links precisam começar com http:// ou https:// (o ícone também aceita {avatar}).",
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         const config =
             await getJoinConfig(
                 interaction.guild.id
             );
 
-        const habilitado =
-            interaction.fields
-                .getTextInputValue(
-                    "habilitado"
-                )
-                .trim()
-                .toLowerCase() !== "não";
-
         await salvarJoinConfig(
             interaction.guild.id,
             {
                 ...(config || {}),
-                autor_nome:
-                    interaction.fields.getTextInputValue(
-                        "nome"
-                    ),
-                autor_icone:
-                    interaction.fields.getTextInputValue(
-                        "icone"
-                    ),
+                autor_nome: nome,
+                autor_icone: icone,
+
+                // Preencheu o nome → liga o autor.
+                // (Para desligar, use o botão Autor: ON/OFF.)
                 autor_habilitado:
-                    habilitado
+                    nome
+                        ? true
+                        : estaAtivado(
+                            config?.autor_habilitado
+                        )
             }
         );
 
-        await interaction.reply({
-            content:
-                "✅ Configuração do autor atualizada!",
-            flags:
-                MessageFlags.Ephemeral
-        });
+        await salvarExtrasJoin(
+            interaction.guild.id,
+            {
+                autor_url: autorUrl
+            }
+        );
 
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -1995,6 +2468,34 @@ async function tratarInteracao(interaction) {
         interaction.isModalSubmit() &&
         id === "join_modal_imagens"
     ) {
+        const thumbnail =
+            interaction.fields
+                .getTextInputValue(
+                    "thumbnail"
+                )
+                .trim();
+
+        const imagem =
+            interaction.fields
+                .getTextInputValue(
+                    "imagem"
+                )
+                .trim();
+
+        if (
+            !urlOuVariavel(thumbnail) ||
+            !urlOuVariavel(imagem)
+        ) {
+            await interaction.reply({
+                content:
+                    "❌ Use links começando com http:// ou https:// (ou as variáveis {avatar} / {banner}).",
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         const config =
             await getJoinConfig(
                 interaction.guild.id
@@ -2004,25 +2505,14 @@ async function tratarInteracao(interaction) {
             interaction.guild.id,
             {
                 ...(config || {}),
-                thumbnail:
-                    interaction.fields.getTextInputValue(
-                        "thumbnail"
-                    ),
-                imagem:
-                    interaction.fields.getTextInputValue(
-                        "imagem"
-                    )
+                thumbnail,
+                imagem
             }
         );
 
-        await interaction.reply({
-            content:
-                "✅ Imagens atualizadas!",
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
@@ -2033,48 +2523,89 @@ async function tratarInteracao(interaction) {
         interaction.isModalSubmit() &&
         id === "join_modal_footer"
     ) {
+        const texto =
+            interaction.fields
+                .getTextInputValue(
+                    "texto"
+                )
+                .trim();
+
+        const icone =
+            interaction.fields
+                .getTextInputValue(
+                    "icone"
+                )
+                .trim();
+
+        if (!urlOuVariavel(icone)) {
+            await interaction.reply({
+                content:
+                    "❌ O ícone precisa ser um link http:// ou https:// (ou {avatar}).",
+                flags:
+                    MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
         const config =
             await getJoinConfig(
                 interaction.guild.id
             );
 
-        const habilitado =
-            interaction.fields
-                .getTextInputValue(
-                    "habilitado"
-                )
-                .trim()
-                .toLowerCase() !== "não";
-
         await salvarJoinConfig(
             interaction.guild.id,
             {
                 ...(config || {}),
-                footer_texto:
-                    interaction.fields.getTextInputValue(
-                        "texto"
-                    ),
-                footer_icone:
-                    interaction.fields.getTextInputValue(
-                        "icone"
-                    ),
+                footer_texto: texto,
+                footer_icone: icone,
+
+                // Preencheu o texto → liga o rodapé.
                 footer_habilitado:
-                    habilitado
+                    texto
+                        ? true
+                        : estaAtivado(
+                            config?.footer_habilitado
+                        )
             }
         );
 
-        await interaction.reply({
-            content:
-                "✅ Configuração do rodapé atualizada!",
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     // =================================================
-    // ⚙️ SALVAR OPÇÕES
+    // 🧾 SALVAR CAMPOS
+    // =================================================
+
+    if (
+        interaction.isModalSubmit() &&
+        id === "join_modal_campos"
+    ) {
+        // Guarda já normalizado: só o que foi aceito de verdade
+        await salvarExtrasJoin(
+            interaction.guild.id,
+            {
+                campos:
+                    camposParaTexto(
+                        textoParaCampos(
+                            interaction.fields
+                                .getTextInputValue(
+                                    "campos"
+                                )
+                        )
+                    )
+            }
+        );
+
+        return responderPainelJoin(
+            interaction
+        );
+    }
+
+    // =================================================
+    // ⚙️ SALVAR OPÇÕES (formulário antigo, mantido por compatibilidade)
     // =================================================
 
     if (
@@ -2086,14 +2617,11 @@ async function tratarInteracao(interaction) {
                 interaction.guild.id
             );
 
-        const valorBooleano = nome => {
-            return (
+        const valorBooleano = nome =>
+            lerSimNao(
                 interaction.fields
                     .getTextInputValue(nome)
-                    .trim()
-                    .toLowerCase() !== "não"
             );
-        };
 
         await salvarJoinConfig(
             interaction.guild.id,
@@ -2114,14 +2642,9 @@ async function tratarInteracao(interaction) {
             }
         );
 
-        await interaction.reply({
-            content:
-                "✅ Opções do sistema atualizadas!",
-            flags:
-                MessageFlags.Ephemeral
-        });
-
-        return true;
+        return responderPainelJoin(
+            interaction
+        );
     }
 
     return false;
