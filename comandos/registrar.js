@@ -30,7 +30,8 @@ const {
     atualizarRegistroBotao,
     excluirRegistroBotao,
     usuarioJaRegistrado,
-    registrarUsuario
+    registrarUsuario,
+    mysqlPool
 } = require("../database/database");
 
 const MAX_PAGINAS = 6;
@@ -44,6 +45,190 @@ const ESTILOS_BOTOES = {
 };
 
 const EPHEMERAL = MessageFlags.Ephemeral;
+
+// =====================================================
+// 🎨 COR
+// =====================================================
+
+function converterCor(cor) {
+    const valor = String(cor ?? "").trim();
+
+    if (/^(#|0x)?[0-9a-f]{6}$/i.test(valor)) {
+        return parseInt(
+            valor.replace(/^(#|0x)/i, ""),
+            16
+        );
+    }
+
+    return 0x5865F2;
+}
+
+// "" = padrão | "#RRGGBB" = válida | null = inválida
+function normalizarCor(texto) {
+    const valor = String(texto ?? "").trim();
+
+    if (!valor) {
+        return "";
+    }
+
+    if (/^(#|0x)?[0-9a-f]{6}$/i.test(valor)) {
+        return "#" +
+            valor
+                .replace(/^(#|0x)/i, "")
+                .toUpperCase();
+    }
+
+    return null;
+}
+
+// =====================================================
+// 💾 COLUNAS EXTRAS (cor, imagens, links)
+// =====================================================
+
+// O database.js não conhece essas colunas: o próprio registrar.js
+// cria (se faltarem) e salva com UPDATE próprio.
+
+const COLUNAS_EXTRAS = {
+    registro_config: {
+        painel_cor: "VARCHAR(20)",
+        painel_titulo_url: "TEXT"
+    },
+
+    registro_paginas: {
+        cor: "VARCHAR(20)",
+        thumbnail: "TEXT",
+        imagem: "TEXT",
+        titulo_url: "TEXT"
+    }
+};
+
+let promessaColunasExtras = null;
+
+function garantirColunasExtrasRegistro() {
+    if (!promessaColunasExtras) {
+        promessaColunasExtras = (async () => {
+            for (const [tabela, extras] of Object.entries(COLUNAS_EXTRAS)) {
+                const [colunas] = await mysqlPool.query(
+                    `SHOW COLUMNS FROM ${tabela}`
+                );
+
+                const existentes = colunas.map(
+                    coluna => coluna.Field
+                );
+
+                for (const [coluna, definicao] of Object.entries(extras)) {
+                    if (!existentes.includes(coluna)) {
+                        await mysqlPool.query(
+                            `ALTER TABLE ${tabela} ADD COLUMN ${coluna} ${definicao}`
+                        );
+                    }
+                }
+            }
+        })().catch(erro => {
+            promessaColunasExtras = null;
+
+            console.error(
+                "❌ Erro ao preparar colunas extras do registro:",
+                erro
+            );
+        });
+    }
+
+    return promessaColunasExtras;
+}
+
+async function salvarExtrasRegistro(
+    tabela,
+    colunaChave,
+    chave,
+    extras
+) {
+    try {
+        await garantirColunasExtrasRegistro();
+
+        const permitidas =
+            Object.keys(
+                COLUNAS_EXTRAS[tabela] || {}
+            );
+
+        const colunas =
+            Object.keys(extras).filter(
+                coluna => permitidas.includes(coluna)
+            );
+
+        if (!colunas.length) {
+            return;
+        }
+
+        await mysqlPool.query(
+            `
+            UPDATE ${tabela}
+            SET ${colunas.map(coluna => `${coluna} = ?`).join(", ")}
+            WHERE ${colunaChave} = ?
+            `,
+            [
+                ...colunas.map(
+                    coluna => extras[coluna] || null
+                ),
+                chave
+            ]
+        );
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao salvar dados extras do registro:",
+            erro
+        );
+    }
+}
+
+function tamanhoEmbed(embed) {
+    const d = embed.data || {};
+
+    return (
+        (d.title || "").length +
+        (d.description || "").length +
+        (d.author?.name || "").length +
+        (d.footer?.text || "").length +
+        (d.fields || []).reduce(
+            (total, campo) =>
+                total +
+                campo.name.length +
+                campo.value.length,
+            0
+        )
+    );
+}
+
+// Atualiza o painel NO LUGAR quando a interação vem de um botão,
+// menu ou formulário aberto a partir do painel.
+function responderPainel(interaction, payload) {
+    const doPainel =
+        (
+            typeof interaction.isFromMessage === "function" &&
+            interaction.isFromMessage()
+        ) ||
+        (
+            typeof interaction.isButton === "function" &&
+            interaction.isButton()
+        ) ||
+        (
+            typeof interaction.isChannelSelectMenu === "function" &&
+            interaction.isChannelSelectMenu()
+        ) ||
+        (
+            typeof interaction.isStringSelectMenu === "function" &&
+            interaction.isStringSelectMenu()
+        );
+
+    if (doPainel) {
+        return interaction.update(payload);
+    }
+
+    return interaction.reply({
+        ...payload,
+        flags: EPHEMERAL
+    });
+}
 
 // =====================================================
 // 🔐 PERMISSÃO
@@ -187,17 +372,35 @@ function urlValida(valor) {
 
 function criarEmbedPagina(pagina) {
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2);
+        .setColor(converterCor(pagina.cor));
 
     if (pagina.titulo) {
         embed.setTitle(
             String(pagina.titulo).substring(0, 256)
         );
+
+        if (urlValida(pagina.titulo_url)) {
+            embed.setURL(
+                String(pagina.titulo_url).trim()
+            );
+        }
     }
 
     if (pagina.descricao) {
         embed.setDescription(
             String(pagina.descricao).substring(0, 4096)
+        );
+    }
+
+    if (urlValida(pagina.thumbnail)) {
+        embed.setThumbnail(
+            String(pagina.thumbnail).trim()
+        );
+    }
+
+    if (urlValida(pagina.imagem)) {
+        embed.setImage(
+            String(pagina.imagem).trim()
         );
     }
 
@@ -220,6 +423,19 @@ function criarEmbedPagina(pagina) {
         }
     }
 
+    // O Discord recusa embed totalmente vazio
+    if (
+        !pagina.titulo &&
+        !pagina.descricao &&
+        !urlValida(pagina.thumbnail) &&
+        !urlValida(pagina.imagem) &&
+        !pagina.rodape
+    ) {
+        embed.setDescription(
+            "Esta página ainda não tem conteúdo."
+        );
+    }
+
     return embed;
 }
 
@@ -229,7 +445,9 @@ function criarEmbedPagina(pagina) {
 
 function criarEmbedPainelInicial(config) {
     const embed = new EmbedBuilder()
-        .setColor(0x5865F2);
+        .setColor(
+            converterCor(config?.painel_cor)
+        );
 
     const titulo =
         config?.painel_titulo ||
@@ -242,6 +460,12 @@ function criarEmbedPainelInicial(config) {
     embed.setTitle(
         String(titulo).substring(0, 256)
     );
+
+    if (urlValida(config?.painel_titulo_url)) {
+        embed.setURL(
+            String(config.painel_titulo_url).trim()
+        );
+    }
 
     embed.setDescription(
         String(descricao).substring(0, 4096)
@@ -266,10 +490,17 @@ function criarEmbedPainelInicial(config) {
     }
 
     if (config?.painel_rodape) {
-        embed.setFooter({
+        const rodape = {
             text: String(config.painel_rodape)
                 .substring(0, 2048)
-        });
+        };
+
+        if (urlValida(config.painel_rodape_icone)) {
+            rodape.iconURL =
+                String(config.painel_rodape_icone).trim();
+        }
+
+        embed.setFooter(rodape);
     }
 
     return embed;
@@ -503,19 +734,20 @@ async function atualizarPublicacaoSeExistir(
 // 📝 PAINEL PRINCIPAL
 // =====================================================
 
-async function mostrarPainel(interaction) {
+async function montarPainelPrincipal(
+    guild,
+    conteudo = ""
+) {
+    const guildId = guild.id;
+
     const config =
-        await garantirConfiguracao(
-            interaction.guild.id
-        );
+        await garantirConfiguracao(guildId);
 
     const paginas =
-        await buscarPaginas(
-            interaction.guild.id
-        );
+        await buscarPaginas(guildId);
 
     const configurado =
-        Boolean(config.configurado);
+        Boolean(Number(config.configurado));
 
     const cargoPosRegistro =
         config.cargo_registro_id
@@ -532,7 +764,7 @@ async function mostrarPainel(interaction) {
                     `📄 Páginas: **${paginas.length}/${MAX_PAGINAS}**`,
                     `📢 Status: **${
                         configurado
-                            ? "Configurado"
+                            ? "Publicado"
                             : "Não publicado"
                     }**`,
                     `📺 Canal: ${
@@ -548,7 +780,7 @@ async function mostrarPainel(interaction) {
                             : "Padrão"
                     }**`,
                     "",
-                    "Configure primeiro o painel inicial e o canal onde ele será publicado."
+                    "Acima está a prévia do painel inicial que os membros verão. Selecione uma página para editar."
                 ].join("\n")
             )
             .setColor(
@@ -557,10 +789,19 @@ async function mostrarPainel(interaction) {
                     : 0x5865F2
             );
 
+    // Soma de todos os embeds da mensagem: máx. 6000 caracteres
+    const embedPrevia =
+        criarEmbedPainelInicial(config);
+
+    const previa =
+        tamanhoEmbed(embedPrevia) <= 4000
+            ? embedPrevia
+            : null;
+
     const menu =
         new StringSelectMenuBuilder()
             .setCustomId(
-                `registro_selecionar_pagina_${interaction.guild.id}`
+                `registro_selecionar_pagina_${guildId}`
             )
             .setPlaceholder("📄 Escolha uma página");
 
@@ -587,7 +828,7 @@ async function mostrarPainel(interaction) {
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_painel_inicial_${interaction.guild.id}`
+                        `registro_painel_inicial_${guildId}`
                     )
                     .setLabel("Painel inicial")
                     .setEmoji("🎨")
@@ -595,25 +836,33 @@ async function mostrarPainel(interaction) {
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_canal_${interaction.guild.id}`
+                        `registro_aparencia_painel_${guildId}`
                     )
-                    .setLabel("Selecionar canal")
+                    .setLabel("Aparência")
+                    .setEmoji("✨")
+                    .setStyle(ButtonStyle.Primary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_canal_${guildId}`
+                    )
+                    .setLabel("Canal")
                     .setEmoji("📺")
                     .setStyle(ButtonStyle.Secondary),
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_botao_painel_${interaction.guild.id}`
+                        `registro_botao_painel_${guildId}`
                     )
-                    .setLabel("Botão Registrar")
+                    .setLabel("Botão")
                     .setEmoji("🔘")
                     .setStyle(ButtonStyle.Secondary),
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_cargo_${interaction.guild.id}`
+                        `registro_cargo_${guildId}`
                     )
-                    .setLabel("Cargo pós-registro")
+                    .setLabel("Cargo")
                     .setEmoji("🎭")
                     .setStyle(ButtonStyle.Secondary)
             );
@@ -623,7 +872,7 @@ async function mostrarPainel(interaction) {
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_adicionar_pagina_${interaction.guild.id}`
+                        `registro_adicionar_pagina_${guildId}`
                     )
                     .setLabel("Adicionar página")
                     .setEmoji("➕")
@@ -634,7 +883,7 @@ async function mostrarPainel(interaction) {
 
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_publicar_${interaction.guild.id}`
+                        `registro_publicar_${guildId}`
                     )
                     .setLabel("Publicar / Atualizar")
                     .setEmoji("📢")
@@ -646,21 +895,37 @@ async function mostrarPainel(interaction) {
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId(
-                        `registro_excluir_${interaction.guild.id}`
+                        `registro_excluir_${guildId}`
                     )
                     .setLabel("Excluir configuração")
                     .setEmoji("🗑️")
                     .setStyle(ButtonStyle.Danger)
             );
 
-    await interaction.reply({
-        embeds: [embed],
+    return {
+        content: conteudo,
+        embeds:
+            previa
+                ? [previa, embed]
+                : [embed],
         components: [
             rowMenu,
             rowBotoes,
             rowPaginas,
             rowExcluir
-        ],
+        ]
+    };
+}
+
+async function mostrarPainel(interaction) {
+    await garantirColunasExtrasRegistro();
+
+    await interaction.reply({
+        ...(
+            await montarPainelPrincipal(
+                interaction.guild
+            )
+        ),
         flags: EPHEMERAL
     });
 }
@@ -778,6 +1043,125 @@ async function abrirModalPainelInicial(
         new ActionRowBuilder().addComponents(imagem),
         new ActionRowBuilder().addComponents(thumbnail),
         new ActionRowBuilder().addComponents(rodape)
+    );
+
+    await interaction.showModal(modal);
+}
+
+// =====================================================
+// ✨ MODAL APARÊNCIA DO PAINEL INICIAL
+// =====================================================
+
+async function abrirModalAparenciaPainel(
+    interaction,
+    guildId
+) {
+    if (
+        !podeConfigurar(interaction) ||
+        !pertenceAoServidor(interaction, guildId)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Você não tem permissão para configurar o registro.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const config =
+        await buscarConfiguracao(guildId);
+
+    const campo = (id, label, valor, placeholder) =>
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId(id)
+                .setLabel(label)
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false)
+                .setPlaceholder(placeholder)
+                .setValue(String(valor || ""))
+                .setMaxLength(
+                    id === "cor" ? 20 : 2048
+                )
+        );
+
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `registro_modal_aparencia_painel_${guildId}`
+            )
+            .setTitle("✨ Aparência do painel");
+
+    modal.addComponents(
+        campo("cor", "Cor (#5865F2)", config?.painel_cor, "#5865F2"),
+        campo("titulo_url", "Link do título (clicável)", config?.painel_titulo_url, "https://..."),
+        campo("rodape_icone", "Ícone do rodapé (link)", config?.painel_rodape_icone, "https://...")
+    );
+
+    await interaction.showModal(modal);
+}
+
+// =====================================================
+// ✨ MODAL APARÊNCIA DA PÁGINA
+// =====================================================
+
+async function abrirModalAparenciaPagina(
+    interaction,
+    guildId,
+    numeroPagina
+) {
+    if (
+        !podeConfigurar(interaction) ||
+        !pertenceAoServidor(interaction, guildId)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Você não tem permissão para configurar o registro.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const pagina =
+        await buscarPagina(
+            guildId,
+            numeroPagina
+        );
+
+    if (!pagina) {
+        return interaction.reply({
+            content:
+                "❌ Página não encontrada.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const campo = (id, label, valor, placeholder) =>
+        new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId(id)
+                .setLabel(label)
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false)
+                .setPlaceholder(placeholder)
+                .setValue(String(valor || ""))
+                .setMaxLength(
+                    id === "cor" ? 20 : 2048
+                )
+        );
+
+    const modal =
+        new ModalBuilder()
+            .setCustomId(
+                `registro_modal_aparencia_pagina_${guildId}_${numeroPagina}`
+            )
+            .setTitle(
+                `✨ Aparência — Página ${numeroPagina}`
+            );
+
+    modal.addComponents(
+        campo("cor", "Cor (#5865F2)", pagina.cor, "#5865F2"),
+        campo("thumbnail", "Thumbnail (link)", pagina.thumbnail, "https://..."),
+        campo("imagem", "Imagem grande (link)", pagina.imagem, "https://..."),
+        campo("titulo_url", "Link do título (clicável)", pagina.titulo_url, "https://...")
     );
 
     await interaction.showModal(modal);
@@ -966,7 +1350,8 @@ async function mostrarSelecaoCanal(
 async function mostrarConfiguracaoPagina(
     interaction,
     guildId,
-    numeroPagina
+    numeroPagina,
+    conteudo = ""
 ) {
     if (!pertenceAoServidor(interaction, guildId)) {
         return interaction.reply({
@@ -993,6 +1378,26 @@ async function mostrarConfiguracaoPagina(
     const botoes =
         await buscarBotoes(pagina.id);
 
+    const resumo = (texto, max = 80) => {
+        const limpo =
+            String(texto || "")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        if (!limpo) {
+            return "Não definido";
+        }
+
+        return limpo.length > max
+            ? `${limpo.slice(0, max - 1)}…`
+            : limpo;
+    };
+
+    const definido = valor =>
+        valor
+            ? "✅ Definido"
+            : "❌ Nenhum";
+
     const embed =
         new EmbedBuilder()
             .setTitle(
@@ -1000,27 +1405,29 @@ async function mostrarConfiguracaoPagina(
             )
             .setDescription(
                 [
-                    `**Título:** ${
-                        pagina.titulo ||
-                        "Não definido"
-                    }`,
-                    `**Descrição:** ${
-                        pagina.descricao ||
-                        "Não definida"
-                    }`,
-                    `**Rodapé:** ${
-                        pagina.rodape ||
-                        "Não definido"
-                    }`,
-                    `**Ícone do rodapé:** ${
-                        pagina.rodape_icone ||
-                        "Não definido"
-                    }`,
+                    "Acima está a prévia da página como o membro vai ver.",
+                    "",
+                    `**Título:** ${resumo(pagina.titulo)}`,
+                    `**Descrição:** ${resumo(pagina.descricao)}`,
+                    `**Rodapé:** ${resumo(pagina.rodape)}`,
+                    `**Cor:** ${pagina.cor || "Padrão"}`,
+                    `**Thumbnail:** ${definido(pagina.thumbnail)}`,
+                    `**Imagem:** ${definido(pagina.imagem)}`,
+                    `**Link do título:** ${definido(pagina.titulo_url)}`,
                     "",
                     `🔘 Botões: **${botoes.length}/${MAX_BOTOES}**`
                 ].join("\n")
             )
             .setColor(0x5865F2);
+
+    const embedPrevia =
+        criarEmbedPagina(pagina);
+
+    // Soma de todos os embeds da mensagem: máx. 6000 caracteres
+    const previa =
+        tamanhoEmbed(embedPrevia) <= 4500
+            ? embedPrevia
+            : null;
 
     const row1 =
         new ActionRowBuilder()
@@ -1039,7 +1446,15 @@ async function mostrarConfiguracaoPagina(
                     )
                     .setLabel("Rodapé")
                     .setEmoji("🔻")
-                    .setStyle(ButtonStyle.Secondary)
+                    .setStyle(ButtonStyle.Secondary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_aparencia_pagina_${guildId}_${numeroPagina}`
+                    )
+                    .setLabel("Aparência")
+                    .setEmoji("✨")
+                    .setStyle(ButtonStyle.Primary)
             );
 
     const row2 =
@@ -1077,14 +1492,21 @@ async function mostrarConfiguracaoPagina(
                     .setStyle(ButtonStyle.Secondary)
             );
 
-    await interaction.update({
-        embeds: [embed],
-        components: [
-            row1,
-            row2,
-            row3
-        ]
-    });
+    await responderPainel(
+        interaction,
+        {
+            content: conteudo,
+            embeds:
+                previa
+                    ? [previa, embed]
+                    : [embed],
+            components: [
+                row1,
+                row2,
+                row3
+            ]
+        }
+    );
 }
 
 // =====================================================
@@ -1351,7 +1773,8 @@ async function abrirModalBotao(
 async function mostrarBotoes(
     interaction,
     guildId,
-    numeroPagina
+    numeroPagina,
+    conteudo = ""
 ) {
     if (
         !podeConfigurar(interaction) ||
@@ -1474,10 +1897,14 @@ async function mostrarBotoes(
             )
     );
 
-    await interaction.update({
-        embeds: [embed],
-        components
-    });
+    await responderPainel(
+        interaction,
+        {
+            content: conteudo,
+            embeds: [embed],
+            components
+        }
+    );
 }
 
 // =====================================================
@@ -1788,11 +2215,11 @@ async function publicarRegistro(
                 ]
             );
 
-            return interaction.reply({
-                content:
-                    "✅ Painel de registro atualizado com sucesso!",
-                flags: EPHEMERAL
-            });
+            return atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                "✅ Painel de registro atualizado com sucesso!"
+            );
         }
     }
 
@@ -1827,11 +2254,11 @@ async function publicarRegistro(
         mensagem.id
     );
 
-    await interaction.reply({
-        content:
-            `✅ Painel de registro publicado em <#${canal.id}>!`,
-        flags: EPHEMERAL
-    });
+    return atualizarPainelPrincipal(
+        interaction,
+        guildId,
+        `✅ Painel de registro publicado em <#${canal.id}>!`
+    );
 }
 
 // =====================================================
@@ -1899,16 +2326,69 @@ async function adicionarPagina(
         guildId
     );
 
-    await interaction.reply({
-        content:
-            `✅ Página ${numero} criada!`,
-        flags: EPHEMERAL
-    });
+    return atualizarPainelPrincipal(
+        interaction,
+        guildId,
+        `✅ Página ${numero} criada!`
+    );
 }
 
 // =====================================================
 // 🗑️ EXCLUIR CONFIGURAÇÃO
 // =====================================================
+
+async function mostrarConfirmacaoExclusao(
+    interaction,
+    guildId
+) {
+    if (
+        !podeConfigurar(interaction) ||
+        !pertenceAoServidor(interaction, guildId)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Você não tem permissão para excluir o registro.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const embed =
+        new EmbedBuilder()
+            .setTitle("🗑️ Excluir o sistema de registro?")
+            .setDescription(
+                [
+                    "Isso apaga **todas as páginas, botões e o registro dos membros** deste servidor, e remove o painel publicado.",
+                    "",
+                    "**Essa ação não pode ser desfeita.**"
+                ].join("\n")
+            )
+            .setColor(0xED4245);
+
+    await interaction.update({
+        content: "",
+        embeds: [embed],
+        components: [
+            new ActionRowBuilder()
+                .addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `registro_confirmar_excluir_${guildId}`
+                        )
+                        .setLabel("Sim, excluir tudo")
+                        .setEmoji("🗑️")
+                        .setStyle(ButtonStyle.Danger),
+
+                    new ButtonBuilder()
+                        .setCustomId(
+                            `registro_cancelar_excluir_${guildId}`
+                        )
+                        .setLabel("Cancelar")
+                        .setEmoji("↩️")
+                        .setStyle(ButtonStyle.Secondary)
+                )
+        ]
+    });
+}
 
 async function excluirRegistro(
     interaction,
@@ -1998,10 +2478,11 @@ async function excluirRegistro(
         [guildId]
     );
 
-    await interaction.reply({
+    await interaction.update({
         content:
-            "🗑️ Sistema de registro excluído com sucesso.",
-        flags: EPHEMERAL
+            "🗑️ Sistema de registro excluído com sucesso. Use `/registrar` para criar de novo.",
+        embeds: [],
+        components: []
     });
 }
 
@@ -2353,18 +2834,15 @@ async function processarBotaoRegistro(
         );
     }
 
-    if (cargosRecebidos.length > 0) {
-        return interaction.reply({
-            content:
-                `✅ Registro concluído com sucesso!\n\n🎭 Cargos recebidos: ${cargosRecebidos.join(", ")}`,
-            flags: EPHEMERAL
-        });
-    }
-
-    return interaction.reply({
+    // Troca a página (com os botões) pela confirmação:
+    // o membro não fica com botões velhos na tela.
+    return interaction.update({
         content:
-            "✅ Registro concluído com sucesso!",
-        flags: EPHEMERAL
+            cargosRecebidos.length > 0
+                ? `✅ Registro concluído com sucesso!\n\n🎭 Cargos recebidos: ${cargosRecebidos.join(", ")}`
+                : "✅ Registro concluído com sucesso!",
+        embeds: [],
+        components: []
     });
 }
 
@@ -2374,162 +2852,16 @@ async function processarBotaoRegistro(
 
 async function atualizarPainelPrincipal(
     interaction,
-    guildId
+    guildId,
+    conteudo = ""
 ) {
-    const paginas =
-        await buscarPaginas(guildId);
-
-    const config =
-        await buscarConfiguracao(guildId);
-
-    const cargoPosRegistro =
-        config &&
-        config.cargo_registro_id
-            ? `<@&${config.cargo_registro_id}>`
-            : "Nenhum";
-
-    const embed =
-        new EmbedBuilder()
-            .setTitle("📝 Sistema de Registro")
-            .setDescription(
-                [
-                    `📄 Páginas: **${paginas.length}/${MAX_PAGINAS}**`,
-                    `📢 Status: **${
-                        config &&
-                        config.configurado
-                            ? "Configurado"
-                            : "Não publicado"
-                    }**`,
-                    `📺 Canal: ${
-                        config &&
-                        config.canal_id
-                            ? `<#${config.canal_id}>`
-                            : "Não definido"
-                    }`,
-                    `🎭 Cargo pós-registro: ${cargoPosRegistro}`,
-                    "",
-                    `🎨 Painel inicial: **${
-                        config &&
-                        config.painel_titulo
-                            ? "Configurado"
-                            : "Padrão"
-                    }**`,
-                    "",
-                    "Selecione uma página para editar."
-                ].join("\n")
-            )
-            .setColor(
-                config &&
-                config.configurado
-                    ? 0x57F287
-                    : 0x5865F2
-            );
-
-    const menu =
-        new StringSelectMenuBuilder()
-            .setCustomId(
-                `registro_selecionar_pagina_${guildId}`
-            )
-            .setPlaceholder("📄 Escolha uma página");
-
-    for (const pagina of paginas) {
-        menu.addOptions({
-            label:
-                `Página ${pagina.pagina}`,
-            description:
-                String(
-                    pagina.titulo ||
-                    "Sem título"
-                ).substring(0, 100),
-            value:
-                String(pagina.pagina)
-        });
-    }
-
-    const rowMenu =
-        new ActionRowBuilder()
-            .addComponents(menu);
-
-    const rowBotoes =
-        new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_painel_inicial_${guildId}`
-                    )
-                    .setLabel("Painel inicial")
-                    .setEmoji("🎨")
-                    .setStyle(ButtonStyle.Primary),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_canal_${guildId}`
-                    )
-                    .setLabel("Selecionar canal")
-                    .setEmoji("📺")
-                    .setStyle(ButtonStyle.Secondary),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_botao_painel_${guildId}`
-                    )
-                    .setLabel("Botão Registrar")
-                    .setEmoji("🔘")
-                    .setStyle(ButtonStyle.Secondary),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_cargo_${guildId}`
-                    )
-                    .setLabel("Cargo pós-registro")
-                    .setEmoji("🎭")
-                    .setStyle(ButtonStyle.Secondary)
-            );
-
-    const rowPaginas =
-        new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_adicionar_pagina_${guildId}`
-                    )
-                    .setLabel("Adicionar página")
-                    .setEmoji("➕")
-                    .setStyle(ButtonStyle.Success)
-                    .setDisabled(
-                        paginas.length >= MAX_PAGINAS
-                    ),
-
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_publicar_${guildId}`
-                    )
-                    .setLabel("Publicar / Atualizar")
-                    .setEmoji("📢")
-                    .setStyle(ButtonStyle.Primary)
-            );
-
-    const rowExcluir =
-        new ActionRowBuilder()
-            .addComponents(
-                new ButtonBuilder()
-                    .setCustomId(
-                        `registro_excluir_${guildId}`
-                    )
-                    .setLabel("Excluir configuração")
-                    .setEmoji("🗑️")
-                    .setStyle(ButtonStyle.Danger)
-            );
-
-    return interaction.update({
-        embeds: [embed],
-        components: [
-            rowMenu,
-            rowBotoes,
-            rowPaginas,
-            rowExcluir
-        ]
-    });
+    return responderPainel(
+        interaction,
+        await montarPainelPrincipal(
+            interaction.guild,
+            conteudo
+        )
+    );
 }
 
 // =====================================================
@@ -2702,7 +3034,13 @@ async function handleInteraction(interaction) {
             "registro_modal_texto_",
             "registro_modal_rodape_",
             "registro_modal_botao_",
-            "registro_modal_editar_botao_"
+            "registro_modal_editar_botao_",
+            "registro_aparencia_painel_",
+            "registro_aparencia_pagina_",
+            "registro_modal_aparencia_painel_",
+            "registro_modal_aparencia_pagina_",
+            "registro_confirmar_excluir_",
+            "registro_cancelar_excluir_"
         ];
 
         const ehAdministrativo =
@@ -2720,6 +3058,252 @@ async function handleInteraction(interaction) {
                     "❌ Você precisa da permissão **Gerenciar Servidor** para configurar o sistema de registro.",
                 flags: EPHEMERAL
             });
+        }
+
+        if (ehAdministrativo) {
+            await garantirColunasExtrasRegistro();
+        }
+
+        // =================================================
+        // ✨ APARÊNCIA (abrir formulários)
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_aparencia_painel_"
+            )
+        ) {
+            return await abrirModalAparenciaPainel(
+                interaction,
+                customId.replace(
+                    "registro_aparencia_painel_",
+                    ""
+                )
+            );
+        }
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_aparencia_pagina_"
+            )
+        ) {
+            const partes =
+                customId.split("_");
+
+            return await abrirModalAparenciaPagina(
+                interaction,
+                partes[3],
+                Number(partes[4])
+            );
+        }
+
+        // =================================================
+        // ✨ APARÊNCIA DO PAINEL (salvar)
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            customId.startsWith(
+                "registro_modal_aparencia_painel_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_modal_aparencia_painel_",
+                    ""
+                );
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const cor =
+                normalizarCor(
+                    interaction.fields
+                        .getTextInputValue("cor")
+                );
+
+            const tituloUrl =
+                interaction.fields
+                    .getTextInputValue("titulo_url")
+                    .trim();
+
+            const rodapeIcone =
+                interaction.fields
+                    .getTextInputValue("rodape_icone")
+                    .trim();
+
+            if (cor === null) {
+                return interaction.reply({
+                    content:
+                        "❌ Cor inválida. Use o formato #RRGGBB (ex.: #5865F2).",
+                    flags: EPHEMERAL
+                });
+            }
+
+            if (
+                (tituloUrl && !urlValida(tituloUrl)) ||
+                (rodapeIcone && !urlValida(rodapeIcone))
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Os links precisam começar com http:// ou https://",
+                    flags: EPHEMERAL
+                });
+            }
+
+            await pool.query(
+                `
+                UPDATE registro_config
+                SET painel_rodape_icone = $1,
+                    atualizado_em = $2
+                WHERE guild_id = $3
+                `,
+                [
+                    rodapeIcone || null,
+                    Date.now(),
+                    guildId
+                ]
+            );
+
+            await salvarExtrasRegistro(
+                "registro_config",
+                "guild_id",
+                guildId,
+                {
+                    painel_cor: cor,
+                    painel_titulo_url: tituloUrl
+                }
+            );
+
+            await atualizarPublicacaoSeExistir(
+                interaction,
+                guildId
+            );
+
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                "✅ Aparência do painel atualizada!"
+            );
+        }
+
+        // =================================================
+        // ✨ APARÊNCIA DA PÁGINA (salvar)
+        // =================================================
+
+        if (
+            interaction.isModalSubmit() &&
+            customId.startsWith(
+                "registro_modal_aparencia_pagina_"
+            )
+        ) {
+            const partes =
+                customId.split("_");
+
+            const guildId =
+                partes[4];
+
+            const numeroPagina =
+                Number(partes[5]);
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Página não encontrada.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const cor =
+                normalizarCor(
+                    interaction.fields
+                        .getTextInputValue("cor")
+                );
+
+            const thumbnail =
+                interaction.fields
+                    .getTextInputValue("thumbnail")
+                    .trim();
+
+            const imagem =
+                interaction.fields
+                    .getTextInputValue("imagem")
+                    .trim();
+
+            const tituloUrl =
+                interaction.fields
+                    .getTextInputValue("titulo_url")
+                    .trim();
+
+            if (cor === null) {
+                return interaction.reply({
+                    content:
+                        "❌ Cor inválida. Use o formato #RRGGBB (ex.: #5865F2).",
+                    flags: EPHEMERAL
+                });
+            }
+
+            if (
+                (thumbnail && !urlValida(thumbnail)) ||
+                (imagem && !urlValida(imagem)) ||
+                (tituloUrl && !urlValida(tituloUrl))
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Os links precisam começar com http:// ou https://",
+                    flags: EPHEMERAL
+                });
+            }
+
+            await salvarExtrasRegistro(
+                "registro_paginas",
+                "id",
+                pagina.id,
+                {
+                    cor,
+                    thumbnail,
+                    imagem,
+                    titulo_url: tituloUrl
+                }
+            );
+
+            return await mostrarConfiguracaoPagina(
+                interaction,
+                guildId,
+                numeroPagina,
+                "✅ Aparência da página atualizada!"
+            );
         }
 
         // =================================================
@@ -2872,27 +3456,11 @@ async function handleInteraction(interaction) {
                 ]
             );
 
-            await interaction.update({
-                content:
-                    `✅ Canal selecionado: <#${canalId}>`,
-                embeds: [],
-                components: [
-                    new ActionRowBuilder()
-                        .addComponents(
-                            new ButtonBuilder()
-                                .setCustomId(
-                                    `registro_voltar_${guildId}`
-                                )
-                                .setLabel("Voltar")
-                                .setEmoji("◀️")
-                                .setStyle(
-                                    ButtonStyle.Secondary
-                                )
-                        )
-                ]
-            });
-
-            return;
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                `✅ Canal selecionado: <#${canalId}>`
+            );
         }
 
         // =================================================
@@ -2958,9 +3526,54 @@ async function handleInteraction(interaction) {
                     ""
                 );
 
+            return await mostrarConfirmacaoExclusao(
+                interaction,
+                guildId
+            );
+        }
+
+        // =================================================
+        // 🗑️ CONFIRMAR EXCLUSÃO
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_confirmar_excluir_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_confirmar_excluir_",
+                    ""
+                );
+
             return await excluirRegistro(
                 interaction,
                 guildId
+            );
+        }
+
+        // =================================================
+        // ↩️ CANCELAR EXCLUSÃO
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_cancelar_excluir_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_cancelar_excluir_",
+                    ""
+                );
+
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                "↩️ Exclusão cancelada."
             );
         }
 
@@ -3348,13 +3961,11 @@ async function handleInteraction(interaction) {
                 config
             );
 
-            await interaction.reply({
-                content:
-                    "✅ Painel inicial atualizado!",
-                flags: EPHEMERAL
-            });
-
-            return;
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                "✅ Painel inicial atualizado!"
+            );
         }
 
         // =================================================
@@ -3417,13 +4028,11 @@ async function handleInteraction(interaction) {
                 config
             );
 
-            await interaction.reply({
-                content:
-                    "✅ Texto do botão atualizado!",
-                flags: EPHEMERAL
-            });
-
-            return;
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                "✅ Texto do botão atualizado!"
+            );
         }
 
         // =================================================
@@ -3515,21 +4124,13 @@ async function handleInteraction(interaction) {
                 ]
             );
 
-            if (cargoResultado.id) {
-                await interaction.reply({
-                    content:
-                        `✅ Cargo pós-registro definido: <@&${cargoResultado.id}>`,
-                    flags: EPHEMERAL
-                });
-            } else {
-                await interaction.reply({
-                    content:
-                        "✅ Cargo pós-registro removido. Os usuários não receberão cargo automático.",
-                    flags: EPHEMERAL
-                });
-            }
-
-            return;
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                cargoResultado.id
+                    ? `✅ Cargo pós-registro definido: <@&${cargoResultado.id}>`
+                    : "✅ Cargo pós-registro removido. Os usuários não receberão cargo automático."
+            );
         }
 
         // =================================================
@@ -3588,6 +4189,7 @@ async function handleInteraction(interaction) {
                     .getTextInputValue("descricao")
                     .trim();
 
+            // O banco regrava os 4 campos de uma vez: mantém o rodapé
             await atualizarRegistroPagina(
                 pagina.id,
                 guildId,
@@ -3595,7 +4197,11 @@ async function handleInteraction(interaction) {
                     titulo:
                         titulo || null,
                     descricao:
-                        descricao || null
+                        descricao || null,
+                    rodape:
+                        pagina.rodape,
+                    rodape_icone:
+                        pagina.rodape_icone
                 }
             );
 
@@ -3604,13 +4210,12 @@ async function handleInteraction(interaction) {
                 guildId
             );
 
-            await interaction.reply({
-                content:
-                    "✅ Título e descrição atualizados!",
-                flags: EPHEMERAL
-            });
-
-            return;
+            return await mostrarConfiguracaoPagina(
+                interaction,
+                guildId,
+                numeroPagina,
+                "✅ Título e descrição atualizados!"
+            );
         }
 
         // =================================================
@@ -3682,10 +4287,15 @@ async function handleInteraction(interaction) {
                 });
             }
 
+            // O banco regrava os 4 campos de uma vez: mantém título e descrição
             await atualizarRegistroPagina(
                 pagina.id,
                 guildId,
                 {
+                    titulo:
+                        pagina.titulo,
+                    descricao:
+                        pagina.descricao,
                     rodape:
                         rodape || null,
                     rodape_icone:
@@ -3698,13 +4308,12 @@ async function handleInteraction(interaction) {
                 guildId
             );
 
-            await interaction.reply({
-                content:
-                    "✅ Rodapé atualizado!",
-                flags: EPHEMERAL
-            });
-
-            return;
+            return await mostrarConfiguracaoPagina(
+                interaction,
+                guildId,
+                numeroPagina,
+                "✅ Rodapé atualizado!"
+            );
         }
 
         // =================================================
@@ -3847,15 +4456,14 @@ async function handleInteraction(interaction) {
                 guildId
             );
 
-            await interaction.reply({
-                content:
-                    cargoResultado.id
-                        ? `✅ Botão criado e configurado para dar <@&${cargoResultado.id}>.`
-                        : "✅ Botão criado sem cargo.",
-                flags: EPHEMERAL
-            });
-
-            return;
+            return await mostrarConfiguracaoPagina(
+                interaction,
+                guildId,
+                numeroPagina,
+                cargoResultado.id
+                    ? `✅ Botão criado e configurado para dar <@&${cargoResultado.id}>.`
+                    : "✅ Botão criado sem cargo."
+            );
         }
 
         // =================================================
@@ -3996,13 +4604,12 @@ async function handleInteraction(interaction) {
                 guildId
             );
 
-            await interaction.reply({
-                content:
-                    "✅ Botão atualizado!",
-                flags: EPHEMERAL
-            });
-
-            return;
+            return await mostrarBotoes(
+                interaction,
+                guildId,
+                numeroPagina,
+                "✅ Botão atualizado!"
+            );
         }
 
         return false;
