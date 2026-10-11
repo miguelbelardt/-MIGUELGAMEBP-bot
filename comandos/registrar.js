@@ -91,16 +91,22 @@ function normalizarCor(texto) {
 const COLUNAS_EXTRAS = {
     registro_config: {
         painel_cor: "VARCHAR(20)",
-        painel_titulo_url: "TEXT"
+        painel_titulo_url: "TEXT",
+        modo_sequencia: "TINYINT(1) DEFAULT 0"
     },
 
     registro_paginas: {
         cor: "VARCHAR(20)",
         thumbnail: "TEXT",
         imagem: "TEXT",
-        titulo_url: "TEXT"
+        titulo_url: "TEXT",
+        opcional: "TINYINT(1) DEFAULT 0"
     }
 };
+
+function sequenciaAtiva(config) {
+    return Number(config?.modo_sequencia) === 1;
+}
 
 let promessaColunasExtras = null;
 
@@ -542,7 +548,8 @@ function criarComponentesPainelInicial(
 async function criarComponentesPagina(
     pagina,
     guildId,
-    numeroPagina
+    numeroPagina,
+    opcoes = {}
 ) {
     const botoes = await buscarBotoes(pagina.id);
 
@@ -596,6 +603,37 @@ async function criarComponentesPagina(
 
     if (row.components.length > 0) {
         rows.push(row);
+    }
+
+    // Modo perguntas: sem Anterior/Próxima; pergunta opcional ganha "Pular"
+    if (opcoes.sequencia) {
+        if (opcoes.opcional) {
+            const pular =
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_pular_${guildId}_${numeroPagina}`
+                    )
+                    .setLabel("Pular")
+                    .setEmoji("⏭️")
+                    .setStyle(ButtonStyle.Secondary);
+
+            const ultima =
+                rows[rows.length - 1];
+
+            if (
+                ultima &&
+                ultima.components.length < 5
+            ) {
+                ultima.addComponents(pular);
+            } else {
+                rows.push(
+                    new ActionRowBuilder()
+                        .addComponents(pular)
+                );
+            }
+        }
+
+        return rows;
     }
 
     const paginas = await buscarPaginas(guildId);
@@ -779,6 +817,11 @@ async function montarPainelPrincipal(
                             ? "Configurado"
                             : "Padrão"
                     }**`,
+                    `❓ Perguntas em sequência: **${
+                        sequenciaAtiva(config)
+                            ? "Ligado (cada página é uma pergunta)"
+                            : "Desligado (o 1º botão conclui o registro)"
+                    }**`,
                     "",
                     "Acima está a prévia do painel inicial que os membros verão. Selecione uma página para editar."
                 ].join("\n")
@@ -887,7 +930,21 @@ async function montarPainelPrincipal(
                     )
                     .setLabel("Publicar / Atualizar")
                     .setEmoji("📢")
-                    .setStyle(ButtonStyle.Primary)
+                    .setStyle(ButtonStyle.Primary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_toggle_sequencia_${guildId}`
+                    )
+                    .setLabel(
+                        `Perguntas: ${sequenciaAtiva(config) ? "ON" : "OFF"}`
+                    )
+                    .setEmoji("❓")
+                    .setStyle(
+                        sequenciaAtiva(config)
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    )
             );
 
     const rowExcluir =
@@ -1414,6 +1471,11 @@ async function mostrarConfiguracaoPagina(
                     `**Thumbnail:** ${definido(pagina.thumbnail)}`,
                     `**Imagem:** ${definido(pagina.imagem)}`,
                     `**Link do título:** ${definido(pagina.titulo_url)}`,
+                    `**Pergunta opcional (botão Pular):** ${
+                        Number(pagina.opcional) === 1
+                            ? "Sim"
+                            : "Não"
+                    }`,
                     "",
                     `🔘 Botões: **${botoes.length}/${MAX_BOTOES}**`
                 ].join("\n")
@@ -1477,7 +1539,21 @@ async function mostrarConfiguracaoPagina(
                     )
                     .setLabel("Editar botões")
                     .setEmoji("⚙️")
-                    .setStyle(ButtonStyle.Primary)
+                    .setStyle(ButtonStyle.Primary),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `registro_toggle_opcional_${guildId}_${numeroPagina}`
+                    )
+                    .setLabel(
+                        `Opcional: ${Number(pagina.opcional) === 1 ? "ON" : "OFF"}`
+                    )
+                    .setEmoji("⏭️")
+                    .setStyle(
+                        Number(pagina.opcional) === 1
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    )
             );
 
     const row3 =
@@ -2538,6 +2614,23 @@ async function iniciarRegistroPrivado(
         });
     }
 
+    const configRegistro =
+        await buscarConfiguracao(guildId);
+
+    if (sequenciaAtiva(configRegistro)) {
+        return interaction.reply({
+            ...(
+                await montarPaginaSequencia(
+                    guildId,
+                    pagina,
+                    paginas.length,
+                    1
+                )
+            ),
+            flags: EPHEMERAL
+        });
+    }
+
     const embed =
         criarEmbedPagina(pagina);
 
@@ -2552,6 +2645,388 @@ async function iniciarRegistroPrivado(
         embeds: [embed],
         components,
         flags: EPHEMERAL
+    });
+}
+
+// =====================================================
+// ❓ MODO PERGUNTAS EM SEQUÊNCIA
+// =====================================================
+
+async function montarPaginaSequencia(
+    guildId,
+    pagina,
+    total,
+    posicao
+) {
+    const opcional =
+        Number(pagina.opcional) === 1;
+
+    return {
+        content:
+            `📝 Pergunta ${posicao} de ${total}${opcional ? " (opcional)" : ""}`,
+        embeds: [
+            criarEmbedPagina(pagina)
+        ],
+        components:
+            await criarComponentesPagina(
+                pagina,
+                guildId,
+                pagina.pagina,
+                {
+                    sequencia: true,
+                    opcional
+                }
+            )
+    };
+}
+
+// Vai para a próxima pergunta ou, se acabaram, conclui o registro
+async function avancarSequencia(
+    interaction,
+    membro,
+    config,
+    numeroAtual,
+    botaoRespondido
+) {
+    const guildId =
+        interaction.guild.id;
+
+    const paginas =
+        await buscarPaginas(guildId);
+
+    const indiceProxima =
+        paginas.findIndex(
+            pagina =>
+                Number(pagina.pagina) >
+                Number(numeroAtual)
+        );
+
+    if (indiceProxima !== -1) {
+        return interaction.update(
+            await montarPaginaSequencia(
+                guildId,
+                paginas[indiceProxima],
+                paginas.length,
+                indiceProxima + 1
+            )
+        );
+    }
+
+    return finalizarRegistroSequencia(
+        interaction,
+        membro,
+        config,
+        numeroAtual,
+        botaoRespondido,
+        paginas
+    );
+}
+
+async function processarRespostaSequencia(
+    interaction,
+    botao,
+    config
+) {
+    let cargoBotao = null;
+
+    if (botao.cargo_id) {
+        cargoBotao =
+            interaction.guild.roles.cache.get(
+                String(botao.cargo_id)
+            );
+
+        if (!cargoBotao) {
+            return interaction.reply({
+                content:
+                    "❌ O cargo configurado para este botão não existe mais.",
+                flags: EPHEMERAL
+            });
+        }
+
+        const verificacao =
+            verificarCargoDoBot(
+                interaction,
+                cargoBotao
+            );
+
+        if (!verificacao.sucesso) {
+            return interaction.reply({
+                content:
+                    verificacao.erro,
+                flags: EPHEMERAL
+            });
+        }
+    }
+
+    const membro =
+        await interaction.guild.members.fetch(
+            interaction.user.id
+        );
+
+    // Uma resposta por pergunta: tira os cargos das outras respostas
+    // desta mesma pergunta (caso o membro esteja refazendo).
+    const botoesPagina =
+        await buscarBotoes(botao.pagina_id);
+
+    for (const outro of botoesPagina) {
+        if (
+            !outro.cargo_id ||
+            String(outro.cargo_id) === String(botao.cargo_id)
+        ) {
+            continue;
+        }
+
+        if (
+            membro.roles.cache.has(
+                String(outro.cargo_id)
+            )
+        ) {
+            await membro.roles
+                .remove(String(outro.cargo_id))
+                .catch(() => {});
+        }
+    }
+
+    if (cargoBotao) {
+        try {
+            await membro.roles.add(cargoBotao);
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao dar cargo da resposta:",
+                erro
+            );
+
+            return interaction.reply({
+                content:
+                    "❌ Não consegui adicionar o cargo configurado para esta resposta.",
+                flags: EPHEMERAL
+            });
+        }
+    }
+
+    return avancarSequencia(
+        interaction,
+        membro,
+        config,
+        botao.pagina,
+        botao
+    );
+}
+
+async function pularPergunta(
+    interaction,
+    guildId,
+    numeroPagina
+) {
+    if (!pertenceAoServidor(interaction, guildId)) {
+        return interaction.reply({
+            content:
+                "❌ Esse registro não pertence a este servidor.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const jaRegistrado =
+        await usuarioJaRegistrado(
+            guildId,
+            interaction.user.id
+        );
+
+    if (jaRegistrado) {
+        return interaction.reply({
+            content:
+                "ℹ️ Você já fez este registro.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const config =
+        await buscarConfiguracao(guildId);
+
+    const pagina =
+        await buscarPagina(
+            guildId,
+            numeroPagina
+        );
+
+    if (
+        !sequenciaAtiva(config) ||
+        !pagina ||
+        Number(pagina.opcional) !== 1
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Essa pergunta não pode ser pulada.",
+            flags: EPHEMERAL
+        });
+    }
+
+    const membro =
+        await interaction.guild.members.fetch(
+            interaction.user.id
+        );
+
+    return avancarSequencia(
+        interaction,
+        membro,
+        config,
+        numeroPagina,
+        null
+    );
+}
+
+async function finalizarRegistroSequencia(
+    interaction,
+    membro,
+    config,
+    numeroPagina,
+    botaoRespondido,
+    paginas
+) {
+    const guildId =
+        interaction.guild.id;
+
+    // =================================================
+    // 🎭 CARGO PÓS-REGISTRO GLOBAL
+    // =================================================
+
+    let cargoPosRegistro = null;
+
+    if (config?.cargo_registro_id) {
+        cargoPosRegistro =
+            interaction.guild.roles.cache.get(
+                String(config.cargo_registro_id)
+            );
+
+        if (!cargoPosRegistro) {
+            return interaction.reply({
+                content:
+                    "❌ O cargo pós-registro configurado não existe mais. Um administrador precisa corrigir a configuração do registro.",
+                flags: EPHEMERAL
+            });
+        }
+
+        const verificacao =
+            verificarCargoDoBot(
+                interaction,
+                cargoPosRegistro
+            );
+
+        if (!verificacao.sucesso) {
+            return interaction.reply({
+                content:
+                    `❌ Não consigo adicionar o cargo pós-registro configurado.\n\n${verificacao.erro}`,
+                flags: EPHEMERAL
+            });
+        }
+
+        try {
+            await membro.roles.add(cargoPosRegistro);
+        } catch (erro) {
+            console.error(
+                "❌ Erro ao dar cargo pós-registro:",
+                erro
+            );
+
+            return interaction.reply({
+                content:
+                    "❌ Não consegui adicionar o cargo pós-registro configurado.",
+                flags: EPHEMERAL
+            });
+        }
+    }
+
+    // =================================================
+    // 💾 SALVAR REGISTRO (só agora, no fim)
+    // =================================================
+
+    const paginaFinal =
+        paginas.find(
+            pagina =>
+                Number(pagina.pagina) ===
+                Number(numeroPagina)
+        );
+
+    try {
+        await registrarUsuario(
+            guildId,
+            interaction.user.id,
+            paginaFinal?.id ?? null,
+            botaoRespondido?.id ?? null,
+            cargoPosRegistro?.id ??
+                botaoRespondido?.cargo_id ??
+                null
+        );
+    } catch (erro) {
+        console.error(
+            "❌ Erro ao salvar usuário registrado:",
+            erro
+        );
+
+        const agoraRegistrado =
+            await usuarioJaRegistrado(
+                guildId,
+                interaction.user.id
+            ).catch(() => false);
+
+        return interaction.reply({
+            content:
+                agoraRegistrado
+                    ? "ℹ️ Você já fez este registro."
+                    : "❌ Ocorreu um erro ao salvar seu registro.",
+            flags: EPHEMERAL
+        });
+    }
+
+    // =================================================
+    // ✅ MENSAGEM FINAL (cargos ganhos nas respostas)
+    // =================================================
+
+    const cargos = new Set();
+
+    for (const pagina of paginas) {
+        if (
+            Number(pagina.pagina) ===
+            Number(numeroPagina)
+        ) {
+            continue;
+        }
+
+        const botoes =
+            await buscarBotoes(pagina.id);
+
+        for (const botao of botoes) {
+            if (
+                botao.cargo_id &&
+                membro.roles.cache.has(
+                    String(botao.cargo_id)
+                )
+            ) {
+                cargos.add(String(botao.cargo_id));
+            }
+        }
+    }
+
+    if (botaoRespondido?.cargo_id) {
+        cargos.add(String(botaoRespondido.cargo_id));
+    }
+
+    if (cargoPosRegistro) {
+        cargos.add(String(cargoPosRegistro.id));
+    }
+
+    const lista =
+        [...cargos]
+            .map(id => `<@&${id}>`)
+            .join(", ");
+
+    return interaction.update({
+        content:
+            lista
+                ? `✅ Registro concluído com sucesso!\n\n🎭 Seus cargos: ${lista}`
+                : "✅ Registro concluído com sucesso!",
+        embeds: [],
+        components: []
     });
 }
 
@@ -2617,6 +3092,19 @@ async function processarBotaoRegistro(
                 "ℹ️ Você já fez este registro.",
             flags: EPHEMERAL
         });
+    }
+
+    const configSequencia =
+        await buscarConfiguracao(
+            interaction.guild.id
+        );
+
+    if (sequenciaAtiva(configSequencia)) {
+        return processarRespostaSequencia(
+            interaction,
+            botao,
+            configSequencia
+        );
     }
 
     // =================================================
@@ -2900,6 +3388,26 @@ async function handleInteraction(interaction) {
         }
 
         // =================================================
+        // ⏭️ PULAR PERGUNTA OPCIONAL
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_pular_"
+            )
+        ) {
+            const partes =
+                customId.split("_");
+
+            return await pularPergunta(
+                interaction,
+                partes[2],
+                Number(partes[3])
+            );
+        }
+
+        // =================================================
         // 🔘 BOTÃO DE REGISTRO
         // =================================================
 
@@ -3040,7 +3548,9 @@ async function handleInteraction(interaction) {
             "registro_modal_aparencia_painel_",
             "registro_modal_aparencia_pagina_",
             "registro_confirmar_excluir_",
-            "registro_cancelar_excluir_"
+            "registro_cancelar_excluir_",
+            "registro_toggle_sequencia_",
+            "registro_toggle_opcional_"
         ];
 
         const ehAdministrativo =
@@ -3062,6 +3572,133 @@ async function handleInteraction(interaction) {
 
         if (ehAdministrativo) {
             await garantirColunasExtrasRegistro();
+        }
+
+        // =================================================
+        // ❓ LIGAR / DESLIGAR PERGUNTAS EM SEQUÊNCIA
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_toggle_sequencia_"
+            )
+        ) {
+            const guildId =
+                customId.replace(
+                    "registro_toggle_sequencia_",
+                    ""
+                );
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const config =
+                await buscarConfiguracao(guildId);
+
+            const novo =
+                !sequenciaAtiva(config);
+
+            await salvarExtrasRegistro(
+                "registro_config",
+                "guild_id",
+                guildId,
+                {
+                    modo_sequencia:
+                        novo
+                            ? 1
+                            : 0
+                }
+            );
+
+            return await atualizarPainelPrincipal(
+                interaction,
+                guildId,
+                novo
+                    ? "✅ Perguntas em sequência **ligado**: cada página é uma pergunta e responder avança para a próxima."
+                    : "✅ Perguntas em sequência **desligado**: o primeiro botão clicado conclui o registro."
+            );
+        }
+
+        // =================================================
+        // ⏭️ PERGUNTA OPCIONAL (liga / desliga "Pular")
+        // =================================================
+
+        if (
+            interaction.isButton() &&
+            customId.startsWith(
+                "registro_toggle_opcional_"
+            )
+        ) {
+            const partes =
+                customId.split("_");
+
+            const guildId =
+                partes[3];
+
+            const numeroPagina =
+                Number(partes[4]);
+
+            if (
+                !pertenceAoServidor(
+                    interaction,
+                    guildId
+                )
+            ) {
+                return interaction.reply({
+                    content:
+                        "❌ Essa interação não pertence a este servidor.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const pagina =
+                await buscarPagina(
+                    guildId,
+                    numeroPagina
+                );
+
+            if (!pagina) {
+                return interaction.reply({
+                    content:
+                        "❌ Página não encontrada.",
+                    flags: EPHEMERAL
+                });
+            }
+
+            const novo =
+                Number(pagina.opcional) !== 1;
+
+            await salvarExtrasRegistro(
+                "registro_paginas",
+                "id",
+                pagina.id,
+                {
+                    opcional:
+                        novo
+                            ? 1
+                            : 0
+                }
+            );
+
+            return await mostrarConfiguracaoPagina(
+                interaction,
+                guildId,
+                numeroPagina,
+                novo
+                    ? "✅ Pergunta **opcional**: o membro verá o botão Pular."
+                    : "✅ Pergunta **obrigatória**: o membro precisa responder."
+            );
         }
 
         // =================================================
