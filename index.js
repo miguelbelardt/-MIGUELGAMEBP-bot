@@ -26,6 +26,7 @@ const logs = require("./comandos/logs");
 const join = require("./comandos/join");
 const leave = require("./comandos/leave");
 const reactrole = require("./comandos/reactrole");
+const criarcall = require("./comandos/criarcall");
 
 // =====================================================
 // 🛡️ PROTEÇÃO E LOGS DE ERROS DO NODE
@@ -151,6 +152,7 @@ const client = new Client({
 // =====================================================
 
 client.registrarLog = logs.registrarLog;
+criarcall.iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
