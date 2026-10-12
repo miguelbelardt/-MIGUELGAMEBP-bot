@@ -793,7 +793,7 @@ function criarModalEmojis(config, grupo) {
                         label: `Emoji de "${BOTOES[chave].texto}"`,
                         valor: emojiTexto(config, chave),
                         max: 100,
-                        placeholder: `Vazio = padrão ${BOTOES[chave].emoji}`
+                        placeholder: `Vazio = padrão ${BOTOES[chave].emoji} | 😀 ou <:nome:ID> ou <a:nome:ID>`
                     })
             )
         );
@@ -1540,7 +1540,7 @@ async function tratarInteracao(interaction) {
 
                     if (emoji === null) {
                         return recusar(
-                            `❌ O emoji de "${BOTOES[chave].texto}" é inválido. Use um emoji normal (😀) ou um emoji personalizado do servidor.`
+                            `❌ O emoji de "${BOTOES[chave].texto}" é inválido. Use um emoji normal (😀) ou o código completo de um emoji personalizado: <:nome:ID> (animado: <a:nome:ID>). Só :nome: não funciona. Para pegar o código, digite \\:nome: no chat e envie.`
                         );
                     }
 
