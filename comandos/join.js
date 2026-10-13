@@ -39,7 +39,48 @@ function substituirVariaveis(texto, dados) {
         .replace(/\{avatar\}/gi, dados.avatar)
         .replace(/\{banner\}/gi, dados.banner || "")
         .replace(/\{members\}/gi, String(dados.members))
+        .replace(/\{humans\}/gi, String(dados.humans ?? dados.members))
         .replace(/\{server\}/gi, dados.server);
+}
+
+// =====================================================
+// 👥 CONTAR MEMBROS SEM BOTS
+// =====================================================
+// {members} = todos (com bots) | {humans} = só pessoas.
+// Usa a lista de membros que o bot já mantém em memória.
+// Se ela estiver incompleta, tenta baixar a lista inteira;
+// se não der, calcula uma estimativa.
+
+async function contarHumanos(guild) {
+    try {
+        const total = guild.memberCount;
+
+        if (guild.members.cache.size < total) {
+            try {
+                await guild.members.fetch();
+            } catch (erro) {
+                console.warn(
+                    "⚠️ Não foi possível baixar todos os membros para contar sem bots:",
+                    erro?.message || erro
+                );
+            }
+        }
+
+        const bots =
+            guild.members.cache.filter(
+                m => m.user.bot
+            ).size;
+
+        const humanos =
+            guild.members.cache.size >= total
+                ? guild.members.cache.size - bots
+                : total - bots;
+
+        return Math.max(0, humanos);
+
+    } catch (erro) {
+        return guild.memberCount;
+    }
 }
 
 // =====================================================
@@ -343,6 +384,7 @@ async function pegarDadosMembro(membro) {
         avatar,
         banner,
         members: membro.guild.memberCount,
+        humans: await contarHumanos(membro.guild),
         server: membro.guild.name
     };
 }
@@ -787,6 +829,8 @@ async function pegarDadosTeste(interaction) {
         banner,
         members:
             interaction.guild.memberCount,
+        humans:
+            await contarHumanos(interaction.guild),
         server:
             interaction.guild.name
     };
@@ -836,7 +880,8 @@ function criarPainelJoin(
                 "Use os botões abaixo para configurar o sistema de boas-vindas.\n\n" +
                 "📝 **Mensagem**, 🎨 **Embed**, 👤 **Autor**, 🖼️ **Imagens**, 📌 **Rodapé** e 🧾 **Campos** abrem formulários.\n" +
                 "Os botões **ON/OFF** ligam e desligam cada parte do embed.\n\n" +
-                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`"
+                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{humans}` `{server}`\n" +
+                "`{members}` conta todos (com bots). `{humans}` conta só pessoas (sem bots)."
             )
             .setColor(
                 converterCor(
