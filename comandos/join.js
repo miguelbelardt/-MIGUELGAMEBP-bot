@@ -39,19 +39,18 @@ function substituirVariaveis(texto, dados) {
         .replace(/\{avatar\}/gi, dados.avatar)
         .replace(/\{banner\}/gi, dados.banner || "")
         .replace(/\{members\}/gi, String(dados.members))
-        .replace(/\{humans\}/gi, String(dados.humans ?? dados.members))
         .replace(/\{server\}/gi, dados.server);
 }
 
 // =====================================================
 // 👥 CONTAR MEMBROS SEM BOTS
 // =====================================================
-// {members} = todos (com bots) | {humans} = só pessoas.
+// A variável {members} mostra só as pessoas (bots não contam).
 // Usa a lista de membros que o bot já mantém em memória.
 // Se ela estiver incompleta, tenta baixar a lista inteira;
 // se não der, calcula uma estimativa.
 
-async function contarHumanos(guild) {
+async function contarMembrosSemBots(guild) {
     try {
         const total = guild.memberCount;
 
@@ -383,8 +382,7 @@ async function pegarDadosMembro(membro) {
         userid: membro.id,
         avatar,
         banner,
-        members: membro.guild.memberCount,
-        humans: await contarHumanos(membro.guild),
+        members: await contarMembrosSemBots(membro.guild),
         server: membro.guild.name
     };
 }
@@ -828,9 +826,7 @@ async function pegarDadosTeste(interaction) {
             }),
         banner,
         members:
-            interaction.guild.memberCount,
-        humans:
-            await contarHumanos(interaction.guild),
+            await contarMembrosSemBots(interaction.guild),
         server:
             interaction.guild.name
     };
@@ -880,8 +876,8 @@ function criarPainelJoin(
                 "Use os botões abaixo para configurar o sistema de boas-vindas.\n\n" +
                 "📝 **Mensagem**, 🎨 **Embed**, 👤 **Autor**, 🖼️ **Imagens**, 📌 **Rodapé** e 🧾 **Campos** abrem formulários.\n" +
                 "Os botões **ON/OFF** ligam e desligam cada parte do embed.\n\n" +
-                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{humans}` `{server}`\n" +
-                "`{members}` conta todos (com bots). `{humans}` conta só pessoas (sem bots)."
+                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`\n" +
+                "`{members}` conta só as pessoas (bots não entram na conta)."
             )
             .setColor(
                 converterCor(
