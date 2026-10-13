@@ -43,6 +43,47 @@ function substituirVariaveis(texto, dados) {
 
 
 // =====================================================
+// 👥 CONTAR MEMBROS SEM BOTS
+// =====================================================
+// A variável {members} mostra só as pessoas (bots não contam).
+// Usa a lista de membros que o bot já mantém em memória.
+// Se ela estiver incompleta, tenta baixar a lista inteira;
+// se não der, calcula uma estimativa.
+
+async function contarMembrosSemBots(guild) {
+    try {
+        const total = guild.memberCount;
+
+        if (guild.members.cache.size < total) {
+            try {
+                await guild.members.fetch();
+            } catch (erro) {
+                console.warn(
+                    "⚠️ Não foi possível baixar todos os membros para contar sem bots:",
+                    erro?.message || erro
+                );
+            }
+        }
+
+        const bots =
+            guild.members.cache.filter(
+                m => m.user.bot
+            ).size;
+
+        const humanos =
+            guild.members.cache.size >= total
+                ? guild.members.cache.size - bots
+                : total - bots;
+
+        return Math.max(0, humanos);
+
+    } catch (erro) {
+        return guild.memberCount;
+    }
+}
+
+
+// =====================================================
 // 🚪 UTILITÁRIOS
 // =====================================================
 
@@ -325,7 +366,7 @@ async function pegarDadosMembro(membro) {
         userid: membro.id,
         avatar,
         banner,
-        members: membro.guild.memberCount,
+        members: await contarMembrosSemBots(membro.guild),
         server: membro.guild.name
     };
 }
@@ -717,7 +758,7 @@ async function pegarDadosTeste(interaction) {
         banner,
 
         members:
-            interaction.guild.memberCount,
+            await contarMembrosSemBots(interaction.guild),
 
         server:
             interaction.guild.name
@@ -772,7 +813,8 @@ function criarPainelLeave(
                 "Configure abaixo como a mensagem de saída será enviada.\n\n" +
                 "💬 **Mensagem**, 🎨 **Embed**, 👤 **Autor**, 🖼️ **Imagens**, 📝 **Footer** e 🧾 **Campos** abrem formulários.\n" +
                 "Os botões **ON/OFF** ligam e desligam cada parte do embed.\n\n" +
-                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`"
+                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`\n" +
+                "`{members}` conta só as pessoas (bots não entram na conta)."
             )
             .addFields(
                 {
