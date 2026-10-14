@@ -1,9 +1,40 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder
+    EmbedBuilder,
+    AttachmentBuilder
 } = require("discord.js");
 
 const os = require("os");
+const fs = require("fs");
+const path = require("path");
+
+// =====================================================
+// 🖼️ BANNER DO BOT
+// =====================================================
+// Duas formas de usar (a primeira que existir ganha):
+//
+// 1) LINK: cole o endereço da imagem em BANNER_URL.
+//    Tem que ser um link PERMANENTE (imgur, imgbb, GitHub
+//    raw...). Links de anexo do Discord expiram.
+//
+// 2) ARQUIVO: deixe BANNER_URL vazio e coloque a imagem na
+//    pasta "imagens" (na raiz do projeto, ao lado de
+//    "comandos"), com o nome botinfo-banner.png.
+//
+// Se não tiver nenhum dos dois, o /botinfo funciona
+// normalmente, só que sem o banner.
+
+const BANNER_URL = "https://cdn.discordapp.com/attachments/1274464188432912425/1559895402583691284/botinfo-banner.png?ex=6ad0bd4d&is=6acf6bcd&hm=fb3a904ffd005609291d9232c8190556d394dcfc272cefdd876802810e0834a4&";
+
+const BANNER_NOME = "botinfo-banner.png";
+
+const BANNER_CAMINHO =
+    path.join(
+        __dirname,
+        "..",
+        "imagens",
+        BANNER_NOME
+    );
 
 const COR = 0x5865F2;
 
@@ -240,6 +271,41 @@ function criarEmbed(client, latenciaResposta, criador) {
 }
 
 // =====================================================
+// 💬 MONTAR RESPOSTA (EMBED + BANNER)
+// =====================================================
+
+function criarResposta(client, latenciaResposta, criador) {
+    const embed =
+        criarEmbed(
+            client,
+            latenciaResposta,
+            criador
+        );
+
+    const resposta = {
+        embeds: [embed]
+    };
+
+    if (/^https?:\/\//i.test(BANNER_URL)) {
+        embed.setImage(BANNER_URL);
+
+    } else if (fs.existsSync(BANNER_CAMINHO)) {
+        resposta.files = [
+            new AttachmentBuilder(
+                BANNER_CAMINHO,
+                { name: BANNER_NOME }
+            )
+        ];
+
+        embed.setImage(
+            `attachment://${BANNER_NOME}`
+        );
+    }
+
+    return resposta;
+}
+
+// =====================================================
 // 🤖 COMANDO
 // =====================================================
 
@@ -249,6 +315,9 @@ module.exports = {
         .setDescription("Veja informações sobre o bot. 🤖"),
 
     criarEmbed,
+    criarResposta,
+    BANNER_CAMINHO,
+    BANNER_URL,
     formatarTempo,
     pegarCriador,
     listarInspiracoes,
@@ -261,15 +330,13 @@ module.exports = {
                     Date.now() - interaction.createdTimestamp
                 );
 
-            await interaction.reply({
-                embeds: [
-                    criarEmbed(
-                        interaction.client,
-                        latencia,
-                        await pegarCriador(interaction.client)
-                    )
-                ]
-            });
+            await interaction.reply(
+                criarResposta(
+                    interaction.client,
+                    latencia,
+                    await pegarCriador(interaction.client)
+                )
+            );
 
         } catch (erro) {
             console.error(
@@ -294,15 +361,13 @@ module.exports = {
                     Date.now() - message.createdTimestamp
                 );
 
-            await message.reply({
-                embeds: [
-                    criarEmbed(
-                        message.client,
-                        latencia,
-                        await pegarCriador(message.client)
-                    )
-                ]
-            });
+            await message.reply(
+                criarResposta(
+                    message.client,
+                    latencia,
+                    await pegarCriador(message.client)
+                )
+            );
 
         } catch (erro) {
             console.error(
