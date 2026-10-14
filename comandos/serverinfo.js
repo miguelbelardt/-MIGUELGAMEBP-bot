@@ -261,22 +261,117 @@ async function criarResposta(guild) {
 }
 
 // =====================================================
+// 🔎 ESCOLHER QUAL SERVIDOR MOSTRAR
+// =====================================================
+// Sem ID: mostra o servidor onde o comando foi usado.
+// Com ID: mostra outro servidor, mas só se o bot estiver
+// nele E a pessoa for membro dele (ou for o dono do bot).
+// Assim ninguém consegue espiar servidores dos outros.
+
+async function pegarIdDoDonoDoBot(client) {
+    try {
+        const aplicacao =
+            await client.application.fetch();
+
+        const dono = aplicacao.owner;
+
+        if (!dono) {
+            return null;
+        }
+
+        return dono.members
+            ? dono.ownerId
+            : dono.id;
+
+    } catch (erro) {
+        return null;
+    }
+}
+
+async function escolherServidor(client, idPedido, usuarioId, guildAtual) {
+    const id = String(idPedido || "").trim();
+
+    if (!id) {
+        if (!guildAtual) {
+            return {
+                erro: "❌ Use esse comando dentro de um servidor ou informe o ID de um servidor."
+            };
+        }
+
+        return { guild: guildAtual };
+    }
+
+    if (!/^\d{15,25}$/.test(id)) {
+        return {
+            erro: "❌ ID inválido. Digite só os números do ID do servidor."
+        };
+    }
+
+    const guild = client.guilds.cache.get(id);
+
+    if (!guild) {
+        return {
+            erro: "❌ Não estou nesse servidor, então não consigo ver as informações dele."
+        };
+    }
+
+    if (guildAtual && guild.id === guildAtual.id) {
+        return { guild };
+    }
+
+    const ehDonoDoBot =
+        (await pegarIdDoDonoDoBot(client)) === usuarioId;
+
+    if (!ehDonoDoBot) {
+        const membro =
+            await guild.members
+                .fetch(usuarioId)
+                .catch(() => null);
+
+        if (!membro) {
+            return {
+                erro: "❌ Você precisa ser membro desse servidor para ver as informações dele."
+            };
+        }
+    }
+
+    return { guild };
+}
+
+// =====================================================
 // 🏰 COMANDO
 // =====================================================
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("serverinfo")
-        .setDescription("Veja informações do servidor. 🏰"),
+        .setDescription("Veja informações do servidor. 🏰")
+        .addStringOption(option =>
+            option
+                .setName("id")
+                .setDescription(
+                    "ID de outro servidor (opcional)."
+                )
+                .setRequired(false)
+        ),
 
     contarMembros,
     contarCanais,
+    escolherServidor,
 
     async execute(interaction) {
         try {
-            if (!interaction.guild) {
+            const escolha =
+                await escolherServidor(
+                    interaction.client,
+                    interaction.options.getString("id"),
+                    interaction.user.id,
+                    interaction.guild
+                );
+
+            if (escolha.erro) {
                 return interaction.reply({
-                    content: "❌ Esse comando só funciona dentro de um servidor.",
+                    content: escolha.erro,
                     ephemeral: true
                 });
             }
@@ -284,7 +379,7 @@ module.exports = {
             await interaction.deferReply();
 
             await interaction.editReply(
-                await criarResposta(interaction.guild)
+                await criarResposta(escolha.guild)
             );
 
         } catch (erro) {
@@ -308,16 +403,22 @@ module.exports = {
         }
     },
 
-    async handlePrefix(message) {
+    async handlePrefix(message, args = []) {
         try {
-            if (!message.guild) {
-                return message.reply(
-                    "❌ Esse comando só funciona dentro de um servidor."
+            const escolha =
+                await escolherServidor(
+                    message.client,
+                    args[0],
+                    message.author.id,
+                    message.guild
                 );
+
+            if (escolha.erro) {
+                return message.reply(escolha.erro);
             }
 
             await message.reply(
-                await criarResposta(message.guild)
+                await criarResposta(escolha.guild)
             );
 
         } catch (erro) {
