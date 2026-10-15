@@ -8,31 +8,49 @@ const {
 
 const { pool, getSaldo } = require("../database/database");
 
+// =====================================================
+// 😀 EMOJIS DO PAY
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    pagamento: "💸",
+    pessoa: "👤",
+    moedas: "<:Coin:1528228277913784340>",
+    saldo: "<:cash:1542933882452578415>",
+    relogio: "<:clock:1542945408865534002>",
+    sucesso: "<:activ:1528228344263348394>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
+const EXPIRA_EM = 60 * 60 * 1000;
+
 async function criarPagamento(remetenteId, destinatario, quantidade, responder) {
     if (!destinatario) {
         return responder({
-            content: "❌ Você precisa informar o usuário que receberá as moedas.",
+            content: `${EMOJIS.erro} Você precisa informar o usuário que receberá as moedas.`,
             ephemeral: true
         });
     }
 
     if (!Number.isInteger(quantidade) || quantidade < 1) {
         return responder({
-            content: "❌ A quantidade precisa ser um número inteiro maior que 0.",
+            content: `${EMOJIS.erro} A quantidade precisa ser um número inteiro maior que 0.`,
             ephemeral: true
         });
     }
 
     if (destinatario.id === remetenteId) {
         return responder({
-            content: "❌ Você não pode enviar moedas para si mesmo.",
+            content: `${EMOJIS.erro} Você não pode enviar moedas para si mesmo.`,
             ephemeral: true
         });
     }
 
     if (destinatario.bot) {
         return responder({
-            content: "❌ Você não pode enviar moedas para um bot.",
+            content: `${EMOJIS.erro} Você não pode enviar moedas para um bot.`,
             ephemeral: true
         });
     }
@@ -43,22 +61,25 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
         if (saldo < quantidade) {
             return responder({
                 content:
-                    `❌ Você não tem moedas suficientes.\n` +
-                    `💰 Seu saldo: **${saldo} moedas**\n` +
-                    `💸 Tentativa: **${quantidade} moedas**`,
+                    `${EMOJIS.erro} Você não tem moedas suficientes.\n` +
+                    `${EMOJIS.moedas} Seu saldo: **${saldo} moedas**\n` +
+                    `${EMOJIS.pagamento} Tentativa: **${quantidade} moedas**`,
                 ephemeral: true
             });
         }
 
         const id = `${remetenteId}-${destinatario.id}-${Date.now()}`;
 
+        const expiraEm =
+            Math.floor((Date.now() + EXPIRA_EM) / 1000);
+
         const embed = new EmbedBuilder()
-            .setTitle("💸 PEDIDO DE PAGAMENTO")
+            .setTitle(`${EMOJIS.pagamento} PEDIDO DE PAGAMENTO`)
             .setDescription(
-                `${responder.user} quer enviar **${quantidade} moedas** para ${destinatario}.\n\n` +
-                `👤 Destinatário: ${destinatario}\n` +
-                `💰 Quantidade: **${quantidade} moedas**\n\n` +
-                `⏰ Este pedido expira em **1 hora**.\n` +
+                `<@${remetenteId}> quer enviar **${quantidade} moedas** para ${destinatario}.\n\n` +
+                `${EMOJIS.pessoa} Destinatário: ${destinatario}\n` +
+                `${EMOJIS.moedas} Quantidade: **${quantidade} moedas**\n\n` +
+                `${EMOJIS.relogio} Este pedido expira <t:${expiraEm}:R> (<t:${expiraEm}:t>).\n` +
                 `Apenas o destinatário pode aceitar.`
             )
             .setColor("Yellow");
@@ -68,7 +89,7 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
                 new ButtonBuilder()
                     .setCustomId(`pay_accept_${id}`)
                     .setLabel("Aceitar pagamento")
-                    .setEmoji("✅")
+                    .setEmoji(EMOJIS.sucesso)
                     .setStyle(ButtonStyle.Success)
             );
 
@@ -79,13 +100,13 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
         });
 
         const collector = mensagem.createMessageComponentCollector({
-            time: 60 * 60 * 1000
+            time: EXPIRA_EM
         });
 
         collector.on("collect", async buttonInteraction => {
             if (buttonInteraction.user.id !== destinatario.id) {
                 return buttonInteraction.reply({
-                    content: "❌ Apenas o destinatário pode aceitar este pagamento.",
+                    content: `${EMOJIS.erro} Apenas o destinatário pode aceitar este pagamento.`,
                     ephemeral: true
                 });
             }
@@ -124,7 +145,7 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
 
                     return buttonInteraction.update({
                         content:
-                            "❌ O pagamento não pôde ser realizado porque o remetente não possui saldo suficiente.",
+                            `${EMOJIS.erro} O pagamento não pôde ser realizado porque o remetente não possui saldo suficiente.`,
                         embeds: [],
                         components: []
                     });
@@ -155,11 +176,11 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
                 const novoSaldo = Number(saldoAtualizado[0]?.saldo ?? 0);
 
                 const sucesso = new EmbedBuilder()
-                    .setTitle("✅ PAGAMENTO ACEITO")
+                    .setTitle(`${EMOJIS.sucesso} PAGAMENTO ACEITO`)
                     .setDescription(
-                        `${destinatario} aceitou o pagamento de ${buttonInteraction.message.interaction?.user ?? "um usuário"}!\n\n` +
-                        `💰 Valor recebido: **${quantidade} moedas**\n` +
-                        `💳 Novo saldo do remetente: **${novoSaldo} moedas**`
+                        `${destinatario} aceitou o pagamento de <@${remetenteId}>!\n\n` +
+                        `${EMOJIS.moedas} Valor recebido: **${quantidade} moedas**\n` +
+                        `${EMOJIS.saldo} Novo saldo do remetente: **${novoSaldo} moedas**`
                     )
                     .setColor("Green");
 
@@ -180,7 +201,7 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
                 console.error("❌ Erro ao aceitar PAY:", erro);
 
                 await buttonInteraction.update({
-                    content: "❌ Ocorreu um erro ao processar o pagamento.",
+                    content: `${EMOJIS.erro} Ocorreu um erro ao processar o pagamento.`,
                     embeds: [],
                     components: []
                 });
@@ -196,7 +217,7 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
             if (motivo !== "accepted") {
                 try {
                     const expirado = new EmbedBuilder()
-                        .setTitle("⏰ PAGAMENTO EXPIRADO")
+                        .setTitle(`${EMOJIS.relogio} PAGAMENTO EXPIRADO`)
                         .setDescription(
                             `O pedido de pagamento de **${quantidade} moedas** expirou.\n\n` +
                             `Nenhuma moeda foi transferida.`
@@ -219,7 +240,7 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
 
         if (!responder.replied && !responder.deferred) {
             await responder({
-                content: "❌ Não foi possível criar o pedido de pagamento.",
+                content: `${EMOJIS.erro} Não foi possível criar o pedido de pagamento.`,
                 ephemeral: true
             });
         }
@@ -263,7 +284,7 @@ module.exports = {
 
         if (!destinatario) {
             return message.reply(
-                "❌ Use o formato: `M pay @usuário quantidade`"
+                `${EMOJIS.erro} Use o formato: \`'pay @usuário quantidade\``
             );
         }
 
