@@ -16,6 +16,17 @@ const {
 
 const crypto = require("crypto");
 
+// =====================================================
+// 😀 EMOJIS DO REGISTRO
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    sucesso: "<:activ:1528228344263348394>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
 const {
     pool,
     getRegistroConfig,
@@ -1001,7 +1012,7 @@ async function abrirModalPainelInicial(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1012,7 +1023,7 @@ async function abrirModalPainelInicial(
     if (!config) {
         return interaction.reply({
             content:
-                "❌ Configuração não encontrada.",
+                `${EMOJIS.erro} Configuração não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1119,7 +1130,7 @@ async function abrirModalAparenciaPainel(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1172,7 +1183,7 @@ async function abrirModalAparenciaPagina(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1186,7 +1197,7 @@ async function abrirModalAparenciaPagina(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Página não encontrada.",
+                `${EMOJIS.erro} Página não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1238,7 +1249,7 @@ async function abrirModalTextoBotaoPainel(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1289,7 +1300,7 @@ async function abrirModalCargoRegistro(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1300,7 +1311,7 @@ async function abrirModalCargoRegistro(
     if (!config) {
         return interaction.reply({
             content:
-                "❌ Configuração não encontrada.",
+                `${EMOJIS.erro} Configuração não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1351,7 +1362,7 @@ async function mostrarSelecaoCanal(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1413,7 +1424,7 @@ async function mostrarConfiguracaoPagina(
     if (!pertenceAoServidor(interaction, guildId)) {
         return interaction.reply({
             content:
-                "❌ Essa interação não pertence a este servidor.",
+                `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
             flags: EPHEMERAL
         });
     }
@@ -1427,7 +1438,7 @@ async function mostrarConfiguracaoPagina(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Essa página não existe.",
+                `${EMOJIS.erro} Essa página não existe.`,
             flags: EPHEMERAL
         });
     }
@@ -1452,8 +1463,8 @@ async function mostrarConfiguracaoPagina(
 
     const definido = valor =>
         valor
-            ? "✅ Definido"
-            : "❌ Nenhum";
+            ? `${EMOJIS.sucesso} Definido`
+            : `${EMOJIS.erro} Nenhum`;
 
     const embed =
         new EmbedBuilder()
@@ -1600,7 +1611,7 @@ async function abrirModalTexto(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1614,7 +1625,7 @@ async function abrirModalTexto(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Página não encontrada.",
+                `${EMOJIS.erro} Página não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1679,7 +1690,7 @@ async function abrirModalRodape(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1693,7 +1704,7 @@ async function abrirModalRodape(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Página não encontrada.",
+                `${EMOJIS.erro} Página não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1758,7 +1769,7 @@ async function abrirModalBotao(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1772,7 +1783,7 @@ async function abrirModalBotao(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Página não encontrada.",
+                `${EMOJIS.erro} Página não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1783,7 +1794,7 @@ async function abrirModalBotao(
     if (botoes.length >= MAX_BOTOES) {
         return interaction.reply({
             content:
-                `❌ Cada página pode ter no máximo ${MAX_BOTOES} botões.`,
+                `${EMOJIS.erro} Cada página pode ter no máximo ${MAX_BOTOES} botões.`,
             flags: EPHEMERAL
         });
     }
@@ -1858,7 +1869,7 @@ async function mostrarBotoes(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -1872,7 +1883,7 @@ async function mostrarBotoes(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Página não encontrada.",
+                `${EMOJIS.erro} Página não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -1999,7 +2010,7 @@ async function abrirModalEditarBotao(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -2013,7 +2024,7 @@ async function abrirModalEditarBotao(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ Página não encontrada.",
+                `${EMOJIS.erro} Página não encontrada.`,
             flags: EPHEMERAL
         });
     }
@@ -2031,7 +2042,7 @@ async function abrirModalEditarBotao(
     if (!botao) {
         return interaction.reply({
             content:
-                "❌ Esse botão não existe nesta página.",
+                `${EMOJIS.erro} Esse botão não existe nesta página.`,
             flags: EPHEMERAL
         });
     }
@@ -2132,7 +2143,7 @@ function obterCargoConfigurado(
         return {
             id: null,
             erro:
-                "❌ O ID do cargo informado é inválido."
+                `${EMOJIS.erro} O ID do cargo informado é inválido.`
         };
     }
 
@@ -2145,7 +2156,7 @@ function obterCargoConfigurado(
         return {
             id: null,
             erro:
-                "❌ Não encontrei esse cargo no servidor."
+                `${EMOJIS.erro} Não encontrei esse cargo no servidor.`
         };
     }
 
@@ -2153,7 +2164,7 @@ function obterCargoConfigurado(
         return {
             id: null,
             erro:
-                "❌ Esse cargo é gerenciado por uma integração e não pode ser atribuído pelo bot."
+                `${EMOJIS.erro} Esse cargo é gerenciado por uma integração e não pode ser atribuído pelo bot.`
         };
     }
 
@@ -2185,7 +2196,7 @@ function verificarCargoDoBot(
         return {
             sucesso: false,
             erro:
-                "❌ Não consegui verificar as permissões do bot."
+                `${EMOJIS.erro} Não consegui verificar as permissões do bot.`
         };
     }
 
@@ -2197,7 +2208,7 @@ function verificarCargoDoBot(
         return {
             sucesso: false,
             erro:
-                "❌ Eu não tenho a permissão **Gerenciar Cargos**."
+                `${EMOJIS.erro} Eu não tenho a permissão **Gerenciar Cargos**.`
         };
     }
 
@@ -2209,7 +2220,7 @@ function verificarCargoDoBot(
         return {
             sucesso: false,
             erro:
-                "❌ Não consigo adicionar esse cargo porque ele está acima ou no mesmo nível do meu maior cargo."
+                `${EMOJIS.erro} Não consigo adicionar esse cargo porque ele está acima ou no mesmo nível do meu maior cargo.`
         };
     }
 
@@ -2233,7 +2244,7 @@ async function publicarRegistro(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -2249,7 +2260,7 @@ async function publicarRegistro(
     if (!config.canal_id) {
         return interaction.reply({
             content:
-                "❌ Primeiro selecione o canal onde o painel de registro será publicado.",
+                `${EMOJIS.erro} Primeiro selecione o canal onde o painel de registro será publicado.`,
             flags: EPHEMERAL
         });
     }
@@ -2265,7 +2276,7 @@ async function publicarRegistro(
     ) {
         return interaction.reply({
             content:
-                "❌ O canal configurado não existe ou não é um canal de texto.",
+                `${EMOJIS.erro} O canal configurado não existe ou não é um canal de texto.`,
             flags: EPHEMERAL
         });
     }
@@ -2294,7 +2305,7 @@ async function publicarRegistro(
             return atualizarPainelPrincipal(
                 interaction,
                 guildId,
-                "✅ Painel de registro atualizado com sucesso!"
+                `${EMOJIS.sucesso} Painel de registro atualizado com sucesso!`
             );
         }
     }
@@ -2333,7 +2344,7 @@ async function publicarRegistro(
     return atualizarPainelPrincipal(
         interaction,
         guildId,
-        `✅ Painel de registro publicado em <#${canal.id}>!`
+        `${EMOJIS.sucesso} Painel de registro publicado em <#${canal.id}>!`
     );
 }
 
@@ -2351,7 +2362,7 @@ async function adicionarPagina(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para configurar o registro.",
+                `${EMOJIS.erro} Você não tem permissão para configurar o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -2364,7 +2375,7 @@ async function adicionarPagina(
     if (paginas.length >= MAX_PAGINAS) {
         return interaction.reply({
             content:
-                `❌ O limite máximo é de ${MAX_PAGINAS} páginas.`,
+                `${EMOJIS.erro} O limite máximo é de ${MAX_PAGINAS} páginas.`,
             flags: EPHEMERAL
         });
     }
@@ -2405,7 +2416,7 @@ async function adicionarPagina(
     return atualizarPainelPrincipal(
         interaction,
         guildId,
-        `✅ Página ${numero} criada!`
+        `${EMOJIS.sucesso} Página ${numero} criada!`
     );
 }
 
@@ -2423,7 +2434,7 @@ async function mostrarConfirmacaoExclusao(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para excluir o registro.",
+                `${EMOJIS.erro} Você não tem permissão para excluir o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -2476,7 +2487,7 @@ async function excluirRegistro(
     ) {
         return interaction.reply({
             content:
-                "❌ Você não tem permissão para excluir o registro.",
+                `${EMOJIS.erro} Você não tem permissão para excluir o registro.`,
             flags: EPHEMERAL
         });
     }
@@ -2487,7 +2498,7 @@ async function excluirRegistro(
     if (!config) {
         return interaction.reply({
             content:
-                "❌ Nenhum sistema de registro encontrado.",
+                `${EMOJIS.erro} Nenhum sistema de registro encontrado.`,
             flags: EPHEMERAL
         });
     }
@@ -2573,7 +2584,7 @@ async function iniciarRegistroPrivado(
     if (!pertenceAoServidor(interaction, guildId)) {
         return interaction.reply({
             content:
-                "❌ Esse registro não pertence a este servidor.",
+                `${EMOJIS.erro} Esse registro não pertence a este servidor.`,
             flags: EPHEMERAL
         });
     }
@@ -2598,7 +2609,7 @@ async function iniciarRegistroPrivado(
     if (!paginas.length) {
         return interaction.reply({
             content:
-                "❌ Nenhuma página de registro foi configurada.",
+                `${EMOJIS.erro} Nenhuma página de registro foi configurada.`,
             flags: EPHEMERAL
         });
     }
@@ -2609,7 +2620,7 @@ async function iniciarRegistroPrivado(
     if (!pagina) {
         return interaction.reply({
             content:
-                "❌ A primeira página do registro não existe.",
+                `${EMOJIS.erro} A primeira página do registro não existe.`,
             flags: EPHEMERAL
         });
     }
@@ -2738,7 +2749,7 @@ async function processarRespostaSequencia(
         if (!cargoBotao) {
             return interaction.reply({
                 content:
-                    "❌ O cargo configurado para este botão não existe mais.",
+                    `${EMOJIS.erro} O cargo configurado para este botão não existe mais.`,
                 flags: EPHEMERAL
             });
         }
@@ -2798,7 +2809,7 @@ async function processarRespostaSequencia(
 
             return interaction.reply({
                 content:
-                    "❌ Não consegui adicionar o cargo configurado para esta resposta.",
+                    `${EMOJIS.erro} Não consegui adicionar o cargo configurado para esta resposta.`,
                 flags: EPHEMERAL
             });
         }
@@ -2821,7 +2832,7 @@ async function pularPergunta(
     if (!pertenceAoServidor(interaction, guildId)) {
         return interaction.reply({
             content:
-                "❌ Esse registro não pertence a este servidor.",
+                `${EMOJIS.erro} Esse registro não pertence a este servidor.`,
             flags: EPHEMERAL
         });
     }
@@ -2856,7 +2867,7 @@ async function pularPergunta(
     ) {
         return interaction.reply({
             content:
-                "❌ Essa pergunta não pode ser pulada.",
+                `${EMOJIS.erro} Essa pergunta não pode ser pulada.`,
             flags: EPHEMERAL
         });
     }
@@ -2901,7 +2912,7 @@ async function finalizarRegistroSequencia(
         if (!cargoPosRegistro) {
             return interaction.reply({
                 content:
-                    "❌ O cargo pós-registro configurado não existe mais. Um administrador precisa corrigir a configuração do registro.",
+                    `${EMOJIS.erro} O cargo pós-registro configurado não existe mais. Um administrador precisa corrigir a configuração do registro.`,
                 flags: EPHEMERAL
             });
         }
@@ -2915,7 +2926,7 @@ async function finalizarRegistroSequencia(
         if (!verificacao.sucesso) {
             return interaction.reply({
                 content:
-                    `❌ Não consigo adicionar o cargo pós-registro configurado.\n\n${verificacao.erro}`,
+                    `${EMOJIS.erro} Não consigo adicionar o cargo pós-registro configurado.\n\n${verificacao.erro}`,
                 flags: EPHEMERAL
             });
         }
@@ -2930,7 +2941,7 @@ async function finalizarRegistroSequencia(
 
             return interaction.reply({
                 content:
-                    "❌ Não consegui adicionar o cargo pós-registro configurado.",
+                    `${EMOJIS.erro} Não consegui adicionar o cargo pós-registro configurado.`,
                 flags: EPHEMERAL
             });
         }
@@ -2973,7 +2984,7 @@ async function finalizarRegistroSequencia(
             content:
                 agoraRegistrado
                     ? "ℹ️ Você já fez este registro."
-                    : "❌ Ocorreu um erro ao salvar seu registro.",
+                    : `${EMOJIS.erro} Ocorreu um erro ao salvar seu registro.`,
             flags: EPHEMERAL
         });
     }
@@ -3023,8 +3034,8 @@ async function finalizarRegistroSequencia(
     return interaction.update({
         content:
             lista
-                ? `✅ Registro concluído com sucesso!\n\n🎭 Seus cargos: ${lista}`
-                : "✅ Registro concluído com sucesso!",
+                ? `${EMOJIS.sucesso} Registro concluído com sucesso!\n\n🎭 Seus cargos: ${lista}`
+                : `${EMOJIS.sucesso} Registro concluído com sucesso!`,
         embeds: [],
         components: []
     });
@@ -3064,7 +3075,7 @@ async function processarBotaoRegistro(
     if (!botao) {
         return interaction.reply({
             content:
-                "❌ Esse botão não está mais disponível.",
+                `${EMOJIS.erro} Esse botão não está mais disponível.`,
             flags: EPHEMERAL
         });
     }
@@ -3075,7 +3086,7 @@ async function processarBotaoRegistro(
     ) {
         return interaction.reply({
             content:
-                "❌ Esse botão não pertence a este servidor.",
+                `${EMOJIS.erro} Esse botão não pertence a este servidor.`,
             flags: EPHEMERAL
         });
     }
@@ -3123,7 +3134,7 @@ async function processarBotaoRegistro(
         if (!cargoBotao) {
             return interaction.reply({
                 content:
-                    "❌ O cargo configurado para este botão não existe mais.",
+                    `${EMOJIS.erro} O cargo configurado para este botão não existe mais.`,
                 flags: EPHEMERAL
             });
         }
@@ -3167,12 +3178,12 @@ async function processarBotaoRegistro(
 
         if (!cargoPosRegistro) {
             console.error(
-                `❌ O cargo pós-registro configurado (${configRegistro.cargo_registro_id}) não existe mais.`
+                `${EMOJIS.erro} O cargo pós-registro configurado (${configRegistro.cargo_registro_id}) não existe mais.`
             );
 
             return interaction.reply({
                 content:
-                    "❌ O cargo pós-registro configurado não existe mais. Um administrador precisa corrigir a configuração do registro.",
+                    `${EMOJIS.erro} O cargo pós-registro configurado não existe mais. Um administrador precisa corrigir a configuração do registro.`,
                 flags: EPHEMERAL
             });
         }
@@ -3186,7 +3197,7 @@ async function processarBotaoRegistro(
         if (!verificacao.sucesso) {
             return interaction.reply({
                 content:
-                    `❌ Não consigo adicionar o cargo pós-registro configurado.\n\n${verificacao.erro}`,
+                    `${EMOJIS.erro} Não consigo adicionar o cargo pós-registro configurado.\n\n${verificacao.erro}`,
                 flags: EPHEMERAL
             });
         }
@@ -3216,7 +3227,7 @@ async function processarBotaoRegistro(
 
             return interaction.reply({
                 content:
-                    "❌ Não consegui adicionar o cargo configurado para este botão.",
+                    `${EMOJIS.erro} Não consegui adicionar o cargo configurado para este botão.`,
                 flags: EPHEMERAL
             });
         }
@@ -3243,7 +3254,7 @@ async function processarBotaoRegistro(
 
             return interaction.reply({
                 content:
-                    "❌ Não consegui adicionar o cargo pós-registro configurado.",
+                    `${EMOJIS.erro} Não consegui adicionar o cargo pós-registro configurado.`,
                 flags: EPHEMERAL
             });
         }
@@ -3293,7 +3304,7 @@ async function processarBotaoRegistro(
 
         return interaction.reply({
             content:
-                "❌ Ocorreu um erro ao salvar seu registro.",
+                `${EMOJIS.erro} Ocorreu um erro ao salvar seu registro.`,
             flags: EPHEMERAL
         });
     }
@@ -3327,8 +3338,8 @@ async function processarBotaoRegistro(
     return interaction.update({
         content:
             cargosRecebidos.length > 0
-                ? `✅ Registro concluído com sucesso!\n\n🎭 Cargos recebidos: ${cargosRecebidos.join(", ")}`
-                : "✅ Registro concluído com sucesso!",
+                ? `${EMOJIS.sucesso} Registro concluído com sucesso!\n\n🎭 Cargos recebidos: ${cargosRecebidos.join(", ")}`
+                : `${EMOJIS.sucesso} Registro concluído com sucesso!`,
         embeds: [],
         components: []
     });
@@ -3441,7 +3452,7 @@ async function handleInteraction(interaction) {
             if (partes.length < 4) {
                 return interaction.reply({
                     content:
-                        "❌ Botão de navegação inválido.",
+                        `${EMOJIS.erro} Botão de navegação inválido.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3460,7 +3471,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3471,7 +3482,7 @@ async function handleInteraction(interaction) {
             if (!paginas.length) {
                 return interaction.reply({
                     content:
-                        "❌ Nenhuma página encontrada.",
+                        `${EMOJIS.erro} Nenhuma página encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3494,7 +3505,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3565,7 +3576,7 @@ async function handleInteraction(interaction) {
         ) {
             return interaction.reply({
                 content:
-                    "❌ Você precisa da permissão **Gerenciar Servidor** para configurar o sistema de registro.",
+                    `${EMOJIS.erro} Você precisa da permissão **Gerenciar Servidor** para configurar o sistema de registro.`,
                 flags: EPHEMERAL
             });
         }
@@ -3598,7 +3609,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3625,8 +3636,8 @@ async function handleInteraction(interaction) {
                 interaction,
                 guildId,
                 novo
-                    ? "✅ Perguntas em sequência **ligado**: cada página é uma pergunta e responder avança para a próxima."
-                    : "✅ Perguntas em sequência **desligado**: o primeiro botão clicado conclui o registro."
+                    ? `${EMOJIS.sucesso} Perguntas em sequência **ligado**: cada página é uma pergunta e responder avança para a próxima.`
+                    : `${EMOJIS.sucesso} Perguntas em sequência **desligado**: o primeiro botão clicado conclui o registro.`
             );
         }
 
@@ -3657,7 +3668,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3671,7 +3682,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3696,8 +3707,8 @@ async function handleInteraction(interaction) {
                 guildId,
                 numeroPagina,
                 novo
-                    ? "✅ Pergunta **opcional**: o membro verá o botão Pular."
-                    : "✅ Pergunta **obrigatória**: o membro precisa responder."
+                    ? `${EMOJIS.sucesso} Pergunta **opcional**: o membro verá o botão Pular.`
+                    : `${EMOJIS.sucesso} Pergunta **obrigatória**: o membro precisa responder.`
             );
         }
 
@@ -3760,7 +3771,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3784,7 +3795,7 @@ async function handleInteraction(interaction) {
             if (cor === null) {
                 return interaction.reply({
                     content:
-                        "❌ Cor inválida. Use o formato #RRGGBB (ex.: #5865F2).",
+                        `${EMOJIS.erro} Cor inválida. Use o formato #RRGGBB (ex.: #5865F2).`,
                     flags: EPHEMERAL
                 });
             }
@@ -3795,7 +3806,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Os links precisam começar com http:// ou https://",
+                        `${EMOJIS.erro} Os links precisam começar com http:// ou https://`,
                     flags: EPHEMERAL
                 });
             }
@@ -3832,7 +3843,7 @@ async function handleInteraction(interaction) {
             return await atualizarPainelPrincipal(
                 interaction,
                 guildId,
-                "✅ Aparência do painel atualizada!"
+                `${EMOJIS.sucesso} Aparência do painel atualizada!`
             );
         }
 
@@ -3863,7 +3874,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3877,7 +3888,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -3906,7 +3917,7 @@ async function handleInteraction(interaction) {
             if (cor === null) {
                 return interaction.reply({
                     content:
-                        "❌ Cor inválida. Use o formato #RRGGBB (ex.: #5865F2).",
+                        `${EMOJIS.erro} Cor inválida. Use o formato #RRGGBB (ex.: #5865F2).`,
                     flags: EPHEMERAL
                 });
             }
@@ -3918,7 +3929,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Os links precisam começar com http:// ou https://",
+                        `${EMOJIS.erro} Os links precisam começar com http:// ou https://`,
                     flags: EPHEMERAL
                 });
             }
@@ -3939,7 +3950,7 @@ async function handleInteraction(interaction) {
                 interaction,
                 guildId,
                 numeroPagina,
-                "✅ Aparência da página atualizada!"
+                `${EMOJIS.sucesso} Aparência da página atualizada!`
             );
         }
 
@@ -4055,7 +4066,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4074,7 +4085,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Esse canal não pode receber o painel.",
+                        `${EMOJIS.erro} Esse canal não pode receber o painel.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4096,7 +4107,7 @@ async function handleInteraction(interaction) {
             return await atualizarPainelPrincipal(
                 interaction,
                 guildId,
-                `✅ Canal selecionado: <#${canalId}>`
+                `${EMOJIS.sucesso} Canal selecionado: <#${canalId}>`
             );
         }
 
@@ -4238,7 +4249,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4386,7 +4397,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4400,7 +4411,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Essa página não existe.",
+                        `${EMOJIS.erro} Essa página não existe.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4420,7 +4431,7 @@ async function handleInteraction(interaction) {
             if (!botao) {
                 return interaction.reply({
                     content:
-                        "❌ Esse botão não existe nesta página.",
+                        `${EMOJIS.erro} Esse botão não existe nesta página.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4502,7 +4513,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4548,7 +4559,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ A URL da imagem é inválida.",
+                        `${EMOJIS.erro} A URL da imagem é inválida.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4559,7 +4570,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ A URL da thumbnail é inválida.",
+                        `${EMOJIS.erro} A URL da thumbnail é inválida.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4601,7 +4612,7 @@ async function handleInteraction(interaction) {
             return await atualizarPainelPrincipal(
                 interaction,
                 guildId,
-                "✅ Painel inicial atualizado!"
+                `${EMOJIS.sucesso} Painel inicial atualizado!`
             );
         }
 
@@ -4629,7 +4640,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4668,7 +4679,7 @@ async function handleInteraction(interaction) {
             return await atualizarPainelPrincipal(
                 interaction,
                 guildId,
-                "✅ Texto do botão atualizado!"
+                `${EMOJIS.sucesso} Texto do botão atualizado!`
             );
         }
 
@@ -4696,7 +4707,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4765,8 +4776,8 @@ async function handleInteraction(interaction) {
                 interaction,
                 guildId,
                 cargoResultado.id
-                    ? `✅ Cargo pós-registro definido: <@&${cargoResultado.id}>`
-                    : "✅ Cargo pós-registro removido. Os usuários não receberão cargo automático."
+                    ? `${EMOJIS.sucesso} Cargo pós-registro definido: <@&${cargoResultado.id}>`
+                    : `${EMOJIS.sucesso} Cargo pós-registro removido. Os usuários não receberão cargo automático.`
             );
         }
 
@@ -4797,7 +4808,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4811,7 +4822,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4851,7 +4862,7 @@ async function handleInteraction(interaction) {
                 interaction,
                 guildId,
                 numeroPagina,
-                "✅ Título e descrição atualizados!"
+                `${EMOJIS.sucesso} Título e descrição atualizados!`
             );
         }
 
@@ -4882,7 +4893,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4896,7 +4907,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4919,7 +4930,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ A URL do ícone do rodapé é inválida.",
+                        `${EMOJIS.erro} A URL do ícone do rodapé é inválida.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4949,7 +4960,7 @@ async function handleInteraction(interaction) {
                 interaction,
                 guildId,
                 numeroPagina,
-                "✅ Rodapé atualizado!"
+                `${EMOJIS.sucesso} Rodapé atualizado!`
             );
         }
 
@@ -4983,7 +4994,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -4997,7 +5008,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5010,7 +5021,7 @@ async function handleInteraction(interaction) {
             if (botoes.length >= MAX_BOTOES) {
                 return interaction.reply({
                     content:
-                        `❌ O limite é de ${MAX_BOTOES} botões por página.`,
+                        `${EMOJIS.erro} O limite é de ${MAX_BOTOES} botões por página.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5023,7 +5034,7 @@ async function handleInteraction(interaction) {
             if (!texto) {
                 return interaction.reply({
                     content:
-                        "❌ O texto do botão não pode ficar vazio.",
+                        `${EMOJIS.erro} O texto do botão não pode ficar vazio.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5098,8 +5109,8 @@ async function handleInteraction(interaction) {
                 guildId,
                 numeroPagina,
                 cargoResultado.id
-                    ? `✅ Botão criado e configurado para dar <@&${cargoResultado.id}>.`
-                    : "✅ Botão criado sem cargo."
+                    ? `${EMOJIS.sucesso} Botão criado e configurado para dar <@&${cargoResultado.id}>.`
+                    : `${EMOJIS.sucesso} Botão criado sem cargo.`
             );
         }
 
@@ -5133,7 +5144,7 @@ async function handleInteraction(interaction) {
             ) {
                 return interaction.reply({
                     content:
-                        "❌ Essa interação não pertence a este servidor.",
+                        `${EMOJIS.erro} Essa interação não pertence a este servidor.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5147,7 +5158,7 @@ async function handleInteraction(interaction) {
             if (!pagina) {
                 return interaction.reply({
                     content:
-                        "❌ Página não encontrada.",
+                        `${EMOJIS.erro} Página não encontrada.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5167,7 +5178,7 @@ async function handleInteraction(interaction) {
             if (!botao) {
                 return interaction.reply({
                     content:
-                        "❌ Esse botão não existe nesta página.",
+                        `${EMOJIS.erro} Esse botão não existe nesta página.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5180,7 +5191,7 @@ async function handleInteraction(interaction) {
             if (!texto) {
                 return interaction.reply({
                     content:
-                        "❌ O texto do botão não pode ficar vazio.",
+                        `${EMOJIS.erro} O texto do botão não pode ficar vazio.`,
                     flags: EPHEMERAL
                 });
             }
@@ -5245,7 +5256,7 @@ async function handleInteraction(interaction) {
                 interaction,
                 guildId,
                 numeroPagina,
-                "✅ Botão atualizado!"
+                `${EMOJIS.sucesso} Botão atualizado!`
             );
         }
 
@@ -5263,14 +5274,14 @@ async function handleInteraction(interaction) {
         ) {
             return interaction.followUp({
                 content:
-                    "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
+                    `${EMOJIS.erro} Ocorreu um erro no sistema de registro. Verifique o console do bot.`,
                 flags: EPHEMERAL
             }).catch(() => {});
         }
 
         return interaction.reply({
             content:
-                "❌ Ocorreu um erro no sistema de registro. Verifique o console do bot.",
+                `${EMOJIS.erro} Ocorreu um erro no sistema de registro. Verifique o console do bot.`,
             flags: EPHEMERAL
         }).catch(() => {});
     }
@@ -5298,7 +5309,7 @@ async function execute(interaction) {
     if (!interaction.guild) {
         return interaction.reply({
             content:
-                "❌ Este comando só pode ser usado em um servidor.",
+                `${EMOJIS.erro} Este comando só pode ser usado em um servidor.`,
             flags: EPHEMERAL
         });
     }
@@ -5306,7 +5317,7 @@ async function execute(interaction) {
     if (!podeConfigurar(interaction)) {
         return interaction.reply({
             content:
-                "❌ Você precisa da permissão **Gerenciar Servidor** para usar este comando.",
+                `${EMOJIS.erro} Você precisa da permissão **Gerenciar Servidor** para usar este comando.`,
             flags: EPHEMERAL
         });
     }
@@ -5328,7 +5339,7 @@ async function execute(interaction) {
 
         return interaction.reply({
             content:
-                "❌ Não foi possível abrir o sistema de registro. Verifique o console do bot.",
+                `${EMOJIS.erro} Não foi possível abrir o sistema de registro. Verifique o console do bot.`,
             flags: EPHEMERAL
         });
     }
