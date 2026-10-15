@@ -7,6 +7,18 @@ const {
     getRankingXP
 } = require("../database/database.js");
 
+// =====================================================
+// 😀 EMOJIS DO RANKING DE XP
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    ranking: "<:GoldRank:1542947364212318328>",
+    xp: "<:FortniteXP:1528582193717182635>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("xp-ranking")
@@ -23,12 +35,12 @@ module.exports = {
             }
 
             const linhas = ranking.map(usuario => {
-                return `${usuario.posicao}. <@${usuario.id}> — ⭐ **${usuario.xp} XP**`;
+                return `${usuario.posicao}. <@${usuario.id}> — ${EMOJIS.xp} **${usuario.xp} XP**`;
             });
 
             const embed = new EmbedBuilder()
                 .setColor("Gold")
-                .setTitle("🏆 Ranking de XP")
+                .setTitle(`${EMOJIS.ranking} Ranking de XP`)
                 .setDescription(linhas.join("\n"))
                 .setFooter({
                     text: "Top 10 jogadores com mais XP"
@@ -46,7 +58,7 @@ module.exports = {
 
             await interaction.reply({
                 content:
-                    "❌ Não foi possível carregar o ranking de XP.",
+                    `${EMOJIS.erro} Não foi possível carregar o ranking de XP.`,
                 ephemeral: true
             });
         }
@@ -63,12 +75,12 @@ module.exports = {
             }
 
             const linhas = ranking.map(usuario => {
-                return `${usuario.posicao}. <@${usuario.id}> — ⭐ **${usuario.xp} XP**`;
+                return `${usuario.posicao}. <@${usuario.id}> — ${EMOJIS.xp} **${usuario.xp} XP**`;
             });
 
             const embed = new EmbedBuilder()
                 .setColor("Gold")
-                .setTitle("🏆 Ranking de XP")
+                .setTitle(`${EMOJIS.ranking} Ranking de XP`)
                 .setDescription(linhas.join("\n"))
                 .setFooter({
                     text: "Top 10 jogadores com mais XP"
@@ -85,7 +97,7 @@ module.exports = {
             );
 
             await message.reply(
-                "❌ Não foi possível carregar o ranking de XP."
+                `${EMOJIS.erro} Não foi possível carregar o ranking de XP.`
             );
         }
     }
