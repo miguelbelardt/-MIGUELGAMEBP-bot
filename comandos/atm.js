@@ -5,6 +5,19 @@ const {
 
 const { getSaldo } = require("../database/database");
 
+// =====================================================
+// 😀 EMOJIS DO ATM
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    banco: "🏦",
+    saldo: "<:cash:1542933882452578415>",
+    moedas: "<:Coin:1528228277913784340>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("atm")
@@ -21,10 +34,10 @@ module.exports = {
             const saldo = await getSaldo(userId);
 
             const embed = new EmbedBuilder()
-                .setTitle("🏦 ATM")
+                .setTitle(`${EMOJIS.banco} ATM`)
                 .setDescription(
-                    `💳 **${interaction.user.username}**, seu saldo é:\n\n` +
-                    `💰 **${saldo} moedas**`
+                    `${EMOJIS.saldo} **${interaction.user.username}**, seu saldo é:\n\n` +
+                    `${EMOJIS.moedas} **${saldo} moedas**`
                 )
                 .setColor("Green");
 
@@ -36,7 +49,7 @@ module.exports = {
             console.error("❌ Erro no ATM:", erro);
 
             await interaction.reply({
-                content: "❌ Não foi possível consultar seu saldo.",
+                content: `${EMOJIS.erro} Não foi possível consultar seu saldo.`,
                 ephemeral: true
             });
         }
@@ -53,10 +66,10 @@ module.exports = {
             const saldo = await getSaldo(userId);
 
             const embed = new EmbedBuilder()
-                .setTitle("🏦 ATM")
+                .setTitle(`${EMOJIS.banco} ATM`)
                 .setDescription(
-                    `💳 **${message.author.username}**, seu saldo é:\n\n` +
-                    `💰 **${saldo} moedas**`
+                    `${EMOJIS.saldo} **${message.author.username}**, seu saldo é:\n\n` +
+                    `${EMOJIS.moedas} **${saldo} moedas**`
                 )
                 .setColor("Green");
 
@@ -68,7 +81,7 @@ module.exports = {
             console.error("❌ Erro no ATM por prefixo:", erro);
 
             await message.reply(
-                "❌ Não foi possível consultar seu saldo."
+                `${EMOJIS.erro} Não foi possível consultar seu saldo.`
             );
         }
     }
