@@ -27,6 +27,27 @@ const COR_ESPERA = 0xFAA61A;
 const COR_NOTIFICACAO = 0x5865F2;
 
 // =====================================================
+// 😀 EMOJIS DO DAILY
+// =====================================================
+// Para trocar um emoji, coloque o código dele no lugar,
+// por exemplo: "<:Coin:123456789012345678>" (use o
+// /emojiinfo para pegar o código) ou um emoji normal como "🎁".
+
+const EMOJIS = {
+    presente: "<:WumpusTrophy:1546214016031129703>",
+    moedas: "<:Coin:1528228277913784340>",
+    saldo: "<:cash:1542933882452578415>",
+    sequencia: "🔥",
+    relogio: "<:clock:1542945408865534002>",
+    calendario: "📅",
+    espera: "⏳",
+    sino: "<:Notification_Bell:1543405169952170048>",
+    lua: "<:SoftBunnyMoon:1530045353577939124>",
+    ranking: "<:GoldRank:1542947364212318328>",
+    dinheiro: "<:coin:1543417629413351564>"
+};
+
+// =====================================================
 // 🔔 CONFIGURAÇÕES DAS NOTIFICAÇÕES
 // =====================================================
 
@@ -561,6 +582,20 @@ function sortearHorarioNotificacaoHoje() {
 }
 
 // =====================================================
+// 🕒 HORÁRIOS DO DISCORD
+// =====================================================
+// O Discord mostra o horário no fuso de cada pessoa e a
+// contagem ("em 5 horas") se atualiza sozinha.
+
+function horarioRelativo(timestamp) {
+    return `<t:${Math.floor(timestamp / 1000)}:R>`;
+}
+
+function horarioCompleto(timestamp) {
+    return `<t:${Math.floor(timestamp / 1000)}:F>`;
+}
+
+// =====================================================
 // ⏳ CALCULAR TEMPO RESTANTE
 // =====================================================
 
@@ -667,10 +702,13 @@ function criarBotaoNotificacao(
                 .setCustomId(
                     "daily_notificar"
                 )
+                .setEmoji(
+                    EMOJIS.sino
+                )
                 .setLabel(
                     ativa
-                        ? "🔔 Notificação ativada"
-                        : "🔔 Me notificar amanhã"
+                        ? "Notificação ativada"
+                        : "Me notificar amanhã"
                 )
                 .setStyle(
                     ativa
@@ -698,12 +736,12 @@ function textoSequencia(
 
     if (numero <= 0) {
         return (
-            "🔥 Você ainda não possui uma sequência de Daily."
+            `${EMOJIS.sequencia} Você ainda não possui uma sequência de Daily.`
         );
     }
 
     return (
-        `🔥 Sua sequência atual é de **${numero} dias**!`
+        `${EMOJIS.sequencia} Sua sequência atual é de **${numero} dias**!`
     );
 }
 
@@ -722,12 +760,12 @@ function textoProximaSequencia(
 
     if (numero <= 0) {
         return (
-            "🔥 Você ainda não possui uma sequência de Daily. Pegue o Daily para começar uma!"
+            `${EMOJIS.sequencia} Você ainda não possui uma sequência de Daily. Pegue o Daily para começar uma!`
         );
     }
 
     return (
-        `🔥 Se você pegar o Daily hoje, sua sequência será de **${numero} dias**!`
+        `${EMOJIS.sequencia} Se você pegar o Daily hoje, sua sequência será de **${numero} dias**!`
     );
 }
 
@@ -957,18 +995,19 @@ async function resgatarDailyAtomico(
                     COR_DAILY
                 )
                 .setTitle(
-                    "🎁 DAILY"
+                    `${EMOJIS.presente} DAILY`
                 )
                 .setDescription(
                     `Parabéns, ${usuario}!\n\n` +
 
-                    `🎲 Você ganhou **${recompensa} moedas**!\n` +
+                    `${EMOJIS.moedas} Você ganhou **${recompensa} moedas**!\n` +
 
-                    `💳 Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
+                    `${EMOJIS.saldo} Seu saldo agora é **${novoSaldo} moedas**.\n\n` +
 
-                    `🔥 Sua sequência atual é de **${novaSequencia} dias**!\n\n` +
+                    `${EMOJIS.sequencia} Sua sequência atual é de **${novaSequencia} dias**!\n\n` +
 
-                    `🕐 Seu próximo daily estará disponível em **${formatarHorario(proximoDaily)}**.`
+                    `${EMOJIS.relogio} Seu próximo daily estará disponível ${horarioRelativo(proximoDaily)}.\n` +
+                    `${EMOJIS.calendario} ${horarioCompleto(proximoDaily)}`
                 )
                 .setFooter({
                     text:
@@ -1163,19 +1202,19 @@ async function verificarNotificacoesDaily(
                             COR_NOTIFICACAO
                         )
                         .setTitle(
-                            "🔔 Seu Daily está disponível!"
+                            `${EMOJIS.sino} Seu Daily está disponível!`
                         )
                         .setDescription(
                             `Olá, ${discordUser}!\n\n` +
 
-                            `🌙 Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
+                            `${EMOJIS.lua} Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
 
                             `${textoDaSequencia}\n\n` +
 
-                            `💰 Entre em um servidor e resgate sua recompensa usando:\n` +
+                            `${EMOJIS.dinheiro} Entre em um servidor e resgate sua recompensa usando:\n` +
                             `</daily:1506070614048378953>\n\n` +
 
-                            `🏆 Quer ver sua posição no ranking de moedas?\n` +
+                            `${EMOJIS.ranking} Quer ver sua posição no ranking de moedas?\n` +
                             `</moedas-ranking:1550572888527085622>`
                         )
                         .setFooter({
@@ -1360,14 +1399,14 @@ module.exports = {
                             COR_ESPERA
                         )
                         .setTitle(
-                            "⏳ DAILY"
+                            `${EMOJIS.espera} DAILY`
                         )
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
 
-                            `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
+                            `${EMOJIS.relogio} Próximo daily ${horarioRelativo(proximoDaily)}.\n` +
 
-                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.\n\n` +
+                            `${EMOJIS.calendario} Disponível em ${horarioCompleto(proximoDaily)}.\n\n` +
 
                             `${textoSequencia(
                                 resultado.sequencia
@@ -1478,14 +1517,14 @@ module.exports = {
                             COR_ESPERA
                         )
                         .setTitle(
-                            "⏳ DAILY"
+                            `${EMOJIS.espera} DAILY`
                         )
                         .setDescription(
                             `Você já pegou seu daily hoje!\n\n` +
 
-                            `🕐 Próximo daily em **${formatarTempo(restante)}**.\n` +
+                            `${EMOJIS.relogio} Próximo daily ${horarioRelativo(proximoDaily)}.\n` +
 
-                            `📅 Disponível em **${formatarHorario(proximoDaily)}**.\n\n` +
+                            `${EMOJIS.calendario} Disponível em ${horarioCompleto(proximoDaily)}.\n\n` +
 
                             `${textoSequencia(
                                 resultado.sequencia
@@ -1636,8 +1675,8 @@ module.exports = {
 
         await interaction.followUp({
             content:
-                `✅ Pronto! Vou te enviar uma notificação depois das **00:00**, quando seu Daily estiver disponível. 🔔\n\n` +
-                `🕐 Horário previsto da notificação: **${formatarHorario(horarioNotificacao)}**.`,
+                `✅ Pronto! Vou te enviar uma notificação depois das **00:00**, quando seu Daily estiver disponível. ${EMOJIS.sino}\n\n` +
+                `${EMOJIS.relogio} Horário previsto da notificação: ${horarioCompleto(horarioNotificacao)} (${horarioRelativo(horarioNotificacao)}).`,
             ephemeral: true
         });
     }
