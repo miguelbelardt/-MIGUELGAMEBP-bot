@@ -18,6 +18,22 @@ const {
 const { pool } = require("../database/database.js");
 
 // ================================
+// 😀 EMOJIS DO TICKET
+// ================================
+// Para trocar um emoji, coloque o código dele no lugar,
+// por exemplo: "<:Ticket:123456789012345678>" (use o
+// /emojiinfo para pegar o código) ou um emoji normal como "🎫".
+
+const EMOJIS = {
+    ticket: "<:Ticket:1528578970218533054>",
+    trancar: "<:lock:1543397564022399017>",
+    motivo: "<:book:1543415786171928716>",
+    pessoa: "👤",
+    relogio: "<:clock:1542945408865534002>",
+    sucesso: "<:activ:1528228344263348394>"
+};
+
+// ================================
 // 🎫 CONFIGURAÇÕES TEMPORÁRIAS
 // ================================
 
@@ -346,6 +362,24 @@ function formatarDataHora(timestamp) {
 }
 
 // ================================
+// 🕒 HORÁRIO DO DISCORD
+// ================================
+// Mostra no fuso de cada pessoa, com contagem automática.
+
+function horarioDiscord(timestamp) {
+
+    const segundos =
+        Math.floor(
+            Number(timestamp) / 1000
+        );
+
+    return (
+        `<t:${segundos}:F>\n` +
+        `(<t:${segundos}:R>)`
+    );
+}
+
+// ================================
 // 🧾 CAMPOS DO EMBED
 // ================================
 
@@ -629,7 +663,7 @@ function criarBotaoFechar() {
             "Fechar Ticket"
         )
         .setEmoji(
-            "🔒"
+            EMOJIS.trancar
         )
         .setStyle(
             ButtonStyle.Danger
@@ -650,7 +684,7 @@ function criarPainel(
                 0x5865F2
             )
             .setTitle(
-                "🎫 Configuração de Tickets"
+                `${EMOJIS.ticket} Configuração de Tickets`
             )
             .setDescription(
                 "Escolha uma opção abaixo para continuar."
@@ -1508,7 +1542,7 @@ function criarPainelModelo(
 
             {
                 name:
-                    "🎫 Tickets criados",
+                    `${EMOJIS.ticket} Tickets criados`,
 
                 value:
                     String(
@@ -1940,7 +1974,7 @@ async function atualizarPainelPublicado(
             criarEmbedTicket(modelo)
                 .setTitle(
                     modelo.titulo ||
-                    "🎫 Abra um Ticket"
+                    `${EMOJIS.ticket} Abra um Ticket`
                 );
 
         const componentes = [
@@ -2275,13 +2309,13 @@ async function abrirTicket(
         )
             .setTitle(
                 modelo.titulo ||
-                `🎫 Ticket de ${interaction.user.username}`
+                `${EMOJIS.ticket} Ticket de ${interaction.user.username}`
             )
             .addFields(
 
                 {
                     name:
-                        "📝 Motivo",
+                        `${EMOJIS.motivo} Motivo`,
 
                     value:
                         motivoFinal,
@@ -2292,7 +2326,7 @@ async function abrirTicket(
 
                 {
                     name:
-                        "👤 Criado por",
+                        `${EMOJIS.pessoa} Criado por`,
 
                     value:
                         `${interaction.user}`,
@@ -2303,10 +2337,10 @@ async function abrirTicket(
 
                 {
                     name:
-                        "🕐 Criado em",
+                        `${EMOJIS.relogio} Criado em`,
 
                     value:
-                        formatarDataHora(
+                        horarioDiscord(
                             criadoEm
                         ),
 
@@ -2366,7 +2400,7 @@ async function abrirTicket(
 
     await interaction.reply({
         content:
-            `✅ Seu ticket foi criado com sucesso: ${canal}`,
+            `${EMOJIS.sucesso} Seu ticket foi criado com sucesso: ${canal}`,
 
         flags:
             MessageFlags.Ephemeral
@@ -2427,7 +2461,7 @@ async function fecharTicket(
 
     await interaction.reply({
         content:
-            "🔒 Este ticket será fechado em 5 segundos..."
+            `${EMOJIS.trancar} Este ticket será fechado <t:${Math.floor((Date.now() + 5000) / 1000)}:R>...`
     });
 
     console.log(
@@ -4183,6 +4217,7 @@ module.exports = {
 
             return true;
         }
+
 
         // ================================
         // 🎨 PERSONALIZAÇÃO
