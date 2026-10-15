@@ -13,6 +13,18 @@ const {
 const LIMITE_POR_PAGINA = 10;
 
 // ================================================
+// 😀 EMOJIS DO RANKING
+// ================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    ranking: "<:GoldRank:1542947364212318328>",
+    moedas: "<:Coin:1528228277913784340>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
+// ================================================
 // 🏆 CRIAR EMBED DO RANKING
 // ================================================
 
@@ -44,7 +56,7 @@ function criarEmbed(resultado, tipo) {
 
     let texto = linhas.length
         ? linhas.join("\n")
-        : "❌ Nenhum usuário encontrado.";
+        : `${EMOJIS.erro} Nenhum usuário encontrado.`;
 
     if (usuario.posicao) {
 
@@ -65,7 +77,7 @@ function criarEmbed(resultado, tipo) {
             texto +=
                 `\n\n━━━━━━━━━━━━━━━━━━\n` +
                 `📍 **Sua posição:** ${usuario.posicao}º\n` +
-                `💰 **Suas moedas:** ${usuario.saldo.toLocaleString("pt-BR")}`;
+                `${EMOJIS.moedas} **Suas moedas:** ${usuario.saldo.toLocaleString("pt-BR")}`;
         }
     }
 
@@ -76,7 +88,7 @@ function criarEmbed(resultado, tipo) {
 
     return new EmbedBuilder()
         .setColor(0xFEE75C)
-        .setTitle(`🏆 ${nomeTipo}`)
+        .setTitle(`${EMOJIS.ranking} ${nomeTipo}`)
         .setDescription(texto)
         .setFooter({
             text:
@@ -223,7 +235,7 @@ async function processarBotao(
     if (botao.user.id !== userId) {
         return botao.reply({
             content:
-                "❌ Esse ranking pertence a outra pessoa.",
+                `${EMOJIS.erro} Esse ranking pertence a outra pessoa.`,
             ephemeral: true
         });
     }
@@ -306,7 +318,7 @@ async function processarBotao(
 
             return botao.update({
                 content:
-                    "❌ Ainda não existem usuários no ranking.",
+                    `${EMOJIS.erro} Ainda não existem usuários no ranking.`,
                 embeds: [],
                 components: []
             });
@@ -363,7 +375,7 @@ async function processarBotao(
 
             await botao.reply({
                 content:
-                    "❌ Não foi possível atualizar o ranking.",
+                    `${EMOJIS.erro} Não foi possível atualizar o ranking.`,
                 ephemeral: true
             });
         }
@@ -411,7 +423,7 @@ module.exports = {
             if (!interaction.guild) {
                 return interaction.reply({
                     content:
-                        "❌ Esse comando só pode ser usado em um servidor.",
+                        `${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`,
                     ephemeral: true
                 });
             }
@@ -431,7 +443,7 @@ module.exports = {
             if (resultado.ranking.length === 0) {
                 return interaction.reply({
                     content:
-                        "❌ Ainda não existem usuários no ranking.",
+                        `${EMOJIS.erro} Ainda não existem usuários no ranking.`,
                     ephemeral: true
                 });
             }
@@ -564,7 +576,7 @@ module.exports = {
 
                 await interaction.reply({
                     content:
-                        "❌ Não foi possível carregar o ranking.",
+                        `${EMOJIS.erro} Não foi possível carregar o ranking.`,
                     ephemeral: true
                 });
             }
@@ -581,7 +593,7 @@ module.exports = {
 
             if (!message.guild) {
                 return message.reply(
-                    "❌ Esse comando só pode ser usado em um servidor."
+                    `${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`
                 );
             }
 
@@ -614,7 +626,7 @@ module.exports = {
 
             if (resultado.ranking.length === 0) {
                 return message.reply(
-                    "❌ Ainda não existem usuários no ranking."
+                    `${EMOJIS.erro} Ainda não existem usuários no ranking.`
                 );
             }
 
@@ -736,7 +748,7 @@ module.exports = {
             );
 
             await message.reply(
-                "❌ Não foi possível carregar o ranking."
+                `${EMOJIS.erro} Não foi possível carregar o ranking.`
             );
         }
     }
