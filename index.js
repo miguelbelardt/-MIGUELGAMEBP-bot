@@ -2349,7 +2349,7 @@ client.once(
         // 🟢 STATUS NORMAL DO BOT
         // =================================================
 
-        let mostrandoServidores = true;
+        let passoStatus = 0;
 
         const atualizarStatus =
             async () => {
@@ -2359,7 +2359,7 @@ client.once(
                     let texto;
 
                     if (
-                        mostrandoServidores
+                        passoStatus === 0
                     ) {
 
                         const servidores =
@@ -2367,6 +2367,13 @@ client.once(
 
                         texto =
                             `🌐 Estou em ${servidores} servidores`;
+
+                    } else if (
+                        passoStatus === 1
+                    ) {
+
+                        texto =
+                            "❓ Use 'help ou /help";
 
                     } else {
 
@@ -2400,8 +2407,8 @@ client.once(
                         `🟢 Status sincronizado: Online — ${texto}`
                     );
 
-                    mostrandoServidores =
-                        !mostrandoServidores;
+                    passoStatus =
+                        (passoStatus + 1) % 3;
 
                 } catch (erro) {
 
