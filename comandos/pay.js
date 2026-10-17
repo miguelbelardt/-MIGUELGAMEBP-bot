@@ -6,7 +6,7 @@ const {
     ButtonStyle
 } = require("discord.js");
 
-const { pool, getSaldo } = require("../database/database");
+const { mysqlPool, getSaldo } = require("../database/database");
 
 // =====================================================
 // 😀 EMOJIS DO PAY
@@ -116,7 +116,7 @@ async function criarPagamento(remetenteId, destinatario, quantidade, responder) 
             let connection;
 
             try {
-                connection = await pool.getConnection();
+                connection = await mysqlPool.getConnection();
 
                 await connection.beginTransaction();
 
