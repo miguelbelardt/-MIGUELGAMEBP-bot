@@ -7,6 +7,17 @@ const {
     isAdm
 } = require("../database/database.js");
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    erro: "<:Danger:1536532666101538836>",
+    xp: "<:FortniteXP:1528582193717182635>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("adicionar-xp")
@@ -38,7 +49,7 @@ module.exports = {
         if (!adm) {
             return interaction.reply({
                 content:
-                    "❌ Você não tem permissão para usar este comando.",
+                    `${EMOJIS.erro} Você não tem permissão para usar este comando.`,
                 ephemeral: true
             });
         }
@@ -57,7 +68,7 @@ module.exports = {
             );
 
             await interaction.reply(
-                `⭐ ${usuario} recebeu **${quantidade} XP**!`
+                `${EMOJIS.xp} ${usuario} recebeu **${quantidade} XP**!`
             );
 
         } catch (erro) {
@@ -69,7 +80,7 @@ module.exports = {
 
             await interaction.reply({
                 content:
-                    "❌ Não foi possível adicionar o XP.",
+                    `${EMOJIS.erro} Não foi possível adicionar o XP.`,
                 ephemeral: true
             });
         }
@@ -87,7 +98,7 @@ module.exports = {
 
         if (!adm) {
             return message.reply(
-                "❌ Você não tem permissão para usar este comando."
+                `${EMOJIS.erro} Você não tem permissão para usar este comando.`
             );
         }
 
@@ -100,7 +111,7 @@ module.exports = {
 
         if (!usuario) {
             return message.reply(
-                "❌ Você precisa mencionar o usuário.\n" +
+                `${EMOJIS.erro} Você precisa mencionar o usuário.\n` +
                 "Exemplo: `'adicionar-xp @usuário 100`"
             );
         }
@@ -121,7 +132,7 @@ module.exports = {
             quantidade < 1
         ) {
             return message.reply(
-                "❌ Informe uma quantidade de XP válida.\n" +
+                `${EMOJIS.erro} Informe uma quantidade de XP válida.\n` +
                 "Exemplo: `'adicionar-xp @usuário 100`"
             );
         }
@@ -134,7 +145,7 @@ module.exports = {
             );
 
             await message.reply(
-                `⭐ ${usuario} recebeu **${quantidade} XP**!`
+                `${EMOJIS.xp} ${usuario} recebeu **${quantidade} XP**!`
             );
 
         } catch (erro) {
@@ -145,7 +156,7 @@ module.exports = {
             );
 
             await message.reply(
-                "❌ Não foi possível adicionar o XP."
+                `${EMOJIS.erro} Não foi possível adicionar o XP.`
             );
         }
     }
