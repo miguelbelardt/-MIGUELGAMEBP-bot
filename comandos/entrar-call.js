@@ -88,7 +88,7 @@ module.exports = {
 
         if (!canal) {
             return message.reply(
-                "❌ Você precisa estar em um canal de voz para usar `M entrar-call`."
+                "❌ Você precisa estar em um canal de voz para usar `'entrar-call`."
             );
         }
 
