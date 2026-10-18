@@ -116,7 +116,7 @@ module.exports = {
         if (!usuario) {
             return message.reply(
                 "❌ Você precisa mencionar o usuário.\n" +
-                "Exemplo: `mremove-xp @usuário 100`"
+                "Exemplo: `'remove-xp @usuário 100`"
             );
         }
 
@@ -133,7 +133,7 @@ module.exports = {
         ) {
             return message.reply(
                 "❌ Informe uma quantidade de XP válida.\n" +
-                "Exemplo: `mremove-xp @usuário 100`"
+                "Exemplo: `'remove-xp @usuário 100`"
             );
         }
 
@@ -167,7 +167,7 @@ module.exports = {
         } catch (erro) {
 
             console.error(
-                "❌ Erro no comando mremove-xp:",
+                "❌ Erro no comando remove-xp por prefixo:",
                 erro
             );
 
