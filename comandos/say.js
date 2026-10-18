@@ -49,7 +49,7 @@ module.exports = {
         if (!mensagem) {
             return message.reply(
                 "❌ Você precisa informar a mensagem.\n" +
-                "Exemplo: `M say Olá!`"
+                "Exemplo: `'say Olá!`"
             );
         }
 
