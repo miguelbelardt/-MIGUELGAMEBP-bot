@@ -198,7 +198,7 @@ async function iniciar(usuario, enviar) {
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName("comprar-premium")
+        .setName("premium")
         .setDescription(
             `Compre ${DIAS_PREMIUM} dias de premium com moedas. 💎`
         ),
@@ -216,7 +216,7 @@ module.exports = {
 
         } catch (erro) {
             console.error(
-                "❌ Erro no comando /comprar-premium:",
+                "❌ Erro no comando /premium:",
                 erro
             );
 
@@ -242,7 +242,7 @@ module.exports = {
 
         } catch (erro) {
             console.error(
-                "❌ Erro no comando comprar-premium por prefixo:",
+                "❌ Erro no comando premium por prefixo:",
                 erro
             );
 
