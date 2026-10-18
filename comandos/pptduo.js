@@ -9,24 +9,37 @@ const {
 
 const desafios = new Map();
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    espera: "<:ampulheta:1561391627090526231>",
+    pedra: "<:rock:1543416296547549227>",
+    papel: "<:book:1543415786171928716>",
+    tesoura: "<:ScissorsIcon:1543416443981533285>"
+};
+
 function criarBotoesJogada(id) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`pptduo_pedra_${id}`)
             .setLabel("Pedra")
-            .setEmoji("🪨")
+            .setEmoji(EMOJIS.pedra)
             .setStyle(ButtonStyle.Secondary),
 
         new ButtonBuilder()
             .setCustomId(`pptduo_papel_${id}`)
             .setLabel("Papel")
-            .setEmoji("📄")
+            .setEmoji(EMOJIS.papel)
             .setStyle(ButtonStyle.Primary),
 
         new ButtonBuilder()
             .setCustomId(`pptduo_tesoura_${id}`)
             .setLabel("Tesoura")
-            .setEmoji("✂️")
+            .setEmoji(EMOJIS.tesoura)
             .setStyle(ButtonStyle.Danger)
     );
 }
@@ -48,9 +61,9 @@ function descobrirVencedor(jogada1, jogada2) {
 }
 
 function emojiJogada(jogada) {
-    if (jogada === "pedra") return "🪨";
-    if (jogada === "papel") return "📄";
-    if (jogada === "tesoura") return "✂️";
+    if (jogada === "pedra") return EMOJIS.pedra;
+    if (jogada === "papel") return EMOJIS.papel;
+    if (jogada === "tesoura") return EMOJIS.tesoura;
     return "❓";
 }
 
@@ -223,7 +236,7 @@ module.exports = {
             await interaction.reply({
                 content:
                     `✅ Você escolheu ${emojiJogada(jogada)} **${jogada}**!\n\n` +
-                    "⏳ Agora aguarde o outro jogador.",
+                    `${EMOJIS.espera} Agora aguarde o outro jogador.`,
                 ephemeral: true
             });
 
@@ -254,7 +267,7 @@ module.exports = {
                                 },
                                 {
                                     name: "👤 Desafiado",
-                                    value: `<@${desafio.jogador2}>\n⏳ Escolha sua jogada`,
+                                    value: `<@${desafio.jogador2}>\n${EMOJIS.espera} Escolha sua jogada`,
                                     inline: true
                                 }
                             )
@@ -281,7 +294,7 @@ module.exports = {
             if (!desafio.jogador1Jogada) {
                 return interaction.reply({
                     content:
-                        "⏳ O desafiante ainda não escolheu a jogada.",
+                        `${EMOJIS.espera} O desafiante ainda não escolheu a jogada.`,
                     ephemeral: true
                 });
             }
