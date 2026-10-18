@@ -6,18 +6,30 @@ const {
     ButtonStyle
 } = require("discord.js");
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    pedra: "<:rock:1543416296547549227>",
+    papel: "<:book:1543415786171928716>",
+    tesoura: "<:ScissorsIcon:1543416443981533285>"
+};
+
 const opcoes = {
     pedra: {
         nome: "Pedra",
-        emoji: "🪨"
+        emoji: EMOJIS.pedra
     },
     papel: {
         nome: "Papel",
-        emoji: "📄"
+        emoji: EMOJIS.papel
     },
     tesoura: {
         nome: "Tesoura",
-        emoji: "✂️"
+        emoji: EMOJIS.tesoura
     }
 };
 
@@ -52,19 +64,19 @@ function criarBotoes() {
         new ButtonBuilder()
             .setCustomId("ppt_pedra")
             .setLabel("Pedra")
-            .setEmoji("🪨")
+            .setEmoji(EMOJIS.pedra)
             .setStyle(ButtonStyle.Secondary),
 
         new ButtonBuilder()
             .setCustomId("ppt_papel")
             .setLabel("Papel")
-            .setEmoji("📄")
+            .setEmoji(EMOJIS.papel)
             .setStyle(ButtonStyle.Primary),
 
         new ButtonBuilder()
             .setCustomId("ppt_tesoura")
             .setLabel("Tesoura")
-            .setEmoji("✂️")
+            .setEmoji(EMOJIS.tesoura)
             .setStyle(ButtonStyle.Danger)
     );
 }
@@ -86,7 +98,7 @@ function criarEmbed(jogador, bot, resultado) {
 
     return new EmbedBuilder()
         .setColor(cor)
-        .setTitle("🪨 Pedra, Papel e Tesoura")
+        .setTitle(`${EMOJIS.pedra} Pedra, Papel e Tesoura`)
         .setDescription(`## ${titulo}`)
         .addFields(
             {
@@ -118,7 +130,7 @@ module.exports = {
         const embed =
             new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle("🪨📄✂️ Pedra, Papel e Tesoura")
+                .setTitle(`${EMOJIS.pedra}${EMOJIS.papel}${EMOJIS.tesoura} Pedra, Papel e Tesoura`)
                 .setDescription(
                     "Escolha uma opção para jogar contra mim!"
                 )
@@ -136,7 +148,7 @@ module.exports = {
         const embed =
             new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle("🪨📄✂️ Pedra, Papel e Tesoura")
+                .setTitle(`${EMOJIS.pedra}${EMOJIS.papel}${EMOJIS.tesoura} Pedra, Papel e Tesoura`)
                 .setDescription(
                     "Escolha uma opção para jogar contra mim!"
                 )
