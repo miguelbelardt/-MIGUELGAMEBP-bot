@@ -23,7 +23,7 @@ const DIAS_MAXIMO = 3650;
 // ou um emoji normal.
 
 const EMOJIS = {
-    premium: "💎",
+    premium: "<a:diamante:1561210993772855356>",
     relogio: "<:clock:1542945408865534002>",
     erro: "<:Danger:1536532666101538836>"
 };
