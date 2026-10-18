@@ -10,6 +10,16 @@ const {
 const COR = 0x5865F2;
 
 // =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    espera: "<:ampulheta:1561391627090526231>"
+};
+
+// =====================================================
 // 🏅 NOMES DAS INSÍGNIAS
 // =====================================================
 
@@ -254,7 +264,7 @@ async function criarEmbedServidor(guild, membro) {
             );
 
         embed.addFields({
-            name: "⏳ Em castigo até",
+            name: `${EMOJIS.espera} Em castigo até`,
             value: `<t:${ate}:f> (<t:${ate}:R>)`,
             inline: true
         });
