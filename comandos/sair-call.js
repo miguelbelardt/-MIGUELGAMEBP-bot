@@ -9,6 +9,18 @@ const {
 
 const DONO_ID = "1124140396516225044";
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    erro: "<:Danger:1536532666101538836>",
+    sucesso: "<:activ:1528228344263348394>",
+    mudo: "<:muted:1530932265985773598>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("sair-call")
@@ -17,7 +29,7 @@ module.exports = {
     async execute(interaction) {
         if (interaction.user.id !== DONO_ID) {
             return interaction.reply({
-                content: "❌ Apenas o dono do bot pode usar este comando.",
+                content: `${EMOJIS.erro} Apenas o dono do bot pode usar este comando.`,
                 ephemeral: true
             });
         }
@@ -26,7 +38,7 @@ module.exports = {
 
         if (!conexao) {
             return interaction.reply({
-                content: "❌ Eu não estou em nenhum canal de voz.",
+                content: `${EMOJIS.erro} Eu não estou em nenhum canal de voz.`,
                 ephemeral: true
             });
         }
@@ -35,8 +47,8 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle("🔇 BOT SAIU DA CALL")
-            .setDescription("✅ Saí do canal de voz com sucesso!");
+            .setTitle(`${EMOJIS.mudo} BOT SAIU DA CALL`)
+            .setDescription(`${EMOJIS.sucesso} Saí do canal de voz com sucesso!`);
 
         await interaction.reply({
             embeds: [embed]
@@ -46,7 +58,7 @@ module.exports = {
     async handlePrefix(message) {
         if (message.author.id !== DONO_ID) {
             return message.reply(
-                "❌ Apenas o dono do bot pode usar este comando."
+                `${EMOJIS.erro} Apenas o dono do bot pode usar este comando.`
             );
         }
 
@@ -59,7 +71,7 @@ module.exports = {
 
         if (!conexao) {
             return message.reply(
-                "❌ Eu não estou em nenhum canal de voz."
+                `${EMOJIS.erro} Eu não estou em nenhum canal de voz.`
             );
         }
 
@@ -68,8 +80,8 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setTitle("🔇 BOT SAIU DA CALL")
-                .setDescription("✅ Saí do canal de voz com sucesso!");
+                .setTitle(`${EMOJIS.mudo} BOT SAIU DA CALL`)
+                .setDescription(`${EMOJIS.sucesso} Saí do canal de voz com sucesso!`);
 
             await message.reply({
                 embeds: [embed]
@@ -79,7 +91,7 @@ module.exports = {
             console.error("❌ Erro ao sair da call por prefixo:", erro);
 
             await message.reply(
-                "❌ Não consegui sair do canal de voz."
+                `${EMOJIS.erro} Não consegui sair do canal de voz.`
             );
         }
     }
