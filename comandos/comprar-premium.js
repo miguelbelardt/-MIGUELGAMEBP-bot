@@ -28,7 +28,7 @@ const TEMPO_CONFIRMACAO = 60 * 1000;
 // ou um emoji normal.
 
 const EMOJIS = {
-    premium: "💎",
+    premium: "<a:diamante:1561210993772855356>",
     moedas: "<:Coin:1528228277913784340>",
     saldo: "<:cash:1542933882452578415>",
     relogio: "<:clock:1542945408865534002>",
