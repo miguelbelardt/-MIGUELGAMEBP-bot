@@ -97,7 +97,7 @@ module.exports = {
         if (!usuario) {
             return message.reply(
                 "❌ Você precisa mencionar o usuário.\n" +
-                "Exemplo: `madd-xp @usuário 100`"
+                "Exemplo: `'add-xp @usuário 100`"
             );
         }
 
@@ -114,7 +114,7 @@ module.exports = {
         ) {
             return message.reply(
                 "❌ Informe uma quantidade de XP válida.\n" +
-                "Exemplo: `madd-xp @usuário 100`"
+                "Exemplo: `'add-xp @usuário 100`"
             );
         }
 
@@ -132,7 +132,7 @@ module.exports = {
         } catch (erro) {
 
             console.error(
-                "❌ Erro no comando madd-xp:",
+                "❌ Erro no comando add-xp por prefixo:",
                 erro
             );
 
