@@ -40,7 +40,7 @@ const EMOJIS = {
     sequencia: "<:fogo:1561078556660858970>",
     relogio: "<:clock:1542945408865534002>",
     calendario: "<:calendario:1561078776186798110>",
-    espera: "⏳",
+    espera: "<:ampulheta:1561391627090526231>",
     sino: "<:Notification_Bell:1543405169952170048>",
     lua: "<:SoftBunnyMoon:1530045353577939124>",
     ranking: "<:GoldRank:1542947364212318328>",
@@ -1361,7 +1361,7 @@ module.exports = {
 
             return interaction.reply({
                 content:
-                    "⏳ Seu Daily já está sendo processado. Aguarde um momento!",
+                    `${EMOJIS.espera} Seu Daily já está sendo processado. Aguarde um momento!`,
                 ephemeral: true
             });
         }
