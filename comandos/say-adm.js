@@ -65,7 +65,7 @@ module.exports = {
 
         if (!usuario) {
             return message.reply(
-                "❌ Use: `M say-adm @usuário mensagem`"
+                "❌ Use: `'say-adm @usuário mensagem`"
             );
         }
 
@@ -77,7 +77,7 @@ module.exports = {
         if (!mensagem) {
             return message.reply(
                 "❌ Você precisa informar a mensagem.\n" +
-                "Exemplo: `M say-adm @usuário Olá!`"
+                "Exemplo: `'say-adm @usuário Olá!`"
             );
         }
 
