@@ -4,6 +4,16 @@ const {
 
 const DONO_ID = "1124140396516225044";
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data:
         new SlashCommandBuilder()
@@ -66,7 +76,7 @@ module.exports = {
         ) {
             return interaction.reply({
                 content:
-                    "❌ Você não tem permissão para usar este comando.",
+                    `${EMOJIS.erro} Você não tem permissão para usar este comando.`,
                 ephemeral: true
             });
         }
@@ -84,7 +94,7 @@ module.exports = {
         if (!comandoCarregado) {
             return interaction.reply({
                 content:
-                    `❌ O comando \`/${nome}\` não está carregado pelo bot.`,
+                    `${EMOJIS.erro} O comando \`/${nome}\` não está carregado pelo bot.`,
                 ephemeral: true
             });
         }
@@ -102,7 +112,7 @@ module.exports = {
         if (!comandoRegistrado) {
             return interaction.reply({
                 content:
-                    `❌ O comando \`/${nome}\` está carregado no bot, mas ainda não está registrado no Discord.`,
+                    `${EMOJIS.erro} O comando \`/${nome}\` está carregado no bot, mas ainda não está registrado no Discord.`,
                 ephemeral: true
             });
         }
