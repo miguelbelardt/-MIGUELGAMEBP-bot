@@ -4,6 +4,17 @@ const {
 
 const comandoDarAdm = require("./dar-adm");
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    sucesso: "<:activ:1528228344263348394>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("say-adm")
@@ -25,7 +36,7 @@ module.exports = {
         // 🔐 ADM DO BOT
         if (!comandoDarAdm.isAdmin(interaction.user.id)) {
             return interaction.reply({
-                content: "❌ Você não é administrador do bot.",
+                content: `${EMOJIS.erro} Você não é administrador do bot.`,
                 ephemeral: true
             });
         }
@@ -37,7 +48,7 @@ module.exports = {
             await usuario.send(mensagem);
 
             await interaction.reply({
-                content: `✅ Mensagem enviada para ${usuario}.`,
+                content: `${EMOJIS.sucesso} Mensagem enviada para ${usuario}.`,
                 ephemeral: true
             });
 
@@ -46,7 +57,7 @@ module.exports = {
 
             await interaction.reply({
                 content:
-                    "❌ Não consegui enviar a mensagem. " +
+                    `${EMOJIS.erro} Não consegui enviar a mensagem. ` +
                     "O usuário pode estar com as DMs fechadas.",
                 ephemeral: true
             });
@@ -57,7 +68,7 @@ module.exports = {
         // 🔐 ADM DO BOT
         if (!comandoDarAdm.isAdmin(message.author.id)) {
             return message.reply(
-                "❌ Você não é administrador do bot."
+                `${EMOJIS.erro} Você não é administrador do bot.`
             );
         }
 
@@ -65,7 +76,7 @@ module.exports = {
 
         if (!usuario) {
             return message.reply(
-                "❌ Use: `'say-adm @usuário mensagem`"
+                `${EMOJIS.erro} Use: \`'say-adm @usuário mensagem\``
             );
         }
 
@@ -76,7 +87,7 @@ module.exports = {
 
         if (!mensagem) {
             return message.reply(
-                "❌ Você precisa informar a mensagem.\n" +
+                `${EMOJIS.erro} Você precisa informar a mensagem.\n` +
                 "Exemplo: `'say-adm @usuário Olá!`"
             );
         }
@@ -85,14 +96,14 @@ module.exports = {
             await usuario.send(mensagem);
 
             await message.reply(
-                `✅ Mensagem enviada para ${usuario}.`
+                `${EMOJIS.sucesso} Mensagem enviada para ${usuario}.`
             );
 
         } catch (erro) {
             console.error("❌ Erro no say-adm:", erro);
 
             await message.reply(
-                "❌ Não consegui enviar a mensagem. " +
+                `${EMOJIS.erro} Não consegui enviar a mensagem. ` +
                 "O usuário pode estar com as DMs fechadas."
             );
         }
