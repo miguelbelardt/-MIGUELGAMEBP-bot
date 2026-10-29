@@ -8,6 +8,17 @@ const {
     isAdm
 } = require("../database/database.js");
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    erro: "<:Danger:1536532666101538836>",
+    xp: "<:FortniteXP:1528582193717182635>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("remove-xp")
@@ -39,7 +50,7 @@ module.exports = {
         if (!adm) {
             return interaction.reply({
                 content:
-                    "❌ Você não tem permissão para usar este comando.",
+                    `${EMOJIS.erro} Você não tem permissão para usar este comando.`,
                 ephemeral: true
             });
         }
@@ -64,7 +75,7 @@ module.exports = {
             if (quantidadeRemover <= 0) {
                 return interaction.reply({
                     content:
-                        `❌ ${usuario} não possui XP para remover.`,
+                        `${EMOJIS.erro} ${usuario} não possui XP para remover.`,
                     ephemeral: true
                 });
             }
@@ -75,7 +86,7 @@ module.exports = {
             );
 
             await interaction.reply(
-                `⭐ Foram removidos **${quantidadeRemover} XP** de ${usuario}.\n` +
+                `${EMOJIS.xp} Foram removidos **${quantidadeRemover} XP** de ${usuario}.\n` +
                 `📊 XP atual: **${xpAtual - quantidadeRemover} XP**`
             );
 
@@ -88,7 +99,7 @@ module.exports = {
 
             await interaction.reply({
                 content:
-                    "❌ Não foi possível remover o XP.",
+                    `${EMOJIS.erro} Não foi possível remover o XP.`,
                 ephemeral: true
             });
         }
@@ -106,7 +117,7 @@ module.exports = {
 
         if (!adm) {
             return message.reply(
-                "❌ Você não tem permissão para usar este comando."
+                `${EMOJIS.erro} Você não tem permissão para usar este comando.`
             );
         }
 
@@ -115,7 +126,7 @@ module.exports = {
 
         if (!usuario) {
             return message.reply(
-                "❌ Você precisa mencionar o usuário.\n" +
+                `${EMOJIS.erro} Você precisa mencionar o usuário.\n` +
                 "Exemplo: `'remove-xp @usuário 100`"
             );
         }
@@ -132,7 +143,7 @@ module.exports = {
             quantidade < 1
         ) {
             return message.reply(
-                "❌ Informe uma quantidade de XP válida.\n" +
+                `${EMOJIS.erro} Informe uma quantidade de XP válida.\n` +
                 "Exemplo: `'remove-xp @usuário 100`"
             );
         }
@@ -150,7 +161,7 @@ module.exports = {
 
             if (quantidadeRemover <= 0) {
                 return message.reply(
-                    `❌ ${usuario} não possui XP para remover.`
+                    `${EMOJIS.erro} ${usuario} não possui XP para remover.`
                 );
             }
 
@@ -160,7 +171,7 @@ module.exports = {
             );
 
             await message.reply(
-                `⭐ Foram removidos **${quantidadeRemover} XP** de ${usuario}.\n` +
+                `${EMOJIS.xp} Foram removidos **${quantidadeRemover} XP** de ${usuario}.\n` +
                 `📊 XP atual: **${xpAtual - quantidadeRemover} XP**`
             );
 
@@ -172,7 +183,7 @@ module.exports = {
             );
 
             await message.reply(
-                "❌ Não foi possível remover o XP."
+                `${EMOJIS.erro} Não foi possível remover o XP.`
             );
         }
     }
