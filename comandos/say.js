@@ -3,6 +3,17 @@ const {
     PermissionFlagsBits
 } = require("discord.js");
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    sucesso: "<:activ:1528228344263348394>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("say")
@@ -20,7 +31,7 @@ module.exports = {
         // 🔐 ADMINISTRADOR DO DISCORD
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({
-                content: "❌ Você precisa ter a permissão de **Administrador do Discord** para usar este comando.",
+                content: `${EMOJIS.erro} Você precisa ter a permissão de **Administrador do Discord** para usar este comando.`,
                 ephemeral: true
             });
         }
@@ -28,7 +39,7 @@ module.exports = {
         const mensagem = interaction.options.getString("mensagem");
 
         await interaction.reply({
-            content: "✅ Mensagem enviada!",
+            content: `${EMOJIS.sucesso} Mensagem enviada!`,
             ephemeral: true
         });
 
@@ -40,7 +51,7 @@ module.exports = {
         // 🔐 ADMINISTRADOR DO DISCORD
         if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return message.reply(
-                "❌ Você precisa ter a permissão de **Administrador do Discord** para usar este comando."
+                `${EMOJIS.erro} Você precisa ter a permissão de **Administrador do Discord** para usar este comando.`
             );
         }
 
@@ -48,7 +59,7 @@ module.exports = {
 
         if (!mensagem) {
             return message.reply(
-                "❌ Você precisa informar a mensagem.\n" +
+                `${EMOJIS.erro} Você precisa informar a mensagem.\n` +
                 "Exemplo: `'say Olá!`"
             );
         }
@@ -56,13 +67,13 @@ module.exports = {
         try {
             await message.channel.send(mensagem);
 
-            await message.reply("✅ Mensagem enviada!");
+            await message.reply(`${EMOJIS.sucesso} Mensagem enviada!`);
 
         } catch (erro) {
             console.error("❌ Erro no say:", erro);
 
             await message.reply(
-                "❌ Não consegui enviar a mensagem."
+                `${EMOJIS.erro} Não consegui enviar a mensagem.`
             );
         }
     }
