@@ -20,6 +20,17 @@ const COR_CALL = 0x5865F2;
 // 🤖 COMANDO
 // =====================================================
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    sucesso: "<:activ:1528228344263348394>",
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("entrar-call")
@@ -35,7 +46,7 @@ module.exports = {
     async execute(interaction) {
         if (interaction.user.id !== DONO_ID) {
             return interaction.reply({
-                content: "❌ Apenas o dono do bot pode usar este comando.",
+                content: `${EMOJIS.erro} Apenas o dono do bot pode usar este comando.`,
                 ephemeral: true
             });
         }
@@ -55,7 +66,7 @@ module.exports = {
                 .setColor(COR_CALL)
                 .setTitle("🔊 BOT NA CALL")
                 .setDescription(
-                    `✅ Entrei no canal de voz **${canal.name}**!`
+                    `${EMOJIS.sucesso} Entrei no canal de voz **${canal.name}**!`
                 );
 
             await interaction.reply({
@@ -66,7 +77,7 @@ module.exports = {
             console.error("❌ Erro ao entrar na call:", erro);
 
             await interaction.reply({
-                content: "❌ Não consegui entrar nesse canal de voz.",
+                content: `${EMOJIS.erro} Não consegui entrar nesse canal de voz.`,
                 ephemeral: true
             });
         }
@@ -75,7 +86,7 @@ module.exports = {
     async handlePrefix(message) {
         if (message.author.id !== DONO_ID) {
             return message.reply(
-                "❌ Apenas o dono do bot pode usar este comando."
+                `${EMOJIS.erro} Apenas o dono do bot pode usar este comando.`
             );
         }
 
@@ -88,13 +99,13 @@ module.exports = {
 
         if (!canal) {
             return message.reply(
-                "❌ Você precisa estar em um canal de voz para usar `'entrar-call`."
+                `${EMOJIS.erro} Você precisa estar em um canal de voz para usar \`'entrar-call\`.`
             );
         }
 
         if (canal.type !== ChannelType.GuildVoice) {
             return message.reply(
-                "❌ Esse canal não é um canal de voz válido."
+                `${EMOJIS.erro} Esse canal não é um canal de voz válido.`
             );
         }
 
@@ -111,7 +122,7 @@ module.exports = {
                 .setColor(COR_CALL)
                 .setTitle("🔊 BOT NA CALL")
                 .setDescription(
-                    `✅ Entrei no canal de voz **${canal.name}**!`
+                    `${EMOJIS.sucesso} Entrei no canal de voz **${canal.name}**!`
                 );
 
             await message.reply({
@@ -122,7 +133,7 @@ module.exports = {
             console.error("❌ Erro ao entrar na call por prefixo:", erro);
 
             await message.reply(
-                "❌ Não consegui entrar nesse canal de voz."
+                `${EMOJIS.erro} Não consegui entrar nesse canal de voz.`
             );
         }
     }
