@@ -7,6 +7,17 @@ const {
     getXP
 } = require("../database/database.js");
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    erro: "<:Danger:1536532666101538836>",
+    xp: "<:FortniteXP:1528582193717182635>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("ver-xp")
@@ -28,9 +39,9 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor("Blue")
-                .setTitle("⭐ XP do usuário")
+                .setTitle(`${EMOJIS.xp} XP do usuário`)
                 .setDescription(
-                    `👤 **Usuário:** ${usuario}\n⭐ **XP:** ${xp}`
+                    `👤 **Usuário:** ${usuario}\n${EMOJIS.xp} **XP:** ${xp}`
                 )
                 .setThumbnail(usuario.displayAvatarURL())
                 .setFooter({
@@ -49,7 +60,7 @@ module.exports = {
 
             await interaction.reply({
                 content:
-                    "❌ Não foi possível consultar o XP.",
+                    `${EMOJIS.erro} Não foi possível consultar o XP.`,
                 ephemeral: true
             });
         }
@@ -65,9 +76,9 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor("Blue")
-                .setTitle("⭐ XP do usuário")
+                .setTitle(`${EMOJIS.xp} XP do usuário`)
                 .setDescription(
-                    `👤 **Usuário:** ${usuario}\n⭐ **XP:** ${xp}`
+                    `👤 **Usuário:** ${usuario}\n${EMOJIS.xp} **XP:** ${xp}`
                 )
                 .setThumbnail(usuario.displayAvatarURL())
                 .setFooter({
@@ -85,7 +96,7 @@ module.exports = {
             );
 
             await message.reply(
-                "❌ Não foi possível consultar o XP."
+                `${EMOJIS.erro} Não foi possível consultar o XP.`
             );
         }
     }
