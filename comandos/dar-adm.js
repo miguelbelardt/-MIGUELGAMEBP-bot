@@ -10,6 +10,16 @@ const {
 
 const DONO_ID = "1124140396516225044";
 
+// =====================================================
+// 😀 EMOJIS
+// =====================================================
+// Para trocar, coloque o código do emoji (use /emojiinfo)
+// ou um emoji normal.
+
+const EMOJIS = {
+    erro: "<:Danger:1536532666101538836>"
+};
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName("dar-adm")
@@ -25,7 +35,7 @@ module.exports = {
         // 👑 Somente o dono pode alterar ADMs
         if (interaction.user.id !== DONO_ID) {
             return interaction.reply({
-                content: "❌ Você não tem permissão para usar este comando.",
+                content: `${EMOJIS.erro} Você não tem permissão para usar este comando.`,
                 ephemeral: true
             });
         }
@@ -64,7 +74,7 @@ module.exports = {
             console.error("❌ Erro ao alterar ADM:", erro);
 
             return interaction.reply({
-                content: "❌ Ocorreu um erro ao alterar a permissão de ADM.",
+                content: `${EMOJIS.erro} Ocorreu um erro ao alterar a permissão de ADM.`,
                 ephemeral: true
             });
         }
