@@ -146,6 +146,11 @@ module.exports = {
         }
 
         try {
+            // Apaga primeiro a mensagem do comando ('clear N), para ela
+            // não entrar na conta. Assim apaga exatamente N mensagens
+            // além do comando (e o limite de 100 do Discord continua valendo).
+            await message.delete().catch(() => { });
+
             const mensagens =
                 await message.channel.bulkDelete(
                     quantidade,
