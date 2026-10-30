@@ -6,6 +6,7 @@ const {
     ButtonStyle,
     ChannelType
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const COR = 0x5865F2;
 
@@ -197,7 +198,7 @@ async function criarResposta(guild) {
                 }
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     if (guild.description) {
