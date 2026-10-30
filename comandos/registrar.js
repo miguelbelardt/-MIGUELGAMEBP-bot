@@ -2568,6 +2568,22 @@ async function excluirRegistro(
         [guildId]
     );
 
+    enviarLog(
+        interaction,
+        "registro_excluido",
+        new EmbedBuilder()
+            .setTitle("🗑️ Registro excluído")
+            .setDescription(
+                `${interaction.user} excluiu o sistema de registro do servidor.`
+            )
+            .addFields({
+                name: "👤 Excluído por",
+                value: `${interaction.user.tag}\n\`${interaction.user.id}\``
+            })
+            .setColor(0xED4245)
+            .setTimestamp()
+    );
+
     await interaction.update({
         content:
             "🗑️ Sistema de registro excluído com sucesso. Use `/registrar` para criar de novo.",
@@ -3034,6 +3050,15 @@ async function finalizarRegistroSequencia(
             .map(id => `<@&${id}>`)
             .join(", ");
 
+    enviarLog(
+        interaction,
+        "registro_concluido",
+        embedRegistroConcluido(
+            interaction.user,
+            [...cargos].map(id => `<@&${id}>`)
+        )
+    );
+
     return interaction.update({
         content:
             lista
@@ -3042,6 +3067,70 @@ async function finalizarRegistroSequencia(
         embeds: [],
         components: []
     });
+}
+
+// =====================================================
+// 📋 ENVIAR LOG (sistema /logs)
+// =====================================================
+// Nunca deixa o log atrapalhar o registro: qualquer erro aqui
+// só aparece no console.
+
+async function enviarLog(
+    interaction,
+    tipo,
+    embed
+) {
+    try {
+        if (
+            interaction.guild &&
+            typeof interaction.client.registrarLog === "function"
+        ) {
+            await interaction.client.registrarLog(
+                interaction.guild,
+                tipo,
+                embed
+            );
+        }
+
+    } catch (erro) {
+        console.error(
+            `❌ Erro ao enviar log de registro (${tipo}):`,
+            erro
+        );
+    }
+}
+
+function embedRegistroConcluido(
+    usuario,
+    cargos
+) {
+    return new EmbedBuilder()
+        .setTitle(`${EMOJIS.sucesso} Registro concluído`)
+        .setDescription(
+            `${usuario} concluiu o registro.`
+        )
+        .addFields(
+            {
+                name: "👤 Membro",
+                value: `${usuario.tag}\n\`${usuario.id}\``,
+                inline: true
+            },
+            {
+                name: "🎭 Cargos recebidos",
+                value:
+                    cargos.length > 0
+                        ? cargos.join(", ").slice(0, 1024)
+                        : "Nenhum",
+                inline: true
+            }
+        )
+        .setThumbnail(
+            usuario.displayAvatarURL({
+                size: 256
+            })
+        )
+        .setColor(0x57F287)
+        .setTimestamp();
 }
 
 // =====================================================
@@ -3335,6 +3424,15 @@ async function processarBotaoRegistro(
             `<@&${cargoPosRegistro.id}>`
         );
     }
+
+    enviarLog(
+        interaction,
+        "registro_concluido",
+        embedRegistroConcluido(
+            interaction.user,
+            cargosRecebidos
+        )
+    );
 
     // Troca a página (com os botões) pela confirmação:
     // o membro não fica com botões velhos na tela.

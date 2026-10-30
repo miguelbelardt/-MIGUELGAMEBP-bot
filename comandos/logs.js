@@ -182,6 +182,62 @@ const TIPOS_LOG = {
         label: "Mudança de canal",
         descricao:
             "Registra quando um membro muda de um canal de voz para outro."
+    },
+
+    // =================================================
+    // 🎫 TICKETS
+    // =================================================
+
+    tickets: {
+        nome: "🎫 Tickets",
+        emoji: "🎫",
+        label: "Tickets",
+        descricao:
+            "Configure separadamente a abertura e o fechamento de tickets."
+    },
+
+    tickets_aberto: {
+        nome: "📩 Ticket aberto",
+        emoji: "📩",
+        label: "Ticket aberto",
+        descricao:
+            "Registra quando um membro abre um ticket."
+    },
+
+    tickets_fechado: {
+        nome: "🔒 Ticket fechado",
+        emoji: "🔒",
+        label: "Ticket fechado",
+        descricao:
+            "Registra quando um ticket é fechado."
+    },
+
+    // =================================================
+    // 📝 REGISTRO
+    // =================================================
+
+    registro: {
+        nome: "📝 Registro",
+        emoji: "📝",
+        label: "Registro",
+        descricao:
+            "Configure separadamente os eventos do sistema de registro."
+    },
+
+    registro_concluido: {
+        nome: "✅ Registro concluído",
+        emoji: "✅",
+        label: "Registro concluído",
+        descricao:
+            "Registra quando um membro conclui o registro."
+    },
+
+    registro_excluido: {
+        nome: "🗑️ Registro excluído",
+        emoji: "🗑️",
+        label: "Registro excluído",
+        descricao:
+            "Registra quando um administrador exclui o sistema de registro."
     }
 };
 
@@ -193,7 +249,9 @@ const TIPOS_PRINCIPAIS = {
     mensagens: TIPOS_LOG.mensagens,
     membros: TIPOS_LOG.membros,
     moderacao: TIPOS_LOG.moderacao,
-    voz: TIPOS_LOG.voz
+    voz: TIPOS_LOG.voz,
+    tickets: TIPOS_LOG.tickets,
+    registro: TIPOS_LOG.registro
 };
 
 const SUBTIPOS_MENSAGENS = [
@@ -223,11 +281,23 @@ const SUBTIPOS_VOZ = [
     "voz_mudanca"
 ];
 
+const SUBTIPOS_TICKETS = [
+    "tickets_aberto",
+    "tickets_fechado"
+];
+
+const SUBTIPOS_REGISTRO = [
+    "registro_concluido",
+    "registro_excluido"
+];
+
 const SUBTIPOS = [
     ...SUBTIPOS_MENSAGENS,
     ...SUBTIPOS_MEMBROS,
     ...SUBTIPOS_MODERACAO,
-    ...SUBTIPOS_VOZ
+    ...SUBTIPOS_VOZ,
+    ...SUBTIPOS_TICKETS,
+    ...SUBTIPOS_REGISTRO
 ];
 
 // =====================================================
@@ -252,7 +322,13 @@ const PAI_SUBTIPO = {
 
     voz_entrada: "voz",
     voz_saida: "voz",
-    voz_mudanca: "voz"
+    voz_mudanca: "voz",
+
+    tickets_aberto: "tickets",
+    tickets_fechado: "tickets",
+
+    registro_concluido: "registro",
+    registro_excluido: "registro"
 };
 
 // =====================================================
@@ -942,6 +1018,103 @@ async function mostrarVoz(interaction) {
 }
 
 // =====================================================
+// 🎫📝 PAINEL GENÉRICO (TICKETS E REGISTRO)
+// =====================================================
+
+async function mostrarPainelDeSubtipos(
+    interaction,
+    titulo,
+    descricao,
+    subtipos,
+    cor
+) {
+    try {
+        const configs = await Promise.all(
+            subtipos.map(subtipo =>
+                buscarConfig(
+                    interaction.guild.id,
+                    subtipo
+                )
+            )
+        );
+
+        const linhas = subtipos.map(
+            (subtipo, i) => {
+                const dados = TIPOS_LOG[subtipo];
+
+                return (
+                    `${dados.emoji} **${dados.label}:** ${
+                        configs[i]
+                            ? `🟢 Ativado → <#${configs[i].canal_id}>`
+                            : "🔴 Desativado"
+                    }`
+                );
+            }
+        );
+
+        const embed = new EmbedBuilder()
+            .setTitle(titulo)
+            .setDescription(
+                `${descricao}\n\n${linhas.join("\n\n")}`
+            )
+            .setColor(cor);
+
+        await interaction.update({
+            embeds: [embed],
+            components: [
+                new ActionRowBuilder().addComponents(
+                    subtipos.map((subtipo, i) => {
+                        const dados = TIPOS_LOG[subtipo];
+
+                        return new ButtonBuilder()
+                            .setCustomId(`logs_${subtipo}`)
+                            .setLabel(dados.label)
+                            .setEmoji(dados.emoji)
+                            .setStyle(
+                                configs[i]
+                                    ? ButtonStyle.Success
+                                    : ButtonStyle.Secondary
+                            );
+                    })
+                ),
+
+                new ActionRowBuilder().addComponents(
+                    criarBotaoVoltar(
+                        "logs_voltar"
+                    )
+                )
+            ]
+        });
+
+    } catch (erro) {
+        console.error(
+            `❌ Erro ao mostrar painel de logs (${titulo}):`,
+            erro
+        );
+    }
+}
+
+async function mostrarTickets(interaction) {
+    return mostrarPainelDeSubtipos(
+        interaction,
+        "🎫 Tickets",
+        "Configure separadamente os logs de tickets.",
+        SUBTIPOS_TICKETS,
+        0x5865F2
+    );
+}
+
+async function mostrarRegistro(interaction) {
+    return mostrarPainelDeSubtipos(
+        interaction,
+        "📝 Registro",
+        "Configure separadamente os logs do sistema de registro.",
+        SUBTIPOS_REGISTRO,
+        0x57F287
+    );
+}
+
+// =====================================================
 // ⚙️ CONFIGURAÇÃO DE SUBTIPO
 // =====================================================
 
@@ -1043,6 +1216,18 @@ async function mostrarTipo(
 
     if (tipo === "voz") {
         return mostrarVoz(
+            interaction
+        );
+    }
+
+    if (tipo === "tickets") {
+        return mostrarTickets(
+            interaction
+        );
+    }
+
+    if (tipo === "registro") {
+        return mostrarRegistro(
             interaction
         );
     }
@@ -1183,6 +1368,26 @@ async function mostrarStatus(
                 "voz_mudanca"
             );
 
+        const ticketAberto =
+            buscarCanal(
+                "tickets_aberto"
+            );
+
+        const ticketFechado =
+            buscarCanal(
+                "tickets_fechado"
+            );
+
+        const registroConcluido =
+            buscarCanal(
+                "registro_concluido"
+            );
+
+        const registroExcluido =
+            buscarCanal(
+                "registro_excluido"
+            );
+
         let descricao =
             `💬 **Mensagens**\n` +
 
@@ -1279,6 +1484,34 @@ async function mostrarStatus(
             `🔄 Mudança → ${
                 vozMudanca
                     ? `<#${vozMudanca.canal_id}>`
+                    : "❌ Desativado"
+            }\n\n` +
+
+            `🎫 **Tickets**\n` +
+
+            `📩 Aberto → ${
+                ticketAberto
+                    ? `<#${ticketAberto.canal_id}>`
+                    : "❌ Desativado"
+            }\n` +
+
+            `🔒 Fechado → ${
+                ticketFechado
+                    ? `<#${ticketFechado.canal_id}>`
+                    : "❌ Desativado"
+            }\n\n` +
+
+            `📝 **Registro**\n` +
+
+            `✅ Concluído → ${
+                registroConcluido
+                    ? `<#${registroConcluido.canal_id}>`
+                    : "❌ Desativado"
+            }\n` +
+
+            `🗑️ Excluído → ${
+                registroExcluido
+                    ? `<#${registroExcluido.canal_id}>`
                     : "❌ Desativado"
             }`;
 
@@ -2016,6 +2249,27 @@ module.exports = {
                         interaction,
                         "voz_mudanca"
                     );
+                }
+
+                // -------------------------------------
+                // 🎫📝 TICKETS E REGISTRO
+                // -------------------------------------
+
+                if (
+                    interaction.customId.startsWith("logs_")
+                ) {
+                    const subtipo =
+                        interaction.customId.slice(5);
+
+                    if (
+                        SUBTIPOS_TICKETS.includes(subtipo) ||
+                        SUBTIPOS_REGISTRO.includes(subtipo)
+                    ) {
+                        return mostrarConfiguracaoSubtipo(
+                            interaction,
+                            subtipo
+                        );
+                    }
                 }
 
                 // -------------------------------------

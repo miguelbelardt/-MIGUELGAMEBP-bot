@@ -2413,7 +2413,67 @@ async function abrirTicket(
         `🎫 Ticket criado: ${canal.name} | Usuário: ${interaction.user.tag} | Número: ${numeroFormatado} | Motivo: ${motivoFinal}`
     );
 
+    await enviarLog(
+        interaction,
+        "tickets_aberto",
+        new EmbedBuilder()
+            .setTitle(`${EMOJIS.ticket} Ticket aberto`)
+            .setDescription(
+                `${interaction.user} abriu um ticket em ${canal}.`
+            )
+            .addFields(
+                {
+                    name: `${EMOJIS.pessoa} Aberto por`,
+                    value: `${interaction.user.tag}\n\`${interaction.user.id}\``,
+                    inline: true
+                },
+                {
+                    name: `${EMOJIS.ticket} Ticket`,
+                    value: `${canal}\n\`${canal.id}\``,
+                    inline: true
+                },
+                {
+                    name: `${EMOJIS.motivo} Motivo`,
+                    value: String(motivoFinal).slice(0, 1024),
+                    inline: false
+                }
+            )
+            .setColor(0x57F287)
+            .setTimestamp()
+    );
+
     return true;
+}
+
+// ================================
+// 📋 ENVIAR LOG (sistema /logs)
+// ================================
+// Nunca deixa o log atrapalhar o ticket: qualquer erro aqui
+// só aparece no console.
+
+async function enviarLog(
+    interaction,
+    tipo,
+    embed
+) {
+    try {
+        if (
+            interaction.guild &&
+            typeof interaction.client.registrarLog === "function"
+        ) {
+            await interaction.client.registrarLog(
+                interaction.guild,
+                tipo,
+                embed
+            );
+        }
+
+    } catch (erro) {
+        console.error(
+            `❌ Erro ao enviar log de ticket (${tipo}):`,
+            erro
+        );
+    }
 }
 
 // ================================
@@ -2469,6 +2529,52 @@ async function fecharTicket(
 
     console.log(
         `🔒 Ticket fechado: ${canal.name} | Por: ${interaction.user.tag}`
+    );
+
+    // O topo do canal guarda: ticket:<id do dono>:<criado em>
+    const [, donoId, criadoEmTopo] =
+        canal.topic.split(":");
+
+    const camposFechamento = [
+        {
+            name: `${EMOJIS.trancar} Fechado por`,
+            value: `${interaction.user.tag}\n\`${interaction.user.id}\``,
+            inline: true
+        },
+        {
+            name: `${EMOJIS.ticket} Ticket`,
+            value: `#${canal.name}\n\`${canal.id}\``,
+            inline: true
+        }
+    ];
+
+    if (/^\d{15,25}$/.test(donoId || "")) {
+        camposFechamento.unshift({
+            name: `${EMOJIS.pessoa} Dono do ticket`,
+            value: `<@${donoId}>\n\`${donoId}\``,
+            inline: true
+        });
+    }
+
+    if (/^\d{10,}$/.test(criadoEmTopo || "")) {
+        camposFechamento.push({
+            name: `${EMOJIS.relogio} Aberto em`,
+            value: horarioDiscord(Number(criadoEmTopo)),
+            inline: false
+        });
+    }
+
+    await enviarLog(
+        interaction,
+        "tickets_fechado",
+        new EmbedBuilder()
+            .setTitle(`${EMOJIS.trancar} Ticket fechado`)
+            .setDescription(
+                `${interaction.user} fechou o ticket **#${canal.name}**.`
+            )
+            .addFields(camposFechamento)
+            .setColor(0xED4245)
+            .setTimestamp()
     );
 
     setTimeout(
