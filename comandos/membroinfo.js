@@ -6,6 +6,7 @@ const {
     ButtonStyle,
     PermissionFlagsBits
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const COR = 0x5865F2;
 
@@ -335,7 +336,7 @@ function criarEmbedPerfil(usuario) {
                 }
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     if (usuario.accentColor) {
