@@ -2,6 +2,7 @@ const {
     SlashCommandBuilder,
     EmbedBuilder
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const {
     getXP
@@ -45,7 +46,7 @@ module.exports = {
                 )
                 .setThumbnail(usuario.displayAvatarURL())
                 .setFooter({
-                    text: "MIGUELGAMEBP-bot"
+                    text: nomeBot()
                 });
 
             await interaction.reply({
@@ -82,7 +83,7 @@ module.exports = {
                 )
                 .setThumbnail(usuario.displayAvatarURL())
                 .setFooter({
-                    text: "MIGUELGAMEBP-bot"
+                    text: nomeBot()
                 });
 
             await message.reply({
@@ -91,7 +92,7 @@ module.exports = {
 
         } catch (erro) {
             console.error(
-                "❌ Erro no comando mver-xp:",
+                "❌ Erro no comando 'ver-xp:",
                 erro
             );
 
