@@ -49,9 +49,17 @@ function converterPlaceholders(
         }
     );
 
+    // Consultas já escritas com "?" (formato do MySQL) não têm $1, $2...
+    // Nesse caso os parâmetros são enviados do jeito que vieram.
+    // Sem isso, o "?" chegava ao MySQL sem valor e dava erro de sintaxe.
+    const usaPlaceholderPostgres = /\$\d+/.test(sql);
+
     return {
         sqlMySQL,
-        novosParametros
+        novosParametros:
+            usaPlaceholderPostgres
+                ? novosParametros
+                : parametros
     };
 }
 
