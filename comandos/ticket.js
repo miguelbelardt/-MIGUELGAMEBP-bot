@@ -25,13 +25,15 @@ const { pool } = require("../database/database.js");
 // por exemplo: "<:Ticket:123456789012345678>" (use o
 // /emojiinfo para pegar o código) ou um emoji normal como "🎫".
 
+const emojis = require("../emojis.js");
+
 const EMOJIS = {
     ticket: "<:Ticket:1528578970218533054>",
-    trancar: "<:lock:1543397564022399017>",
+    trancar: emojis.trancar,
     motivo: "<:book:1543415786171928716>",
-    pessoa: "👤",
-    relogio: "<:clock:1542945408865534002>",
-    sucesso: "<:activ:1528228344263348394>"
+    pessoa: emojis.pessoa,
+    relogio: emojis.relogio,
+    sucesso: emojis.sucesso
 };
 
 // ================================

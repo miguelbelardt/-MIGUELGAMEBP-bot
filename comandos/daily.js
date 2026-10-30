@@ -33,17 +33,19 @@ const COR_NOTIFICACAO = 0x5865F2;
 // por exemplo: "<:Coin:123456789012345678>" (use o
 // /emojiinfo para pegar o código) ou um emoji normal como "🎁".
 
+const emojis = require("../emojis.js");
+
 const EMOJIS = {
     presente: "<:WumpusTrophy:1546214016031129703>",
-    moedas: "<:Coin:1528228277913784340>",
-    saldo: "<:cash:1542933882452578415>",
+    moedas: emojis.moedas,
+    saldo: emojis.saldo,
     sequencia: "<:fogo:1561078556660858970>",
-    relogio: "<:clock:1542945408865534002>",
+    relogio: emojis.relogio,
     calendario: "<:calendario:1561078776186798110>",
-    espera: "<:ampulheta:1561391627090526231>",
+    espera: emojis.espera,
     sino: "<:Notification_Bell:1543405169952170048>",
     lua: "<:SoftBunnyMoon:1530045353577939124>",
-    ranking: "<:GoldRank:1542947364212318328>",
+    ranking: emojis.ranking,
     dinheiro: "<:coin:1543417629413351564>"
 };
 

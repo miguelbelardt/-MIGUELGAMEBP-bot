@@ -19,13 +19,16 @@ const DIAS_MAXIMO = 3650;
 // =====================================================
 // 😀 EMOJIS DO PREMIUM
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    premium: "<a:diamante:1561210993772855356>",
-    relogio: "<:clock:1542945408865534002>",
-    erro: "<:Danger:1536532666101538836>"
+    premium: emojis.premium,
+    relogio: emojis.relogio,
+    erro: emojis.erro
 };
 
 // =====================================================

@@ -9,13 +9,16 @@ const {
 // =====================================================
 // 😀 EMOJIS
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    pedra: "<:rock:1543416296547549227>",
-    papel: "<:book:1543415786171928716>",
-    tesoura: "<:ScissorsIcon:1543416443981533285>"
+    pedra: emojis.pedra,
+    papel: emojis.papel,
+    tesoura: emojis.tesoura
 };
 
 const opcoes = {

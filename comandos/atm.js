@@ -8,14 +8,17 @@ const { getSaldo } = require("../database/database");
 // =====================================================
 // 😀 EMOJIS DO ATM
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
     banco: "🏦",
-    saldo: "<:cash:1542933882452578415>",
-    moedas: "<:Coin:1528228277913784340>",
-    erro: "<:Danger:1536532666101538836>"
+    saldo: emojis.saldo,
+    moedas: emojis.moedas,
+    erro: emojis.erro
 };
 
 module.exports = {

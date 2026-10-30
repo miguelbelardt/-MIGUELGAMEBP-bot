@@ -11,17 +11,20 @@ const { mysqlPool, getSaldo } = require("../database/database");
 // =====================================================
 // 😀 EMOJIS DO PAY
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
     pagamento: "💸",
-    pessoa: "👤",
-    moedas: "<:Coin:1528228277913784340>",
-    saldo: "<:cash:1542933882452578415>",
-    relogio: "<:clock:1542945408865534002>",
-    sucesso: "<:activ:1528228344263348394>",
-    erro: "<:Danger:1536532666101538836>"
+    pessoa: emojis.pessoa,
+    moedas: emojis.moedas,
+    saldo: emojis.saldo,
+    relogio: emojis.relogio,
+    sucesso: emojis.sucesso,
+    erro: emojis.erro
 };
 
 const EXPIRA_EM = 60 * 60 * 1000;

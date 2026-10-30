@@ -7,12 +7,15 @@ const comandoDarAdm = require("./dar-adm");
 // =====================================================
 // 😀 EMOJIS
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    sucesso: "<:activ:1528228344263348394>",
-    erro: "<:Danger:1536532666101538836>"
+    sucesso: emojis.sucesso,
+    erro: emojis.erro
 };
 
 module.exports = {

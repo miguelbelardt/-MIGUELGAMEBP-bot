@@ -15,13 +15,16 @@ const LIMITE_POR_PAGINA = 10;
 // ================================================
 // 😀 EMOJIS DO RANKING
 // ================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    ranking: "<:GoldRank:1542947364212318328>",
-    moedas: "<:Coin:1528228277913784340>",
-    erro: "<:Danger:1536532666101538836>"
+    ranking: emojis.ranking,
+    moedas: emojis.moedas,
+    erro: emojis.erro
 };
 
 // ================================================

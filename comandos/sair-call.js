@@ -12,12 +12,15 @@ const DONO_ID = "1124140396516225044";
 // =====================================================
 // 😀 EMOJIS
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    erro: "<:Danger:1536532666101538836>",
-    sucesso: "<:activ:1528228344263348394>",
+    erro: emojis.erro,
+    sucesso: emojis.sucesso,
     mudo: "<:muted:1530932265985773598>"
 };
 

@@ -13,11 +13,14 @@ const COR = 0x5865F2;
 // =====================================================
 // 😀 EMOJIS
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    espera: "<:ampulheta:1561391627090526231>"
+    espera: emojis.espera
 };
 
 // =====================================================

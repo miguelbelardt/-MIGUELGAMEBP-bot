@@ -10,12 +10,15 @@ const {
 // =====================================================
 // 😀 EMOJIS
 // =====================================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    erro: "<:Danger:1536532666101538836>",
-    xp: "<:FortniteXP:1528582193717182635>"
+    erro: emojis.erro,
+    xp: emojis.xp
 };
 
 module.exports = {

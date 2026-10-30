@@ -22,15 +22,18 @@ const sessoes = new Map();
 // ================================
 // 😀 EMOJIS DO SORTEIO
 // ================================
-// Para trocar, coloque o código do emoji (use /emojiinfo)
-// ou um emoji normal.
+// Emojis usados em vários comandos vêm de emojis.js (troque lá).
+// Os outros ficam aqui: para trocar, coloque o código do emoji
+// (use /emojiinfo) ou um emoji normal.
+
+const emojis = require("../emojis.js");
 
 const EMOJIS = {
     trofeu: "<:WumpusTrophy:1546214016031129703>",
-    relogio: "<:clock:1542945408865534002>",
+    relogio: emojis.relogio,
     ingresso: "<:Ticket:1528578970218533054>",
-    trancar: "<:lock:1543397564022399017>",
-    erro: "<:Danger:1536532666101538836>"
+    trancar: emojis.trancar,
+    erro: emojis.erro
 };
 
 // Mostra o horário no fuso de cada pessoa, com contagem
