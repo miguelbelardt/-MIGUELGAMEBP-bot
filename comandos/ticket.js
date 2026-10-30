@@ -14,6 +14,7 @@ const {
     PermissionFlagsBits,
     MessageFlags
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const { pool } = require("../database/database.js");
 
@@ -986,7 +987,7 @@ function criarModalTicket() {
                 "Autor do embed"
             )
             .setPlaceholder(
-                "Ex: MIGUELGAMEBP"
+                `Ex: ${nomeBot()}`
             )
             .setStyle(
                 TextInputStyle.Short
