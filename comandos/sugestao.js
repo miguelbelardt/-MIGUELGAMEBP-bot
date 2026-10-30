@@ -2,6 +2,7 @@ const {
     SlashCommandBuilder,
     EmbedBuilder
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const COR = 0xFEE75C;
 
@@ -153,7 +154,7 @@ async function enviarSugestao(client, autor, guild, canal, texto) {
                 }
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     try {
