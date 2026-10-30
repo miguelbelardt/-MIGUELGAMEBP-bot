@@ -54,7 +54,7 @@ module.exports = {
 
         } catch (erro) {
             console.error(
-                "❌ Erro no comando /ver-xp:",
+                "❌ Erro no comando /xp:",
                 erro
             );
 
@@ -91,7 +91,7 @@ module.exports = {
 
         } catch (erro) {
             console.error(
-                "❌ Erro no comando mver-xp:",
+                "❌ Erro no comando 'xp:",
                 erro
             );
 
