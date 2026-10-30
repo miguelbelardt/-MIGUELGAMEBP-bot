@@ -3,6 +3,7 @@ const {
     EmbedBuilder,
     AttachmentBuilder
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const crypto = require("crypto");
 
@@ -422,7 +423,7 @@ async function montarResposta(usuarioA, usuarioB) {
                 `💞 Nome do casal: **${casal}**`
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     const resposta = { embeds: [embed] };
