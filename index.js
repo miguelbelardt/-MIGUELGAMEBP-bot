@@ -22,6 +22,8 @@ const {
     adicionarXP
 } = require("./database/database");
 
+const { definirBot, nomeBot } = require("./botNome.js");
+
 const logs = require("./comandos/logs");
 const join = require("./comandos/join");
 const leave = require("./comandos/leave");
@@ -55,7 +57,7 @@ const servidor = http.createServer((req, res) => {
         "Content-Type": "text/plain"
     });
 
-    res.end("MIGUELGAMEBP-bot está online! 🤖");
+    res.end(`${nomeBot()} está online! 🤖`);
 });
 
 servidor.listen(PORT, "0.0.0.0", () => {
@@ -2244,6 +2246,8 @@ async function definirPresenca(
 client.once(
     Events.ClientReady,
     async () => {
+
+        definirBot(client);
 
         console.log(
             `🤖 Bot online como ${client.user.tag}`
