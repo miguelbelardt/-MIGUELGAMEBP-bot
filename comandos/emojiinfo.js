@@ -5,6 +5,7 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const COR = 0xFEE75C;
 
@@ -179,7 +180,7 @@ async function criarRespostaPersonalizado(info, guild) {
                 }
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     if (criadoMs) {
@@ -315,7 +316,7 @@ function criarRespostaPadrao(info) {
                 }
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     return { embeds: [embed] };
