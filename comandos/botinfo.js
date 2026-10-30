@@ -3,6 +3,7 @@ const {
     EmbedBuilder,
     AttachmentBuilder
 } = require("discord.js");
+const { nomeBot } = require("../botNome.js");
 
 const os = require("os");
 const fs = require("fs");
@@ -39,7 +40,7 @@ const BANNER_CAMINHO =
 const COR = 0x5865F2;
 
 // =====================================================
-// ✨ BOTS QUE INSPIRARAM O MIGUELGAMEBP
+// ✨ BOTS QUE INSPIRARAM O BOT
 // =====================================================
 // Para trocar ou adicionar, é só mexer nesta lista.
 // Se a menção (@) não aparecer direito no Discord,
@@ -183,7 +184,7 @@ function criarEmbed(client, latenciaResposta, criador) {
             .setColor(COR)
             .setTitle(`🤖 ${bot.username}`)
             .setDescription(
-                `Olá! Eu sou o **MIGUELGAMEBP**, um bot feito por ${criador || CRIADOR_PADRAO} ` +
+                `Olá! Eu sou o **${nomeBot()}**, um bot feito por ${criador || CRIADOR_PADRAO} ` +
                 `para deixar o servidor mais divertido e organizado, com economia, XP, tickets, ` +
                 `sorteios, registro, calls personalizadas, boas-vindas e muito mais.\n\n` +
                 `✨ Fui inspirado em bots incríveis como ${listarInspiracoes()}.`
@@ -264,7 +265,7 @@ function criarEmbed(client, latenciaResposta, criador) {
                 }
             )
             .setFooter({
-                text: "MIGUELGAMEBP-bot"
+                text: nomeBot()
             });
 
     return embed;
