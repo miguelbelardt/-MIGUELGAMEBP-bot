@@ -1558,7 +1558,8 @@ async function mostrarStatus(
 async function registrarLog(
     guild,
     tipo,
-    embed
+    embed,
+    files = []
 ) {
     if (!guild) return;
 
@@ -1584,7 +1585,8 @@ async function registrarLog(
 
     try {
         await canal.send({
-            embeds: [embed]
+            embeds: [embed],
+            files
         });
 
     } catch (erro) {
