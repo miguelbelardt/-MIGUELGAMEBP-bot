@@ -243,7 +243,11 @@ function guardarMensagemRecente(message) {
                             "arquivo",
 
                         url:
-                            anexo.url
+                            anexo.url,
+
+                        tipo:
+                            anexo.contentType ||
+                            ""
                     })
                 )
                 : [],
@@ -356,7 +360,11 @@ function obterDadosMensagemApagada(message) {
                             "arquivo",
 
                         url:
-                            anexo.url
+                            anexo.url,
+
+                        tipo:
+                            anexo.contentType ||
+                            ""
                     })
                 )
                 : [],
@@ -539,6 +547,168 @@ function criarArquivoMensagensApagadas(
 }
 
 // =====================================================
+// 🖼️ IMAGEM NOS LOGS (editada / apagada)
+// =====================================================
+// Mostra a primeira imagem da mensagem dentro do log. O bot
+// baixa a imagem e envia uma cópia junto com o log, porque o
+// link original do Discord expira e some depois de um tempo.
+// Se não conseguir baixar, usa o link original.
+
+const TAMANHO_MAXIMO_IMAGEM_LOG = 8 * 1024 * 1024;
+
+function anexoEhImagem(anexo) {
+
+    if (!anexo?.url) {
+        return false;
+    }
+
+    return (
+        String(anexo.tipo || "")
+            .toLowerCase()
+            .startsWith("image/") ||
+        /\.(png|jpe?g|gif|webp|bmp)$/i
+            .test(String(anexo.nome || ""))
+    );
+}
+
+function urlDoDiscord(url) {
+
+    try {
+
+        const endereco = new URL(url);
+
+        return (
+            endereco.protocol === "https:" &&
+            /(^|\.)(discordapp\.com|discordapp\.net|discord\.com|discordapp\.media)$/i
+                .test(endereco.hostname)
+        );
+
+    } catch {
+        return false;
+    }
+}
+
+async function prepararImagemDoLog(anexos) {
+
+    const imagem =
+        (anexos || []).find(
+            anexoEhImagem
+        );
+
+    if (!imagem) {
+        return {
+            url: null,
+            files: []
+        };
+    }
+
+    try {
+
+        if (!urlDoDiscord(imagem.url)) {
+            throw new Error(
+                "Link de imagem fora do Discord."
+            );
+        }
+
+        const controle =
+            new AbortController();
+
+        const relogio =
+            setTimeout(
+                () => controle.abort(),
+                10000
+            );
+
+        let resposta;
+
+        try {
+
+            resposta =
+                await fetch(
+                    imagem.url,
+                    {
+                        signal:
+                            controle.signal
+                    }
+                );
+
+        } finally {
+            clearTimeout(relogio);
+        }
+
+        if (!resposta.ok) {
+            throw new Error(
+                `HTTP ${resposta.status}`
+            );
+        }
+
+        const tipo =
+            resposta.headers.get(
+                "content-type"
+            ) || "";
+
+        if (!tipo.startsWith("image/")) {
+            throw new Error(
+                "O link não é uma imagem."
+            );
+        }
+
+        const buffer =
+            Buffer.from(
+                await resposta.arrayBuffer()
+            );
+
+        if (
+            buffer.length >
+            TAMANHO_MAXIMO_IMAGEM_LOG
+        ) {
+            throw new Error(
+                "Imagem grande demais."
+            );
+        }
+
+        const extensao =
+            (
+                tipo.split("/")[1] ||
+                "png"
+            )
+                .split(";")[0]
+                .replace("jpeg", "jpg")
+                .replace(/[^a-z0-9]/gi, "") ||
+            "png";
+
+        const nome =
+            `imagem-${Date.now()}.${extensao}`;
+
+        return {
+            url:
+                `attachment://${nome}`,
+
+            files: [
+                new AttachmentBuilder(
+                    buffer,
+                    {
+                        name: nome
+                    }
+                )
+            ]
+        };
+
+    } catch (erro) {
+
+        console.warn(
+            "⚠️ Não consegui copiar a imagem para o log, usando o link original:",
+            erro?.message || erro
+        );
+
+        return {
+            url: imagem.url,
+            files: []
+        };
+    }
+}
+
+// =====================================================
 // 🗑️ ENVIAR LOG DE MENSAGEM APAGADA
 // =====================================================
 
@@ -626,7 +796,9 @@ async function enviarLogMensagemApagada(
                             0,
                             3900
                         )
-                        : "[Conteúdo não disponível]"
+                        : mensagem.anexos?.length > 0
+                            ? "[Sem texto, só anexo]"
+                            : "[Conteúdo não disponível]"
                 }`;
 
             const embed =
@@ -668,10 +840,24 @@ async function enviarLogMensagemApagada(
                 });
             }
 
+            const imagem =
+                await prepararImagemDoLog(
+                    mensagem.anexos
+                );
+
+            if (imagem.url) {
+                embed.setImage(
+                    imagem.url
+                );
+            }
+
             await canal.send({
                 embeds: [
                     embed
-                ]
+                ],
+
+                files:
+                    imagem.files
             });
 
             return;
@@ -1114,10 +1300,39 @@ client.on(
                 );
             }
 
+            const imagem =
+                await prepararImagemDoLog(
+                    mensagemNova.attachments
+                        ? [
+                            ...mensagemNova.attachments.values()
+                        ].map(
+                            anexo => ({
+                                nome:
+                                    anexo.name ||
+                                    "arquivo",
+
+                                url:
+                                    anexo.url,
+
+                                tipo:
+                                    anexo.contentType ||
+                                    ""
+                            })
+                        )
+                        : []
+                );
+
+            if (imagem.url) {
+                embed.setImage(
+                    imagem.url
+                );
+            }
+
             await client.registrarLog(
                 mensagemNova.guild,
                 "mensagens_editadas",
-                embed
+                embed,
+                imagem.files
             );
 
         } catch (erro) {
