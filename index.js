@@ -157,6 +157,7 @@ const client = new Client({
 client.registrarLog = logs.registrarLog;
 criarcall.iniciar(client);
 require("./comandos/youtube").iniciar(client);
+require("./niveis.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
