@@ -14,7 +14,7 @@ const {
     pool,
     getXP,
     adicionarXP
-} = require("./database/database.js");
+} = require("../database/database.js");
 
 let canvasLib = null;
 
