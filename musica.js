@@ -609,8 +609,11 @@ function agendarSaida(fila) {
         );
 }
 
-async function tocarProxima(fila, anunciar = true) {
+async function tocarProxima(fila, anunciar = true, inicioMs = 0) {
     matarProcesso(fila);
+
+    // O áudio antigo (já sem ffmpeg) vai dar "Idle": isso não pode avançar a fila.
+    fila.recurso = null;
 
     const proxima = fila.faixas.shift();
 
@@ -623,6 +626,7 @@ async function tocarProxima(fila, anunciar = true) {
     clearTimeout(fila.relogioInativo);
 
     fila.atual = proxima;
+    fila.inicioMs = inicioMs;
 
     try {
         const ffmpeg = localizarFFmpeg();
@@ -653,8 +657,14 @@ async function tocarProxima(fila, anunciar = true) {
                     "-reconnect", "1",
                     "-reconnect_streamed", "1",
                     "-reconnect_delay_max", "5",
+                    ...(inicioMs > 0
+                        ? ["-ss", String(Math.floor(inicioMs / 1000))]
+                        : []),
                     "-i", endereco,
                     "-vn",
+                    ...(fila.volume !== 100
+                        ? ["-af", `volume=${(fila.volume / 100).toFixed(2)}`]
+                        : []),
                     "-c:a", "libopus",
                     "-b:a", "96k",
                     "-ar", "48000",
@@ -687,6 +697,8 @@ async function tocarProxima(fila, anunciar = true) {
                 console.warn(
                     `⚠️ Música: ffmpeg terminou com erro (${codigo}): ${erroFFmpeg.trim()}`
                 );
+
+                proxima.falhou = true;
 
                 avisar(
                     fila,
@@ -767,7 +779,11 @@ function criarFila(guild, membro, canalTexto) {
         atual: null,
         processo: null,
         recurso: null,
-        relogioInativo: null
+        relogioInativo: null,
+        volume: 100,
+        loop: "off",
+        inicioMs: 0,
+        pulando: false
     };
 
     // Terminou uma faixa: toca a próxima.
@@ -781,7 +797,24 @@ function criarFila(guild, membro, canalTexto) {
         }
 
         if (filas.get(guild.id) === fila && fila.atual) {
-            tocarProxima(fila);
+            const terminada = fila.atual;
+            const foiPulada = fila.pulando;
+            fila.pulando = false;
+
+            let repetindo = false;
+
+            if (!terminada.falhou) {
+                if (fila.loop === "musica" && !foiPulada) {
+                    fila.faixas.unshift(terminada);
+                    repetindo = true;
+                } else if (fila.loop === "fila") {
+                    fila.faixas.push(terminada);
+                    repetindo = fila.faixas.length === 1;
+                }
+            }
+
+            // Repetindo a mesma música: não anuncia de novo.
+            tocarProxima(fila, !repetindo);
         }
     });
 
@@ -1040,6 +1073,7 @@ function pular({ guild, membro }) {
     }
 
     const pulada = fila.atual;
+    fila.pulando = true;
 
     // Para o áudio atual; o evento "Idle" toca a próxima.
     matarProcesso(fila);
@@ -1113,6 +1147,171 @@ function verFila({ guild }) {
             ]
         }
     };
+}
+
+// =====================================================
+// 🔊 VOLUME, LOOP, SHUFFLE E TOCANDO
+// =====================================================
+
+function posicaoMs(fila) {
+    return fila.inicioMs + (fila.recurso?.playbackDuration || 0);
+}
+
+async function volume({ guild, membro, valor }) {
+    const fila = filas.get(guild.id);
+
+    if (!fila || !fila.atual) {
+        return { erro: `${EMOJIS.erro} Não tem nada tocando agora.` };
+    }
+
+    const problema = exigirMesmaCall(membro, fila);
+
+    if (problema) {
+        return { erro: problema };
+    }
+
+    if (valor === undefined || valor === null) {
+        return { resposta: `🔊 Volume atual: **${fila.volume}%**.` };
+    }
+
+    const novo = Math.round(Number(valor));
+
+    if (!Number.isFinite(novo) || novo < 1 || novo > 200) {
+        return { erro: `${EMOJIS.erro} Use um volume entre **1** e **200**.` };
+    }
+
+    fila.volume = novo;
+
+    // O volume vale a partir do próximo trecho: reinicia a música
+    // atual do ponto em que ela está (pode dar um soluço rápido).
+    const estavaPausada =
+        fila.player.state.status === AudioPlayerStatus.Paused ||
+        fila.player.state.status === AudioPlayerStatus.AutoPaused;
+
+    const faixa = fila.atual;
+    const ponto = posicaoMs(fila);
+
+    fila.faixas.unshift(faixa);
+    await tocarProxima(fila, false, ponto);
+
+    if (estavaPausada) {
+        fila.player.pause();
+    }
+
+    return { resposta: `🔊 Volume em **${novo}%**.` };
+}
+
+const NOMES_LOOP = {
+    off: "desligado",
+    musica: "repetindo a música atual",
+    fila: "repetindo a fila toda"
+};
+
+function loop({ guild, membro, modo }) {
+    const fila = filas.get(guild.id);
+
+    if (!fila || !fila.atual) {
+        return { erro: `${EMOJIS.erro} Não tem nada tocando agora.` };
+    }
+
+    const problema = exigirMesmaCall(membro, fila);
+
+    if (problema) {
+        return { erro: problema };
+    }
+
+    const escolhido = String(modo || "").toLowerCase();
+
+    if (!NOMES_LOOP[escolhido]) {
+        return {
+            erro: `${EMOJIS.erro} Use \`off\`, \`musica\` ou \`fila\`.`
+        };
+    }
+
+    fila.loop = escolhido;
+
+    return { resposta: `🔁 Loop: **${NOMES_LOOP[escolhido]}**.` };
+}
+
+function embaralhar({ guild, membro }) {
+    const fila = filas.get(guild.id);
+
+    if (!fila || !fila.atual) {
+        return { erro: `${EMOJIS.erro} Não tem nada tocando agora.` };
+    }
+
+    const problema = exigirMesmaCall(membro, fila);
+
+    if (problema) {
+        return { erro: problema };
+    }
+
+    if (fila.faixas.length < 2) {
+        return {
+            erro: `${EMOJIS.erro} Precisa de pelo menos 2 músicas na fila para embaralhar.`
+        };
+    }
+
+    for (let i = fila.faixas.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [fila.faixas[i], fila.faixas[j]] = [fila.faixas[j], fila.faixas[i]];
+    }
+
+    return {
+        resposta: `🔀 Embaralhei **${fila.faixas.length}** músicas da fila.`
+    };
+}
+
+function barraDeProgresso(atualMs, totalMs, tamanho = 18) {
+    const posicao = Math.min(
+        tamanho - 1,
+        Math.floor((atualMs / totalMs) * tamanho)
+    );
+
+    return "▬".repeat(posicao) + "🔘" + "▬".repeat(tamanho - 1 - posicao);
+}
+
+function tocando({ guild }) {
+    const fila = filas.get(guild.id);
+
+    if (!fila || !fila.atual) {
+        return {
+            erro: `${EMOJIS.musica} Não tem nada tocando agora. Use \`/play\`.`
+        };
+    }
+
+    const faixa = fila.atual;
+    const atual = Math.min(posicaoMs(fila), faixa.duracaoMs || Infinity);
+    const pausada =
+        fila.player.state.status === AudioPlayerStatus.Paused ||
+        fila.player.state.status === AudioPlayerStatus.AutoPaused;
+
+    const proxima = fila.faixas[0];
+
+    const embed =
+        new EmbedBuilder()
+            .setColor(COR)
+            .setTitle(`${pausada ? "⏸️" : EMOJIS.musica} ${pausada ? "Pausada" : "Tocando agora"}`)
+            .setDescription(
+                `${faixa.pagina
+                    ? `[${limpar(faixa.titulo)}](${faixa.pagina})`
+                    : `**${limpar(faixa.titulo)}**`}\n` +
+                `por ${limpar(faixa.autor)}\n\n` +
+                (faixa.duracaoMs
+                    ? `${barraDeProgresso(atual, faixa.duracaoMs)}\n` +
+                      `\`${duracao(atual)} / ${duracao(faixa.duracaoMs)}\`\n\n`
+                    : `▶️ \`${duracao(atual)}\` • duração desconhecida\n\n`) +
+                `🔊 Volume: **${fila.volume}%**  •  🔁 Loop: **${NOMES_LOOP[fila.loop]}**\n` +
+                (proxima
+                    ? `⏭️ Próxima: **${limpar(proxima.titulo)}** (+${fila.faixas.length - 1})`
+                    : `⏭️ Próxima: *nada na fila*`)
+            );
+
+    if (faixa.imagem) {
+        embed.setThumbnail(faixa.imagem);
+    }
+
+    return { resposta: { embeds: [embed] } };
 }
 
 // =====================================================
@@ -1239,6 +1438,10 @@ module.exports = {
     pular,
     parar,
     verFila,
+    volume,
+    loop,
+    embaralhar,
+    tocando,
 
     // para testes
     _teste: {
