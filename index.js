@@ -23,6 +23,7 @@ const {
 } = require("./database/database");
 
 const { definirBot, nomeBot } = require("./botNome.js");
+const { gerarImagemDaMensagem } = require("./imagemMensagem.js");
 
 const logs = require("./comandos/logs");
 const join = require("./comandos/join");
@@ -228,6 +229,20 @@ function guardarMensagemRecente(message) {
             message.author?.username ||
             "Usuário desconhecido",
 
+        autorExibicao:
+            message.member?.displayName ||
+            message.author?.globalName ||
+            message.author?.username ||
+            "Usuário desconhecido",
+
+        autorAvatar:
+            message.author?.displayAvatarURL
+                ? message.author.displayAvatarURL({
+                    extension: "png",
+                    size: 128
+                })
+                : null,
+
         conteudo:
             message.content ||
             "",
@@ -344,6 +359,20 @@ function obterDadosMensagemApagada(message) {
         autorNome:
             message.author?.username ||
             "Usuário desconhecido",
+
+        autorExibicao:
+            message.member?.displayName ||
+            message.author?.globalName ||
+            message.author?.username ||
+            "Usuário desconhecido",
+
+        autorAvatar:
+            message.author?.displayAvatarURL
+                ? message.author.displayAvatarURL({
+                    extension: "png",
+                    size: 128
+                })
+                : null,
 
         conteudo:
             message.content ||
@@ -547,168 +576,6 @@ function criarArquivoMensagensApagadas(
 }
 
 // =====================================================
-// 🖼️ IMAGEM NOS LOGS (editada / apagada)
-// =====================================================
-// Mostra a primeira imagem da mensagem dentro do log. O bot
-// baixa a imagem e envia uma cópia junto com o log, porque o
-// link original do Discord expira e some depois de um tempo.
-// Se não conseguir baixar, usa o link original.
-
-const TAMANHO_MAXIMO_IMAGEM_LOG = 8 * 1024 * 1024;
-
-function anexoEhImagem(anexo) {
-
-    if (!anexo?.url) {
-        return false;
-    }
-
-    return (
-        String(anexo.tipo || "")
-            .toLowerCase()
-            .startsWith("image/") ||
-        /\.(png|jpe?g|gif|webp|bmp)$/i
-            .test(String(anexo.nome || ""))
-    );
-}
-
-function urlDoDiscord(url) {
-
-    try {
-
-        const endereco = new URL(url);
-
-        return (
-            endereco.protocol === "https:" &&
-            /(^|\.)(discordapp\.com|discordapp\.net|discord\.com|discordapp\.media)$/i
-                .test(endereco.hostname)
-        );
-
-    } catch {
-        return false;
-    }
-}
-
-async function prepararImagemDoLog(anexos) {
-
-    const imagem =
-        (anexos || []).find(
-            anexoEhImagem
-        );
-
-    if (!imagem) {
-        return {
-            url: null,
-            files: []
-        };
-    }
-
-    try {
-
-        if (!urlDoDiscord(imagem.url)) {
-            throw new Error(
-                "Link de imagem fora do Discord."
-            );
-        }
-
-        const controle =
-            new AbortController();
-
-        const relogio =
-            setTimeout(
-                () => controle.abort(),
-                10000
-            );
-
-        let resposta;
-
-        try {
-
-            resposta =
-                await fetch(
-                    imagem.url,
-                    {
-                        signal:
-                            controle.signal
-                    }
-                );
-
-        } finally {
-            clearTimeout(relogio);
-        }
-
-        if (!resposta.ok) {
-            throw new Error(
-                `HTTP ${resposta.status}`
-            );
-        }
-
-        const tipo =
-            resposta.headers.get(
-                "content-type"
-            ) || "";
-
-        if (!tipo.startsWith("image/")) {
-            throw new Error(
-                "O link não é uma imagem."
-            );
-        }
-
-        const buffer =
-            Buffer.from(
-                await resposta.arrayBuffer()
-            );
-
-        if (
-            buffer.length >
-            TAMANHO_MAXIMO_IMAGEM_LOG
-        ) {
-            throw new Error(
-                "Imagem grande demais."
-            );
-        }
-
-        const extensao =
-            (
-                tipo.split("/")[1] ||
-                "png"
-            )
-                .split(";")[0]
-                .replace("jpeg", "jpg")
-                .replace(/[^a-z0-9]/gi, "") ||
-            "png";
-
-        const nome =
-            `imagem-${Date.now()}.${extensao}`;
-
-        return {
-            url:
-                `attachment://${nome}`,
-
-            files: [
-                new AttachmentBuilder(
-                    buffer,
-                    {
-                        name: nome
-                    }
-                )
-            ]
-        };
-
-    } catch (erro) {
-
-        console.warn(
-            "⚠️ Não consegui copiar a imagem para o log, usando o link original:",
-            erro?.message || erro
-        );
-
-        return {
-            url: imagem.url,
-            files: []
-        };
-    }
-}
-
-// =====================================================
 // 🗑️ ENVIAR LOG DE MENSAGEM APAGADA
 // =====================================================
 
@@ -840,15 +707,83 @@ async function enviarLogMensagemApagada(
                 });
             }
 
-            const imagem =
-                await prepararImagemDoLog(
-                    mensagem.anexos
-                );
+            // Só gera o "print" se a gente sabe algo da mensagem.
+            const arquivos = [];
 
-            if (imagem.url) {
-                embed.setImage(
-                    imagem.url
-                );
+            if (
+                mensagem.autorId ||
+                mensagem.conteudo ||
+                mensagem.anexos?.length > 0
+            ) {
+
+                const imagem =
+                    await gerarImagemDaMensagem({
+                        tipo:
+                            "apagada",
+
+                        guildNome:
+                            mensagem.guildNome,
+
+                        canalNome:
+                            mensagem.canalNome,
+
+                        autor: {
+                            id:
+                                mensagem.autorId,
+
+                            nome:
+                                mensagem.autorExibicao ||
+                                mensagem.autorNome,
+
+                            avatar:
+                                mensagem.autorAvatar
+                        },
+
+                        ids: {
+                            usuario:
+                                mensagem.autorId,
+
+                            servidor:
+                                mensagem.guildId,
+
+                            canal:
+                                mensagem.canalId,
+
+                            mensagem:
+                                mensagem.id
+                        },
+
+                        mensagens: [{
+                            conteudo:
+                                mensagem.conteudo,
+
+                            criadoEm:
+                                mensagem.criadoEm,
+
+                            anexos:
+                                mensagem.anexos
+                        }],
+
+                        nomeBot:
+                            nomeBot()
+                    });
+
+                if (imagem) {
+
+                    arquivos.push(
+                        new AttachmentBuilder(
+                            imagem,
+                            {
+                                name:
+                                    "mensagem.png"
+                            }
+                        )
+                    );
+
+                    embed.setImage(
+                        "attachment://mensagem.png"
+                    );
+                }
             }
 
             await canal.send({
@@ -857,7 +792,7 @@ async function enviarLogMensagemApagada(
                 ],
 
                 files:
-                    imagem.files
+                    arquivos
             });
 
             return;
@@ -1300,31 +1235,114 @@ client.on(
                 );
             }
 
+            const arquivos = [];
+
             const imagem =
-                await prepararImagemDoLog(
-                    mensagemNova.attachments
-                        ? [
-                            ...mensagemNova.attachments.values()
-                        ].map(
-                            anexo => ({
-                                nome:
-                                    anexo.name ||
-                                    "arquivo",
+                await gerarImagemDaMensagem({
+                    tipo:
+                        "editada",
 
-                                url:
-                                    anexo.url,
+                    guildNome:
+                        mensagemNova.guild.name,
 
-                                tipo:
-                                    anexo.contentType ||
-                                    ""
+                    canalNome:
+                        mensagemNova.channel?.name,
+
+                    autor: {
+                        id:
+                            mensagemNova.author.id,
+
+                        nome:
+                            mensagemNova.member?.displayName ||
+                            mensagemNova.author.globalName ||
+                            mensagemNova.author.username,
+
+                        avatar:
+                            mensagemNova.author.displayAvatarURL({
+                                extension: "png",
+                                size: 128
                             })
-                        )
-                        : []
+                    },
+
+                    ids: {
+                        usuario:
+                            mensagemNova.author.id,
+
+                        servidor:
+                            mensagemNova.guild.id,
+
+                        canal:
+                            mensagemNova.channel?.id,
+
+                        mensagem:
+                            mensagemNova.id
+                    },
+
+                    mensagens: [
+                        {
+                            rotulo:
+                                "ANTES",
+
+                            conteudo:
+                                conteudoAntigo,
+
+                            criadoEm:
+                                mensagemNova.createdTimestamp,
+
+                            anexos:
+                                []
+                        },
+                        {
+                            rotulo:
+                                "DEPOIS",
+
+                            conteudo:
+                                conteudoNovo,
+
+                            criadoEm:
+                                mensagemNova.editedTimestamp ||
+                                Date.now(),
+
+                            anexos:
+                                mensagemNova.attachments
+                                    ? [
+                                        ...mensagemNova.attachments.values()
+                                    ].map(
+                                        anexo => ({
+                                            nome:
+                                                anexo.name ||
+                                                "arquivo",
+
+                                            url:
+                                                anexo.url,
+
+                                            tipo:
+                                                anexo.contentType ||
+                                                ""
+                                        })
+                                    )
+                                    : []
+                        }
+                    ],
+
+                    nomeBot:
+                        nomeBot()
+                });
+
+            if (imagem) {
+
+                arquivos.push(
+                    new AttachmentBuilder(
+                        imagem,
+                        {
+                            name:
+                                "mensagem.png"
+                        }
+                    )
                 );
 
-            if (imagem.url) {
                 embed.setImage(
-                    imagem.url
+                    "attachment://mensagem.png"
                 );
             }
 
@@ -1332,7 +1350,7 @@ client.on(
                 mensagemNova.guild,
                 "mensagens_editadas",
                 embed,
-                imagem.files
+                arquivos
             );
 
         } catch (erro) {
