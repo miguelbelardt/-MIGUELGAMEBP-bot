@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js");
-const niveis = require("./niveis.js");
+const niveis = require("../niveis.js");
 const emojis = require("../emojis.js");
 
 module.exports = {
