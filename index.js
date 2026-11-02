@@ -158,6 +158,7 @@ client.registrarLog = logs.registrarLog;
 criarcall.iniciar(client);
 require("./comandos/youtube").iniciar(client);
 require("./niveis.js").iniciar(client);
+require("./utilidade.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
