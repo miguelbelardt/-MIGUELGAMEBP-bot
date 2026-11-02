@@ -147,7 +147,8 @@ const SECOES = [
             embed: "Cria e gerencia embeds.",
             join: "Configura as boas-vindas.",
             leave: "Configura a mensagem de saída.",
-            logs: "Configura os logs do servidor."
+            logs: "Configura os logs do servidor.",
+            contador: "Canal que mostra membros, bots ou canais do servidor."
         }
     },
     {
