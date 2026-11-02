@@ -1,14 +1,7 @@
-const {
-    SlashCommandBuilder,
-    EmbedBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
-} = require("discord.js");
+const { SlashCommandBuilder } = require("discord.js");
 
-const {
-    getRankingMoedasPaginado
-} = require("../database/database");
+const { getRankingMoedasPaginado } = require("../database/database");
+const { abrirRanking } = require("../rankingImagem.js");
 
 const LIMITE_POR_PAGINA = 10;
 
@@ -16,373 +9,100 @@ const LIMITE_POR_PAGINA = 10;
 // 😀 EMOJIS DO RANKING
 // ================================================
 // Emojis usados em vários comandos vêm de emojis.js (troque lá).
-// Os outros ficam aqui: para trocar, coloque o código do emoji
-// (use /emojiinfo) ou um emoji normal.
 
 const emojis = require("../emojis.js");
 
 const EMOJIS = {
-    ranking: emojis.ranking,
-    moedas: emojis.moedas,
     erro: emojis.erro
 };
 
 // ================================================
-// 🏆 CRIAR EMBED DO RANKING
-// ================================================
-
-function criarEmbed(resultado, tipo) {
-
-    const ranking = resultado.ranking;
-    const usuario = resultado.usuario;
-
-    const linhas = [];
-
-    for (const pessoa of ranking) {
-
-        let medalha;
-
-        if (pessoa.posicao === 1) {
-            medalha = "🥇";
-        } else if (pessoa.posicao === 2) {
-            medalha = "🥈";
-        } else if (pessoa.posicao === 3) {
-            medalha = "🥉";
-        } else {
-            medalha = `**${pessoa.posicao}.**`;
-        }
-
-        linhas.push(
-            `${medalha} <@${pessoa.id}> — **${pessoa.saldo.toLocaleString("pt-BR")} moedas**`
-        );
-    }
-
-    let texto = linhas.length
-        ? linhas.join("\n")
-        : `${EMOJIS.erro} Nenhum usuário encontrado.`;
-
-    if (usuario.posicao) {
-
-        const inicioPagina =
-            (resultado.pagina - 1) *
-            LIMITE_POR_PAGINA + 1;
-
-        const fimPagina =
-            resultado.pagina *
-            LIMITE_POR_PAGINA;
-
-        const usuarioEstaNaPagina =
-            usuario.posicao >= inicioPagina &&
-            usuario.posicao <= fimPagina;
-
-        if (!usuarioEstaNaPagina) {
-
-            texto +=
-                `\n\n━━━━━━━━━━━━━━━━━━\n` +
-                `📍 **Sua posição:** ${usuario.posicao}º\n` +
-                `${EMOJIS.moedas} **Suas moedas:** ${usuario.saldo.toLocaleString("pt-BR")}`;
-        }
-    }
-
-    const nomeTipo =
-        tipo === "local"
-            ? "🏠 RANKING LOCAL"
-            : "🌎 RANKING GLOBAL";
-
-    return new EmbedBuilder()
-        .setColor(0xFEE75C)
-        .setTitle(`${EMOJIS.ranking} ${nomeTipo}`)
-        .setDescription(texto)
-        .setFooter({
-            text:
-                `Página ${resultado.pagina}/${resultado.totalPaginas} • ` +
-                `${resultado.totalUsuarios} usuários`
-        });
-}
-
-// ================================================
-// 🔘 CRIAR BOTÕES
-// ================================================
-
-function criarBotoes(resultado, tipo, userId) {
-
-    const pagina = resultado.pagina;
-    const totalPaginas = resultado.totalPaginas;
-
-    return new ActionRowBuilder().addComponents(
-
-        new ButtonBuilder()
-            .setCustomId(
-                `moedas_anterior_${userId}`
-            )
-            .setLabel("Voltar")
-            .setEmoji("◀️")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(pagina <= 1),
-
-        new ButtonBuilder()
-            .setCustomId(
-                `moedas_global_${userId}`
-            )
-            .setLabel("Global")
-            .setEmoji("🌎")
-            .setStyle(
-                tipo === "global"
-                    ? ButtonStyle.Primary
-                    : ButtonStyle.Secondary
-            ),
-
-        new ButtonBuilder()
-            .setCustomId(
-                `moedas_local_${userId}`
-            )
-            .setLabel("Local")
-            .setEmoji("🏠")
-            .setStyle(
-                tipo === "local"
-                    ? ButtonStyle.Primary
-                    : ButtonStyle.Secondary
-            ),
-
-        new ButtonBuilder()
-            .setCustomId(
-                `moedas_proxima_${userId}`
-            )
-            .setLabel("Próxima")
-            .setEmoji("▶️")
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(pagina >= totalPaginas)
-    );
-}
-
-// ================================================
-// 👥 PEGAR USUÁRIOS DO SERVIDOR
+// 👥 USUÁRIOS DO SERVIDOR (para o ranking local)
 // ================================================
 
 async function pegarUsuariosServidor(guild) {
-
-    if (!guild) {
-        return [];
-    }
+    if (!guild) return [];
 
     try {
-
         await guild.members.fetch();
-
-        return [
-            ...guild.members.cache
-                .filter(member => !member.user.bot)
-                .keys()
-        ];
-
     } catch (erro) {
-
-        console.error(
-            "❌ Erro ao buscar membros do servidor:",
-            erro
-        );
-
-        return [
-            ...guild.members.cache
-                .filter(member => !member.user.bot)
-                .keys()
-        ];
+        console.error("❌ Erro ao buscar membros do servidor:", erro);
     }
+
+    return [
+        ...guild.members.cache
+            .filter(membro => !membro.user.bot)
+            .keys()
+    ];
 }
 
 // ================================================
-// 📊 CARREGAR RANKING
+// 📊 CARREGAR UMA PÁGINA
 // ================================================
 
-async function carregarRanking(
-    userId,
-    guild,
-    tipo,
-    pagina
-) {
+function criarCarregador(userId, guild) {
+    return async (tipo, pagina) => {
+        let usuariosServidor = [];
 
-    let usuariosServidor = [];
+        if (tipo === "local") {
+            usuariosServidor = await pegarUsuariosServidor(guild);
 
-    if (tipo === "local") {
-
-        usuariosServidor =
-            await pegarUsuariosServidor(guild);
-
-        if (
-            !usuariosServidor.includes(userId)
-        ) {
-            usuariosServidor.push(userId);
+            if (!usuariosServidor.includes(userId)) {
+                usuariosServidor.push(userId);
+            }
         }
-    }
 
-    return await getRankingMoedasPaginado(
+        const r = await getRankingMoedasPaginado(
+            userId,
+            tipo,
+            usuariosServidor,
+            pagina,
+            LIMITE_POR_PAGINA
+        );
+
+        // Mostra "sua posição" só se você não está nesta página
+        let voce = null;
+
+        if (r.usuario && r.usuario.posicao) {
+            const inicio = (r.pagina - 1) * LIMITE_POR_PAGINA + 1;
+            const fim = r.pagina * LIMITE_POR_PAGINA;
+
+            if (r.usuario.posicao < inicio || r.usuario.posicao > fim) {
+                voce = {
+                    id: userId,
+                    posicao: r.usuario.posicao,
+                    valor: r.usuario.saldo
+                };
+            }
+        }
+
+        return {
+            linhas: r.ranking.map(p => ({
+                id: p.id,
+                posicao: p.posicao,
+                valor: p.saldo
+            })),
+            pagina: r.pagina,
+            totalPaginas: r.totalPaginas,
+            total: r.totalUsuarios,
+            voce
+        };
+    };
+}
+
+function opcoesDoRanking(client, userId, guild, tipo, enviar) {
+    return {
+        client,
         userId,
         tipo,
-        usuariosServidor,
-        pagina,
-        LIMITE_POR_PAGINA
-    );
-}
-
-// ================================================
-// 🔄 PROCESSAR BOTÃO
-// ================================================
-
-async function processarBotao(
-    botao,
-    estado,
-    userId,
-    guild
-) {
-
-    if (botao.user.id !== userId) {
-        return botao.reply({
-            content:
-                `${EMOJIS.erro} Esse ranking pertence a outra pessoa.`,
-            ephemeral: true
-        });
-    }
-
-    try {
-
-        const partes =
-            botao.customId.split("_");
-
-        const acao =
-            partes[1];
-
-        let novoTipo =
-            estado.tipo;
-
-        let novaPagina =
-            estado.pagina;
-
-        // ================================
-        // ◀️ VOLTAR
-        // ================================
-
-        if (acao === "anterior") {
-
-            novaPagina =
-                Math.max(
-                    1,
-                    estado.pagina - 1
-                );
-        }
-
-        // ================================
-        // ▶️ PRÓXIMA
-        // ================================
-
-        else if (acao === "proxima") {
-
-            novaPagina =
-                Math.min(
-                    estado.totalPaginas,
-                    estado.pagina + 1
-                );
-        }
-
-        // ================================
-        // 🌎 GLOBAL
-        // ================================
-
-        else if (acao === "global") {
-
-            novoTipo = "global";
-            novaPagina = 1;
-        }
-
-        // ================================
-        // 🏠 LOCAL
-        // ================================
-
-        else if (acao === "local") {
-
-            novoTipo = "local";
-            novaPagina = 1;
-        }
-
-        // ================================
-        // 📊 CARREGAR NOVO RANKING
-        // ================================
-
-        const novoResultado =
-            await carregarRanking(
-                userId,
-                guild,
-                novoTipo,
-                novaPagina
-            );
-
-        if (
-            novoResultado.ranking.length === 0
-        ) {
-
-            return botao.update({
-                content:
-                    `${EMOJIS.erro} Ainda não existem usuários no ranking.`,
-                embeds: [],
-                components: []
-            });
-        }
-
-        // Atualizar estado
-        estado.tipo =
-            novoTipo;
-
-        estado.pagina =
-            novoResultado.pagina;
-
-        estado.totalPaginas =
-            novoResultado.totalPaginas;
-
-        estado.totalUsuarios =
-            novoResultado.totalUsuarios;
-
-        // ================================
-        // 🏆 NOVO EMBED
-        // ================================
-
-        const novoEmbed =
-            criarEmbed(
-                novoResultado,
-                novoTipo
-            );
-
-        // ================================
-        // 🔘 NOVOS BOTÕES
-        // ================================
-
-        const novosBotoes =
-            criarBotoes(
-                novoResultado,
-                novoTipo,
-                userId
-            );
-
-        await botao.update({
-            content: null,
-            embeds: [novoEmbed],
-            components: [novosBotoes]
-        });
-
-    } catch (erro) {
-
-        console.error(
-            "❌ Erro ao atualizar ranking:",
-            erro
-        );
-
-        if (!botao.replied) {
-
-            await botao.reply({
-                content:
-                    `${EMOJIS.erro} Não foi possível atualizar o ranking.`,
-                ephemeral: true
-            });
-        }
-    }
+        prefixo: "moedas",
+        titulo: "Ranking de Moedas",
+        cor: 0xFEE75C,
+        corDestaque: "#f1c40f",
+        formatarValor: v => `${Number(v).toLocaleString("pt-BR")} moedas`,
+        carregar: criarCarregador(userId, guild),
+        enviar
+    };
 }
 
 // ================================================
@@ -390,369 +110,88 @@ async function processarBotao(
 // ================================================
 
 module.exports = {
-
     data: new SlashCommandBuilder()
         .setName("moedas-ranking")
-        .setDescription(
-            "Veja o ranking de usuários com mais moedas! 🏆"
-        )
+        .setDescription("Veja o ranking de usuários com mais moedas! 🏆")
         .addStringOption(option =>
             option
                 .setName("tipo")
-                .setDescription(
-                    "Escolha entre ranking local ou global."
-                )
+                .setDescription("Escolha entre ranking local ou global.")
                 .setRequired(false)
                 .addChoices(
-                    {
-                        name: "🏠 Local",
-                        value: "local"
-                    },
-                    {
-                        name: "🌎 Global",
-                        value: "global"
-                    }
+                    { name: "🏠 Local", value: "local" },
+                    { name: "🌎 Global", value: "global" }
                 )
         ),
 
-    // ================================================
-    // /moedas-ranking
-    // ================================================
-
     async execute(interaction) {
-
         try {
-
             if (!interaction.guild) {
                 return interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`,
+                    content: `${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`,
                     ephemeral: true
                 });
             }
 
-            let tipo =
-                interaction.options.getString("tipo") ||
-                "global";
+            // Montar a imagem pode passar de 3 segundos
+            await interaction.deferReply();
 
-            let resultado =
-                await carregarRanking(
+            const r = await abrirRanking(
+                opcoesDoRanking(
+                    interaction.client,
                     interaction.user.id,
                     interaction.guild,
-                    tipo,
-                    1
-                );
+                    interaction.options.getString("tipo") || "global",
+                    dados => interaction.editReply(dados)
+                )
+            );
 
-            if (resultado.ranking.length === 0) {
-                return interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Ainda não existem usuários no ranking.`,
-                    ephemeral: true
-                });
+            if (r.vazio) {
+                await interaction.editReply(`${EMOJIS.erro} Ainda não existem usuários no ranking.`);
             }
 
-            const embed =
-                criarEmbed(
-                    resultado,
-                    tipo
-                );
-
-            const botoes =
-                criarBotoes(
-                    resultado,
-                    tipo,
-                    interaction.user.id
-                );
-
-            const resposta =
-                await interaction.reply({
-                    embeds: [embed],
-                    components: [botoes],
-                    fetchReply: true
-                });
-
-            const estado = {
-                tipo,
-                pagina: resultado.pagina,
-                totalPaginas: resultado.totalPaginas,
-                totalUsuarios: resultado.totalUsuarios
-            };
-
-            const collector =
-                resposta.createMessageComponentCollector({
-                    time: 5 * 60 * 1000
-                });
-
-            collector.on(
-                "collect",
-                async botao => {
-
-                    await processarBotao(
-                        botao,
-                        estado,
-                        interaction.user.id,
-                        interaction.guild
-                    );
-                }
-            );
-
-            collector.on(
-                "end",
-                async () => {
-
-                    try {
-
-                        const mensagem =
-                            await interaction.fetchReply();
-
-                        const botoesDesativados =
-                            new ActionRowBuilder().addComponents(
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_anterior_expirado"
-                                    )
-                                    .setLabel("Voltar")
-                                    .setEmoji("◀️")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true),
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_global_expirado"
-                                    )
-                                    .setLabel("Global")
-                                    .setEmoji("🌎")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true),
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_local_expirado"
-                                    )
-                                    .setLabel("Local")
-                                    .setEmoji("🏠")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true),
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_proxima_expirado"
-                                    )
-                                    .setLabel("Próxima")
-                                    .setEmoji("▶️")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true)
-                            );
-
-                        await mensagem.edit({
-                            components: [
-                                botoesDesativados
-                            ]
-                        });
-
-                    } catch (erro) {
-                        // Mensagem pode ter sido apagada
-                    }
-                }
-            );
-
         } catch (erro) {
+            console.error("❌ Erro no ranking de moedas:", erro);
 
-            console.error(
-                "❌ Erro no ranking de moedas:",
-                erro
-            );
+            const aviso = `${EMOJIS.erro} Não foi possível carregar o ranking.`;
 
-            if (
-                !interaction.replied &&
-                !interaction.deferred
-            ) {
-
-                await interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Não foi possível carregar o ranking.`,
-                    ephemeral: true
-                });
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: aviso, embeds: [], files: [], components: [] }).catch(() => { });
+            } else {
+                await interaction.reply({ content: aviso, ephemeral: true }).catch(() => { });
             }
         }
     },
 
-    // ================================================
-    // mmoedas-ranking
-    // ================================================
-
     async handlePrefix(message, args) {
-
         try {
-
             if (!message.guild) {
-                return message.reply(
-                    `${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`
-                );
+                return message.reply(`${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`);
             }
 
-            const argumento =
-                args?.[0]?.toLowerCase();
+            const argumento = args?.[0]?.toLowerCase();
+            const tipo = argumento === "local" || argumento === "l" ? "local" : "global";
 
-            let tipo = "global";
+            await message.channel.sendTyping().catch(() => { });
 
-            if (
-                argumento === "local" ||
-                argumento === "l"
-            ) {
-                tipo = "local";
-            }
-
-            if (
-                argumento === "global" ||
-                argumento === "g"
-            ) {
-                tipo = "global";
-            }
-
-            let resultado =
-                await carregarRanking(
+            const r = await abrirRanking(
+                opcoesDoRanking(
+                    message.client,
                     message.author.id,
                     message.guild,
                     tipo,
-                    1
-                );
+                    dados => message.reply(dados)
+                )
+            );
 
-            if (resultado.ranking.length === 0) {
-                return message.reply(
-                    `${EMOJIS.erro} Ainda não existem usuários no ranking.`
-                );
+            if (r.vazio) {
+                await message.reply(`${EMOJIS.erro} Ainda não existem usuários no ranking.`);
             }
 
-            const embed =
-                criarEmbed(
-                    resultado,
-                    tipo
-                );
-
-            const botoes =
-                criarBotoes(
-                    resultado,
-                    tipo,
-                    message.author.id
-                );
-
-            const resposta =
-                await message.reply({
-                    embeds: [embed],
-                    components: [botoes]
-                });
-
-            const estado = {
-                tipo,
-                pagina: resultado.pagina,
-                totalPaginas: resultado.totalPaginas,
-                totalUsuarios: resultado.totalUsuarios
-            };
-
-            const collector =
-                resposta.createMessageComponentCollector({
-                    time: 5 * 60 * 1000
-                });
-
-            collector.on(
-                "collect",
-                async botao => {
-
-                    await processarBotao(
-                        botao,
-                        estado,
-                        message.author.id,
-                        message.guild
-                    );
-                }
-            );
-
-            collector.on(
-                "end",
-                async () => {
-
-                    try {
-
-                        const botoesDesativados =
-                            new ActionRowBuilder().addComponents(
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_anterior_expirado"
-                                    )
-                                    .setLabel("Voltar")
-                                    .setEmoji("◀️")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true),
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_global_expirado"
-                                    )
-                                    .setLabel("Global")
-                                    .setEmoji("🌎")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true),
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_local_expirado"
-                                    )
-                                    .setLabel("Local")
-                                    .setEmoji("🏠")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true),
-
-                                new ButtonBuilder()
-                                    .setCustomId(
-                                        "moedas_proxima_expirado"
-                                    )
-                                    .setLabel("Próxima")
-                                    .setEmoji("▶️")
-                                    .setStyle(
-                                        ButtonStyle.Secondary
-                                    )
-                                    .setDisabled(true)
-                            );
-
-                        await resposta.edit({
-                            components: [
-                                botoesDesativados
-                            ]
-                        });
-
-                    } catch (erro) {
-                        // Mensagem pode ter sido apagada
-                    }
-                }
-            );
-
         } catch (erro) {
+            console.error("❌ Erro no ranking de moedas por prefixo:", erro);
 
-            console.error(
-                "❌ Erro no ranking de moedas por prefixo:",
-                erro
-            );
-
-            await message.reply(
-                `${EMOJIS.erro} Não foi possível carregar o ranking.`
-            );
+            await message.reply(`${EMOJIS.erro} Não foi possível carregar o ranking.`).catch(() => { });
         }
     }
 };
