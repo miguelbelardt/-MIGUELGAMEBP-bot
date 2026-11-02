@@ -26,6 +26,7 @@ const EMOJIS = {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("sair-call")
         .setDescription("Faz o bot sair do canal de voz."),
 

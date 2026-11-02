@@ -1858,6 +1858,7 @@ async function registrarMensagensApagadas(
 module.exports = {
 
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("logs")
         .setDescription(
             "Configura o sistema de logs."

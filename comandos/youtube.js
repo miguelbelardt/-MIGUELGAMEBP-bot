@@ -896,6 +896,7 @@ async function testar(interaction) {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("youtube")
         .setDescription(
             "Avisa no servidor quando um canal do YouTube posta vídeo novo."

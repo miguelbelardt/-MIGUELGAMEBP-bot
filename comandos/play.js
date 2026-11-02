@@ -6,6 +6,7 @@ const musica = require("../musica.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("play")
         .setDescription(
             "Toca uma música do SoundCloud (nome ou link) ou um link de áudio."

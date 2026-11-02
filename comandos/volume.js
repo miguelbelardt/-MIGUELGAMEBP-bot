@@ -3,6 +3,7 @@ const musica = require("../musica.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("volume")
         .setDescription("Muda o volume da música (1 a 200).")
         .addIntegerOption(opcao =>

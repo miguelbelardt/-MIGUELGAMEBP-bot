@@ -19,6 +19,7 @@ const EMOJIS = {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("say")
         .setDescription("Faz o bot enviar uma mensagem.")
         .addStringOption(option =>

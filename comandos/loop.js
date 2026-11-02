@@ -3,6 +3,7 @@ const musica = require("../musica.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("loop")
         .setDescription("Repete a música atual ou a fila toda.")
         .addStringOption(opcao =>

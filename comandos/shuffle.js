@@ -3,6 +3,7 @@ const musica = require("../musica.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("shuffle")
         .setDescription("Embaralha a ordem das músicas da fila."),
 

@@ -2609,6 +2609,7 @@ module.exports = {
 
     data:
         new SlashCommandBuilder()
+        .setDMPermission(false)
             .setName("ticket")
             .setDescription(
                 "Configura o sistema de tickets"

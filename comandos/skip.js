@@ -6,6 +6,7 @@ const musica = require("../musica.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("skip")
         .setDescription(
             "Pula para a próxima música da fila."

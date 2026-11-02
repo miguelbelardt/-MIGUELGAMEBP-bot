@@ -5394,6 +5394,7 @@ async function handleInteraction(interaction) {
 
 const data =
     new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("registrar")
         .setDescription(
             "Cria e configura o sistema de registro do servidor."

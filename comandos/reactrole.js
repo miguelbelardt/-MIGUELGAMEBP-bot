@@ -20,6 +20,7 @@ const { mysqlPool } = require("../database/database");
 // =====================================================
 
 const data = new SlashCommandBuilder()
+        .setDMPermission(false)
     .setName("reactrole")
     .setDescription(
         "Sistema de configuração de Reaction Role."

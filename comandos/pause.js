@@ -6,6 +6,7 @@ const musica = require("../musica.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("pause")
         .setDescription(
             "Pausa a música que está tocando."

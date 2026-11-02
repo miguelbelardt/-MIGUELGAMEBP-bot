@@ -497,6 +497,7 @@ async function criarResposta(usuarioBase, guild) {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("membroinfo")
         .setDescription(
             "Veja as informações de um membro e do perfil dele. 👤"

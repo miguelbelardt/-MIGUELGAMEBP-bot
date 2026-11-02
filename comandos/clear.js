@@ -6,6 +6,7 @@ const {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("clear")
         .setDescription("Apaga mensagens do canal.")
         .addIntegerOption(option =>

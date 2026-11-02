@@ -136,6 +136,7 @@ async function abrir(origem, enviar) {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("tocando")
         .setDescription("Mostra a música que está tocando agora. 🎵"),
 

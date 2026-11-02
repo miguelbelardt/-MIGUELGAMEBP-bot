@@ -345,6 +345,7 @@ async function escolherServidor(client, idPedido, usuarioId, guildAtual) {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDMPermission(false)
         .setName("serverinfo")
         .setDescription("Veja informações do servidor. 🏰")
         .addStringOption(option =>

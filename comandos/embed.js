@@ -1048,6 +1048,7 @@ function isAdmin(interaction) {
 module.exports = {
     data:
         new SlashCommandBuilder()
+        .setDMPermission(false)
             .setName("embed")
             .setDescription(
                 "Abre o painel para criar e gerenciar embeds."
