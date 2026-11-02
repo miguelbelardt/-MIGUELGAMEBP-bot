@@ -39,6 +39,10 @@ const SECOES = [
             skip: "Pula para a próxima música da fila.",
             stop: "Para tudo, limpa a fila e sai da call.",
             fila: "Mostra a fila de músicas.",
+            tocando: "Mostra a música atual, com barra de progresso e botões.",
+            volume: "Muda o volume da música (1 a 200).",
+            loop: "Repete a música atual ou a fila toda.",
+            shuffle: "Embaralha a ordem das músicas da fila.",
             "entrar-call": "Faz o bot entrar em um canal de voz.",
             "sair-call": "Faz o bot sair do canal de voz."
         }
@@ -53,7 +57,8 @@ const SECOES = [
             membroinfo: "Informações e perfil de um membro.",
             botinfo: "Informações sobre o bot.",
             emojiinfo: "Detalhes de um emoji.",
-            idcomando: "Mostra o ID de um Slash Command."
+            idcomando: "Mostra o ID de um Slash Command.",
+            avatar: "Mostra o avatar de alguém em tamanho grande."
         }
     },
     {
@@ -70,7 +75,14 @@ const SECOES = [
             premium: "Compra ou renova o premium.",
             xp: "Mostra o XP de um usuário.",
             "ver-xp": "Mostra o XP de um usuário.",
-            "xp-ranking": "Ranking de XP do servidor."
+            "xp-ranking": "Ranking de XP, global ou do servidor.",
+            rank: "Seu nível, XP e posição, em imagem.",
+            perfil: "Seu perfil com nível, moedas e premium.",
+            trabalhar: "Trabalhe para ganhar moedas (1 vez por hora).",
+            loja: "Veja e compre itens da loja.",
+            comprar: "Compra um item da loja.",
+            inventario: "Veja os itens de um inventário.",
+            usar: "Usa um item do seu inventário."
         }
     },
     {
@@ -93,7 +105,23 @@ const SECOES = [
             ppt: "Pedra, Papel e Tesoura contra o bot.",
             pptduo: "Desafia alguém para Pedra, Papel e Tesoura.",
             ship: "Chance de duas pessoas darem match.",
-            sorteio: "Cria e gerencia sorteios."
+            sorteio: "Cria e gerencia sorteios.",
+            "8ball": "Faça uma pergunta para a bola 8 mágica.",
+            dado: "Rola um ou mais dados.",
+            casar: "Peça alguém em casamento (gasta 1 anel da loja).",
+            divorciar: "Termina o seu casamento.",
+            casamento: "Veja com quem alguém está casado."
+        }
+    },
+    {
+        id: "utilidade",
+        nome: "Utilidade",
+        emoji: "🧰",
+        resumo: "Enquetes, lembretes e AFK",
+        comandos: {
+            enquete: "Cria uma votação com botões.",
+            lembrete: "O bot te avisa depois (criar, listar, remover).",
+            afk: "Fica AFK e avisa quem te marcar."
         }
     },
     {
@@ -109,6 +137,21 @@ const SECOES = [
             join: "Configura as boas-vindas.",
             leave: "Configura a mensagem de saída.",
             logs: "Configura os logs do servidor."
+        }
+    },
+    {
+        id: "moderacao",
+        nome: "Moderação",
+        emoji: "🛡️",
+        resumo: "Banir, expulsar, silenciar e advertir",
+        comandos: {
+            ban: "Bane um membro do servidor.",
+            unban: "Desbane um usuário pelo ID.",
+            kick: "Expulsa um membro do servidor.",
+            timeout: "Silencia um membro por um tempo.",
+            warn: "Dá uma advertência a um membro.",
+            warns: "Veja as advertências de um membro.",
+            delwarn: "Remove uma advertência pelo número."
         }
     },
     {
@@ -133,8 +176,8 @@ const SECOES = [
 const IGNORADOS = new Set(["help", "ajuda"]);
 
 const ACESSO_RAPIDO = [
-    "play", "serverinfo", "membroinfo", "daily",
-    "atm", "ticket", "criarcall", "help"
+    "play", "perfil", "rank", "loja",
+    "daily", "trabalhar", "serverinfo", "help"
 ];
 
 // =====================================================
