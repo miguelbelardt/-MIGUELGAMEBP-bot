@@ -58,7 +58,8 @@ const SECOES = [
             botinfo: "Informações sobre o bot.",
             emojiinfo: "Detalhes de um emoji.",
             idcomando: "Mostra o ID de um Slash Command.",
-            avatar: "Mostra o avatar de alguém em tamanho grande."
+            avatar: "Mostra o avatar de alguém em tamanho grande.",
+            banner: "Mostra o banner de perfil de alguém."
         }
     },
     {
@@ -151,7 +152,8 @@ const SECOES = [
             timeout: "Silencia um membro por um tempo.",
             warn: "Dá uma advertência a um membro.",
             warns: "Veja as advertências de um membro.",
-            delwarn: "Remove uma advertência pelo número."
+            delwarn: "Remove uma advertência pelo número.",
+            "ban-bot": "Proíbe alguém de usar o bot (dono e ADMs do bot)."
         }
     },
     {
