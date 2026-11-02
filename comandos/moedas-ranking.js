@@ -101,6 +101,7 @@ function opcoesDoRanking(client, userId, guild, tipo, enviar) {
         corDestaque: "#f1c40f",
         formatarValor: v => `${Number(v).toLocaleString("pt-BR")} moedas`,
         carregar: criarCarregador(userId, guild),
+        semLocal: !guild,
         enviar
     };
 }
@@ -126,13 +127,6 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            if (!interaction.guild) {
-                return interaction.reply({
-                    content: `${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`,
-                    ephemeral: true
-                });
-            }
-
             // Montar a imagem pode passar de 3 segundos
             await interaction.deferReply();
 
@@ -141,7 +135,7 @@ module.exports = {
                     interaction.client,
                     interaction.user.id,
                     interaction.guild,
-                    interaction.options.getString("tipo") || "global",
+                    interaction.guild ? (interaction.options.getString("tipo") || "global") : "global",
                     dados => interaction.editReply(dados)
                 )
             );
@@ -165,12 +159,8 @@ module.exports = {
 
     async handlePrefix(message, args) {
         try {
-            if (!message.guild) {
-                return message.reply(`${EMOJIS.erro} Esse comando só pode ser usado em um servidor.`);
-            }
-
             const argumento = args?.[0]?.toLowerCase();
-            const tipo = argumento === "local" || argumento === "l" ? "local" : "global";
+            const tipo = message.guild && (argumento === "local" || argumento === "l") ? "local" : "global";
 
             await message.channel.sendTyping().catch(() => { });
 
