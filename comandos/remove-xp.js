@@ -1,4 +1,5 @@
 const {
+    PermissionFlagsBits,
     SlashCommandBuilder
 } = require("discord.js");
 
@@ -24,6 +25,7 @@ const EMOJIS = {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setName("remove-xp")
         .setDescription("Remove XP de um usuário.")
         .addUserOption(option =>

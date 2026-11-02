@@ -1,4 +1,5 @@
 const {
+    PermissionFlagsBits,
     SlashCommandBuilder
 } = require("discord.js");
 
@@ -25,6 +26,7 @@ const EMOJIS = {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setName("dar-adm")
         .setDescription("Dá ou remove a permissão de ADM do bot.")
         .addUserOption(option =>

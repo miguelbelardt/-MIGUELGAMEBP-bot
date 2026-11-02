@@ -1,4 +1,5 @@
 const {
+    PermissionFlagsBits,
     SlashCommandBuilder
 } = require("discord.js");
 
@@ -20,6 +21,7 @@ const EMOJIS = {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setName("say-adm")
         .setDescription("Envia uma mensagem privada para um usuário.")
         .addUserOption(option =>

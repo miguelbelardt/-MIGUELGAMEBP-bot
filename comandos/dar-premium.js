@@ -1,4 +1,5 @@
 const {
+    PermissionFlagsBits,
     SlashCommandBuilder,
     EmbedBuilder
 } = require("discord.js");
@@ -95,6 +96,7 @@ async function entregar(autorId, usuario, dias) {
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setName("dar-premium")
         .setDescription("Dá dias de premium a um usuário. 💎")
         .addUserOption(option =>

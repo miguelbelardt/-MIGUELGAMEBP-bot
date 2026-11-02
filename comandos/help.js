@@ -9,6 +9,16 @@ const {
 } = require("discord.js");
 
 const { nomeBot } = require("../botNome.js");
+const { isAdm } = require("../database/database.js");
+
+const DONO_ID = "1124140396516225044";
+
+// Comandos que só o dono e os ADMs do bot podem usar:
+// só aparecem na ajuda para eles.
+const SO_ADM = new Set([
+    "add-xp", "adicionar-xp", "remove-xp", "set-xp",
+    "dar-adm", "dar-premium", "say-adm", "ban-bot"
+]);
 
 const PREFIXO = "'";
 const COR = 0x1ABC9C;
@@ -186,8 +196,10 @@ const ACESSO_RAPIDO = [
 // 🧱 MONTAGEM DOS EMBEDS
 // =====================================================
 
-function comandosDaSecao(client, secao) {
-    const existentes = new Set(client.commands.keys());
+function comandosDaSecao(client, secao, ehAdm) {
+    const existentes = new Set(
+        [...client.commands.keys()].filter(nome => ehAdm || !SO_ADM.has(nome))
+    );
     const lista = [];
 
     for (const [nome, texto] of Object.entries(secao.comandos || {})) {
@@ -203,6 +215,7 @@ function comandosDaSecao(client, secao) {
 
         for (const [nome, comando] of client.commands) {
             if (conhecidos.has(nome) || IGNORADOS.has(nome)) continue;
+            if (!ehAdm && SO_ADM.has(nome)) continue;
             lista.push([nome, comando.data?.description || "Sem descrição."]);
         }
     }
@@ -222,9 +235,9 @@ function embedBase(client, secao) {
         .setTitle(`${secao.emoji} ${secao.nome}`);
 }
 
-function embedCentral(client) {
+function embedCentral(client, ehAdm) {
     const total = [...client.commands.keys()]
-        .filter(nome => !IGNORADOS.has(nome)).length;
+        .filter(nome => !IGNORADOS.has(nome) && (ehAdm || !SO_ADM.has(nome))).length;
 
     const atalhos = ACESSO_RAPIDO
         .filter(nome => client.commands.has(nome))
@@ -250,8 +263,8 @@ function embedCentral(client) {
         );
 }
 
-function embedSecao(client, secao) {
-    const lista = comandosDaSecao(client, secao);
+function embedSecao(client, secao, ehAdm) {
+    const lista = comandosDaSecao(client, secao, ehAdm);
 
     const texto = lista.length
         ? lista
@@ -265,9 +278,9 @@ function embedSecao(client, secao) {
         );
 }
 
-function montarEmbed(client, id) {
+function montarEmbed(client, id, ehAdm) {
     const secao = SECOES.find(s => s.id === id) || SECOES[0];
-    return secao.id === "central" ? embedCentral(client) : embedSecao(client, secao);
+    return secao.id === "central" ? embedCentral(client, ehAdm) : embedSecao(client, secao, ehAdm);
 }
 
 // =====================================================
@@ -324,8 +337,19 @@ async function abrirPainel(client, donoId, enviar) {
     const idPainel = Date.now().toString(36);
     let secaoAtual = "central";
 
+    // Quem abriu é dono/ADM do bot? Então vê também os comandos de ADM.
+    let ehAdm = donoId === DONO_ID;
+
+    if (!ehAdm) {
+        try {
+            ehAdm = await isAdm(donoId);
+        } catch {
+            ehAdm = false;
+        }
+    }
+
     const mensagem = await enviar({
-        embeds: [montarEmbed(client, secaoAtual)],
+        embeds: [montarEmbed(client, secaoAtual, ehAdm)],
         components: montarComponentes(idPainel, secaoAtual),
         allowedMentions: { repliedUser: false }
     });
@@ -367,7 +391,7 @@ async function abrirPainel(client, donoId, enviar) {
             // "Atualizar" só reconstrói o painel da seção atual
 
             await interacao.update({
-                embeds: [montarEmbed(client, secaoAtual)],
+                embeds: [montarEmbed(client, secaoAtual, ehAdm)],
                 components: montarComponentes(idPainel, secaoAtual)
             });
 

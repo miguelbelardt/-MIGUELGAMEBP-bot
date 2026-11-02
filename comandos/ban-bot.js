@@ -1,9 +1,10 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 const economia = require("../economia.js");
 const banbot = require("../banbot.js");
 
 module.exports = {
     data: new SlashCommandBuilder()
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .setName("ban-bot")
         .setDescription("Proíbe alguém de usar o bot (só dono e ADMs do bot). 🚫")
         .addSubcommand(s =>
