@@ -159,6 +159,8 @@ criarcall.iniciar(client);
 require("./comandos/youtube").iniciar(client);
 require("./niveis.js").iniciar(client);
 require("./utilidade.js").iniciar(client);
+require("./banbot.js").iniciar(client);
+require("./contadores.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
