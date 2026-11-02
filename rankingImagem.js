@@ -287,7 +287,7 @@ async function gerarImagem(dados) {
 // 🔘 PAINEL COM BOTÕES
 // =====================================================
 
-function botoes(prefixo, userId, tipo, pagina, totalPaginas, desativado = false) {
+function botoes(prefixo, userId, tipo, pagina, totalPaginas, desativado = false, semLocal = false) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`${prefixo}_anterior_${userId}`)
@@ -306,7 +306,7 @@ function botoes(prefixo, userId, tipo, pagina, totalPaginas, desativado = false)
             .setLabel("Local")
             .setEmoji("🏠")
             .setStyle(tipo === "local" ? ButtonStyle.Primary : ButtonStyle.Secondary)
-            .setDisabled(desativado),
+            .setDisabled(desativado || semLocal),
         new ButtonBuilder()
             .setCustomId(`${prefixo}_proxima_${userId}`)
             .setLabel("Próxima")
@@ -393,7 +393,7 @@ async function abrirRanking(opcoes) {
     const mensagem = await opcoes.enviar({
         ...conteudo,
         components: [
-            botoes(opcoes.prefixo, opcoes.userId, estado.tipo, estado.pagina, estado.totalPaginas)
+            botoes(opcoes.prefixo, opcoes.userId, estado.tipo, estado.pagina, estado.totalPaginas, false, opcoes.semLocal)
         ]
     });
 
@@ -451,7 +451,7 @@ async function abrirRanking(opcoes) {
                 content: null,
                 ...novo,
                 components: [
-                    botoes(opcoes.prefixo, opcoes.userId, tipo, estado.pagina, estado.totalPaginas)
+                    botoes(opcoes.prefixo, opcoes.userId, tipo, estado.pagina, estado.totalPaginas, false, opcoes.semLocal)
                 ]
             });
         } catch (erro) {
@@ -467,7 +467,7 @@ async function abrirRanking(opcoes) {
     coletor.on("end", async () => {
         await mensagem.edit({
             components: [
-                botoes(opcoes.prefixo, opcoes.userId, estado.tipo, estado.pagina, estado.totalPaginas, true)
+                botoes(opcoes.prefixo, opcoes.userId, estado.tipo, estado.pagina, estado.totalPaginas, true, opcoes.semLocal)
             ]
         }).catch(() => { });
     });
