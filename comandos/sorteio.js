@@ -679,131 +679,133 @@ function criarEmbedPainel(
 // 🎉 EMBED DO SORTEIO
 // ================================
 
+const MEDALHAS = ["🥇", "🥈", "🥉"];
+
+function listaPodio(ids) {
+    return ids
+        .map((id, i) => `${MEDALHAS[i] || "🎖️"} <@${id}>`)
+        .join("\n");
+}
+
+function lerVencedoresIds(sorteio) {
+    try {
+        const v =
+            typeof sorteio.vencedores_ids === "string"
+                ? JSON.parse(sorteio.vencedores_ids)
+                : sorteio.vencedores_ids;
+
+        return Array.isArray(v) ? v.map(String) : [];
+    } catch {
+        return [];
+    }
+}
+
+// Sorteio justo (embaralha de verdade) com no máximo 20 vencedores
+function sortearVencedores(lista, quantidade) {
+    const embaralhados = [...lista];
+
+    for (let i = embaralhados.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+
+        [embaralhados[i], embaralhados[j]] = [embaralhados[j], embaralhados[i]];
+    }
+
+    const total = Math.min(
+        Math.max(Number(quantidade) || 1, 1),
+        20,
+        embaralhados.length
+    );
+
+    return embaralhados.slice(0, total);
+}
+
+function terminaEm(config) {
+    const timestamp = converterData(config.data, config.horario);
+
+    if (!timestamp) return `${config.data} às ${config.horario}`;
+
+    const s = Math.floor(timestamp / 1000);
+
+    return `<t:${s}:R> · <t:${s}:f>`;
+}
+
 function criarEmbedPreview(
     config,
     encerrado = false
 ) {
+    const inscritos = Number(config.inscritos) || 0;
+    const criadorId = config.criadorId || config.usuarioId || null;
+    const vencedoresIds = Array.isArray(config.vencedoresIds) ? config.vencedoresIds : [];
+
+    const base =
+        String(
+            config.descricao ||
+            (encerrado ? "🏁 Sorteio encerrado." : "🎁 Participe deste sorteio!")
+        ).slice(0, 2500);
+
+    // Bloco de informações (estilo citação)
+    const info = [];
+
+    if (config.premio) info.push(`> 🏆 **Prêmio:** ${config.premio}`);
+
+    info.push(`> 🥇 **Vencedores:** ${config.vencedores || 1}`);
+    info.push(`> 🎟️ **Inscritos:** ${inscritos}`);
+
+    if (criadorId) info.push(`> 👑 **Organizador:** <@${criadorId}>`);
+
+    if (encerrado) {
+        if (config.encerradoEm) {
+            info.push(`> 🏁 **Encerrado:** <t:${Math.floor(Number(config.encerradoEm) / 1000)}:R>`);
+        }
+    } else if (config.data && config.horario) {
+        info.push(`> ⏳ **Termina:** ${terminaEm(config)}`);
+    }
+
+    let descricao = `${base}\n\n${info.join("\n")}`;
+
+    if (encerrado) {
+        descricao +=
+            "\n\n**🏅 Ganhadores**\n" +
+            (
+                vencedoresIds.length
+                    ? listaPodio(vencedoresIds)
+                    : "Ninguém participou desta vez. 😢"
+            );
+    }
+
     const embed =
         new EmbedBuilder()
             .setColor(
                 encerrado
-                    ? 0xED4245
-                    : normalizarCor(
-                        config.cor
-                    )
+                    ? 0x4F545C
+                    : normalizarCor(config.cor)
             )
             .setTitle(
-                `🎉 ${
-                    config.titulo ||
-                    "Sorteio"
-                }`
+                `${encerrado ? "🏁" : "🎁"} ${config.titulo || "Sorteio"}`
             )
-            .setDescription(
-                encerrado
-                    ? (
-                        config.descricao ||
-                        "🎁 Sorteio encerrado."
-                    )
-                    : (
-                        config.descricao ||
-                        "🎁 Participe deste sorteio!"
-                    )
-            )
-            .addFields({
-                name: `${EMOJIS.trofeu} Vencedores`,
-                value:
-                    String(
-                        config.vencedores ||
-                        1
-                    ),
-                inline: true
-            });
-
-    // ================================
-    // 🎁 PRÊMIO
-    // ================================
-
-    if (config.premio) {
-        embed.addFields({
-            name: "🎁 Prêmio",
-            value:
-                config.premio,
-            inline: true
-        });
-    }
-
-    // ================================
-    // ✍️ AUTOR
-    // ================================
+            .setDescription(descricao.slice(0, 4000));
 
     if (config.autor) {
-        const autor = {
-            name: config.autor
-        };
+        const autor = { name: config.autor };
 
-        if (
-            config.autorIcone &&
-            validarURL(config.autorIcone)
-        ) {
-            autor.iconURL =
-                config.autorIcone;
+        if (config.autorIcone && validarURL(config.autorIcone)) {
+            autor.iconURL = config.autorIcone;
         }
 
-        embed.setAuthor(
-            autor
-        );
+        embed.setAuthor(autor);
     }
 
-    // ================================
-    // 🆔 ID DO SORTEIO
-    // ================================
+    if (config.imagem) embed.setImage(config.imagem);
 
-    if (config.sorteioId) {
-        embed.addFields({
-            name: "🆔 ID do sorteio",
-            value:
-                `\`${config.sorteioId}\``,
-            inline: true
-        });
-    }
+    if (config.thumbnail) embed.setThumbnail(config.thumbnail);
 
-    if (
-        config.data &&
-        config.horario
-    ) {
-        embed.addFields({
-            name:
-                encerrado
-                    ? "🔴 Encerramento"
-                    : `${EMOJIS.relogio} Encerramento`,
-            value:
-                horarioDiscord(config.data, config.horario),
-            inline: true
-        });
-    }
+    const sufixoId = config.sorteioId ? ` • Sorteio #${config.sorteioId}` : "";
 
-    if (config.imagem) {
-        embed.setImage(
-            config.imagem
-        );
-    }
-
-    if (config.thumbnail) {
-        embed.setThumbnail(
-            config.thumbnail
-        );
-    }
-
-    // Rodapé personalizado; se o sorteio acabou, o aviso de
-    // encerrado sempre tem prioridade.
     const rodape = {
         text:
             encerrado
-                ? "🔴 Este sorteio foi encerrado."
-                : (
-                    config.rodape ||
-                    "🎉 Clique no botão abaixo para participar!"
-                )
+                ? `🔴 Encerrado${sufixoId}`
+                : (config.rodape || `Aperte em 🎟️ para entrar${sufixoId}`)
     };
 
     if (
@@ -812,15 +814,60 @@ function criarEmbedPreview(
         config.rodapeIcone &&
         validarURL(config.rodapeIcone)
     ) {
-        rodape.iconURL =
-            config.rodapeIcone;
+        rodape.iconURL = config.rodapeIcone;
     }
 
-    embed.setFooter(
-        rodape
-    );
+    embed.setFooter(rodape);
 
     return embed;
+}
+
+// ================================
+// 🎊 MENSAGEM DE RESULTADO
+// ================================
+
+function criarEmbedResultado(sorteio, vencedores, inscritos, novoSorteio = false) {
+    const linhas = [`**${sorteio.titulo}**`];
+
+    if (sorteio.premio) linhas.push(`🏆 Prêmio: **${sorteio.premio}**`);
+
+    linhas.push("");
+
+    linhas.push(
+        vencedores.length
+            ? listaPodio(vencedores)
+            : "Ninguém participou deste sorteio. 😢"
+    );
+
+    return new EmbedBuilder()
+        .setColor(vencedores.length ? 0xF1C40F : 0x4F545C)
+        .setTitle(novoSorteio ? "🔄 Novos ganhadores" : "🎊 Resultado do sorteio")
+        .setDescription(linhas.join("\n").slice(0, 4000))
+        .setFooter({ text: `${inscritos} inscrito(s) • Sorteio #${sorteio.id}` });
+}
+
+function criarBotoesResultado(sorteio) {
+    const botoes = [];
+
+    if (sorteio.mensagem_id && sorteio.guild_id && sorteio.canal_id) {
+        botoes.push(
+            new ButtonBuilder()
+                .setLabel("Ver sorteio")
+                .setEmoji("🎁")
+                .setStyle(ButtonStyle.Link)
+                .setURL(`https://discord.com/channels/${sorteio.guild_id}/${sorteio.canal_id}/${sorteio.mensagem_id}`)
+        );
+    }
+
+    botoes.push(
+        new ButtonBuilder()
+            .setCustomId(`sorteio_resortear_${sorteio.id}`)
+            .setLabel("Sortear de novo")
+            .setEmoji("🔄")
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return [new ActionRowBuilder().addComponents(botoes)];
 }
 
 // ================================
@@ -1465,6 +1512,20 @@ async function atualizarMensagemSorteio(
             premio:
                 sorteio.premio,
 
+            inscritos:
+                participantes.length,
+
+            criadorId:
+                sorteio.criador_id,
+
+            vencedoresIds:
+                lerVencedoresIds(
+                    sorteio
+                ),
+
+            encerradoEm:
+                sorteio.encerrado_em,
+
             data:
                 data.data,
 
@@ -1824,52 +1885,11 @@ async function finalizarSorteio(
                 sorteio.id
             );
 
-        let vencedores = [];
-
-        if (lista.length) {
-            const embaralhados =
-                [...lista];
-
-            for (
-                let i =
-                    embaralhados.length -
-                    1;
-                i > 0;
-                i--
-            ) {
-                const j =
-                    Math.floor(
-                        Math.random() *
-                        (i + 1)
-                    );
-
-                [
-                    embaralhados[i],
-                    embaralhados[j]
-                ] = [
-                    embaralhados[j],
-                    embaralhados[i]
-                ];
-            }
-
-            const quantidade =
-                Math.min(
-                    Math.max(
-                        Number(
-                            sorteio.vencedores
-                        ) || 1,
-                        1
-                    ),
-                    20,
-                    embaralhados.length
-                );
-
-            vencedores =
-                embaralhados.slice(
-                    0,
-                    quantidade
-                );
-        }
+        const vencedores =
+            sortearVencedores(
+                lista,
+                sorteio.vencedores
+            );
 
         await pool.query(
             `
@@ -1916,119 +1936,27 @@ async function finalizarSorteio(
             return;
         }
 
-        const timestampEncerramento =
-            sorteio.encerrado_em ||
-            Date.now();
-
-        const dataEncerramento =
-            formatarData(
-                timestampEncerramento
-            );
-
-        const dataHoraEncerramento =
-            horarioDiscord(
-                dataEncerramento.data,
-                dataEncerramento.horario
-            );
-
-        if (!vencedores.length) {
-            const embedSemVencedores =
-                new EmbedBuilder()
-                    .setColor(
-                        normalizarCor(
-                            sorteio.cor
-                        )
-                    )
-                    .setTitle(
-                        "🎉 Sorteio encerrado!"
-                    )
-                    .setDescription(
-                        `O sorteio **${sorteio.titulo}** terminou, mas ninguém participou.`
-                    )
-                    .addFields(
-                        {
-                            name:
-                                "🆔 ID do sorteio",
-                            value:
-                                `\`${sorteio.id}\``,
-                            inline: true
-                        },
-                        {
-                            name:
-                                `${EMOJIS.relogio} Encerrado em`,
-                            value:
-                                dataHoraEncerramento,
-                            inline: true
-                        }
-                    );
-
-            await canal.send({
-                embeds: [
-                    embedSemVencedores
-                ]
-            });
-
-            return;
-        }
-
         const mencoes =
             vencedores
-                .map(
-                    id =>
-                        `<@${id}>`
-                )
-                .join(
-                    ", "
-                );
+                .map(id => `<@${id}>`)
+                .join(", ");
 
-        const embed =
-            new EmbedBuilder()
-                .setColor(
-                    normalizarCor(
-                        sorteio.cor
-                    )
-                )
-                .setTitle(
-                    `${EMOJIS.trofeu} Sorteio encerrado!`
-                )
-                .setDescription(
-                    `🎉 O sorteio **${sorteio.titulo}** terminou!\n\n` +
-                    `${EMOJIS.trofeu} **Vencedores:**\n${mencoes}`
-                )
-                .addFields(
-                    {
-                        name:
-                            "🆔 ID do sorteio",
-                        value:
-                            `\`${sorteio.id}\``,
-                        inline: true
-                    },
-                    {
-                        name:
-                            `${EMOJIS.relogio} Encerrado em`,
-                        value:
-                            dataHoraEncerramento,
-                        inline: true
-                    }
-                );
-
-        if (sorteio.premio) {
-            embed.addFields({
-                name:
-                    "🎁 Prêmio",
-                value:
-                    sorteio.premio
-            });
-        }
-
-        // Menção só dentro do embed NÃO notifica ninguém,
-        // então vai também no texto da mensagem.
         await canal.send({
             content:
-                `🎉 Parabéns ${mencoes}!`,
+                vencedores.length
+                    ? `🎉 Parabéns ${mencoes}!`
+                    : undefined,
             embeds: [
-                embed
+                criarEmbedResultado(
+                    sorteio,
+                    vencedores,
+                    lista.length
+                )
             ],
+            components:
+                criarBotoesResultado(
+                    sorteio
+                ),
             allowedMentions: {
                 users:
                     vencedores
@@ -2041,6 +1969,100 @@ async function finalizarSorteio(
             erro
         );
     }
+}
+
+// ================================
+// 🔄 SORTEAR DE NOVO
+// ================================
+
+async function resortearSorteio(
+    interaction,
+    id
+) {
+    const sorteio =
+        await buscarSorteio(
+            id
+        );
+
+    const erro = texto =>
+        interaction.reply({
+            content:
+                `${EMOJIS.erro} ${texto}`,
+            flags:
+                MessageFlags.Ephemeral
+        });
+
+    if (!sorteio) {
+        return erro("Esse sorteio não existe mais.");
+    }
+
+    if (String(sorteio.guild_id) !== String(interaction.guildId)) {
+        return erro("Esse sorteio pertence a outro servidor.");
+    }
+
+    const permissoes = interaction.memberPermissions;
+
+    const permitido =
+        String(sorteio.criador_id) === String(interaction.user.id) ||
+        permissoes?.has(PermissionFlagsBits.Administrator) ||
+        permissoes?.has(PermissionFlagsBits.ManageGuild);
+
+    if (!permitido) {
+        return erro("Só quem criou o sorteio (ou a administração) pode sortear de novo.");
+    }
+
+    if (!sorteio.encerrado) {
+        return erro("Esse sorteio ainda não terminou.");
+    }
+
+    const lista = await buscarParticipantes(id);
+    const anteriores = lerVencedoresIds(sorteio);
+    const restantes = lista.filter(u => !anteriores.includes(String(u)));
+
+    if (!restantes.length) {
+        return erro("Não sobrou ninguém para sortear: todos os inscritos já foram ganhadores.");
+    }
+
+    const novos = sortearVencedores(restantes, sorteio.vencedores);
+
+    await pool.query(
+        `
+        UPDATE sorteios
+        SET vencedores_ids = $1
+        WHERE id = $2
+        `,
+        [
+            JSON.stringify(novos),
+            sorteio.id
+        ]
+    );
+
+    sorteio.vencedores_ids = JSON.stringify(novos);
+
+    await atualizarMensagemSorteio(
+        interaction.client,
+        sorteio.id
+    );
+
+    return interaction.reply({
+        content:
+            `🎉 Parabéns ${novos.map(u => `<@${u}>`).join(", ")}!`,
+        embeds: [
+            criarEmbedResultado(
+                sorteio,
+                novos,
+                lista.length,
+                true
+            )
+        ],
+        components:
+            criarBotoesResultado(
+                sorteio
+            ),
+        allowedMentions: {
+            users: novos
+        }
+    });
 }
 
 async function verificarSorteios(
@@ -2414,6 +2436,20 @@ module.exports = {
 
         const userId =
             interaction.user.id;
+
+        if (
+            customId.startsWith(
+                "sorteio_resortear_"
+            )
+        ) {
+            return resortearSorteio(
+                interaction,
+                customId.replace(
+                    "sorteio_resortear_",
+                    ""
+                )
+            );
+        }
 
         if (
             customId.startsWith(
