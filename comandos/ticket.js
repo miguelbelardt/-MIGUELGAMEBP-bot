@@ -17,6 +17,7 @@ const {
 const { nomeBot } = require("../botNome.js");
 
 const { pool } = require("../database/database.js");
+const extra = require("../ticketExtra.js");
 
 // ================================
 // 😀 EMOJIS DO TICKET
@@ -311,6 +312,9 @@ async function inicializarTickets() {
             `);
         }
     }
+
+    // Tabelas e colunas do ticketExtra.js (assumir, transcrição, extras)
+    await extra.preparar();
 }
 
 // ================================
@@ -793,6 +797,20 @@ function criarPainel(
                     )
                     .setStyle(
                         ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        "ticket_extras"
+                    )
+                    .setLabel(
+                        "Extras"
+                    )
+                    .setEmoji(
+                        "🧩"
+                    )
+                    .setStyle(
+                        ButtonStyle.Primary
                     )
             )
     );
@@ -2134,18 +2152,29 @@ async function abrirTicket(
         return true;
     }
 
-    const ticketExistente =
-        encontrarTicketDoUsuario(
+    const ticketsAbertos =
+        extra.ticketsDoUsuario(
             interaction.guild,
             interaction.user.id,
             categoria.id
         );
 
-    if (ticketExistente) {
+    const limiteTickets =
+        Math.max(
+            1,
+            Number(config.limite_tickets) || 1
+        );
+
+    if (ticketsAbertos.size >= limiteTickets) {
+
+        const primeiro =
+            ticketsAbertos.first();
 
         await interaction.reply({
             content:
-                `❌ Você já possui um ticket aberto: ${ticketExistente}`,
+                limiteTickets === 1
+                    ? `❌ Você já possui um ticket aberto: ${primeiro}`
+                    : `❌ Você já possui ${ticketsAbertos.size} ticket(s) aberto(s) (limite: ${limiteTickets}). Feche um antes de abrir outro: ${primeiro}`,
 
             flags:
                 MessageFlags.Ephemeral
@@ -2353,10 +2382,9 @@ async function abrirTicket(
             );
 
     const botoes =
-        new ActionRowBuilder()
-            .addComponents(
-                criarBotaoFechar()
-            );
+        extra.linhaTicket(
+            null
+        );
 
     let conteudo =
         `${interaction.user}`;
@@ -2377,7 +2405,7 @@ async function abrirTicket(
         }
     }
 
-    await canal.send({
+    const mensagemTicket = await canal.send({
         content:
             conteudo,
 
@@ -2385,9 +2413,8 @@ async function abrirTicket(
             embed
         ],
 
-        components: [
-            botoes
-        ],
+        components:
+            botoes,
 
         allowedMentions: {
             users: [
@@ -2407,6 +2434,29 @@ async function abrirTicket(
 
         flags:
             MessageFlags.Ephemeral
+    });
+
+    await extra.registrarAbertura({
+        guild:
+            interaction.guild,
+
+        canal,
+
+        mensagem:
+            mensagemTicket,
+
+        dono:
+            interaction.user,
+
+        modelo,
+
+        motivo:
+            motivoFinal === "Nenhum"
+                ? null
+                : motivoFinal,
+
+        numero:
+            numeroFormatado
     });
 
     console.log(
@@ -2481,7 +2531,8 @@ async function enviarLog(
 // ================================
 
 async function fecharTicket(
-    interaction
+    interaction,
+    motivoFechar = null
 ) {
 
     const canal =
@@ -2535,6 +2586,16 @@ async function fecharTicket(
     const [, donoId, criadoEmTopo] =
         canal.topic.split(":");
 
+    // Transcrição, DM, avaliação e log com canal de transcrições
+    const infoFechar =
+        await extra.aoFechar({
+            interaction,
+            canal,
+            donoId,
+            criadoEm: criadoEmTopo,
+            motivo: motivoFechar
+        });
+
     const camposFechamento = [
         {
             name: `${EMOJIS.trancar} Fechado por`,
@@ -2560,6 +2621,30 @@ async function fecharTicket(
         camposFechamento.push({
             name: `${EMOJIS.relogio} Aberto em`,
             value: horarioDiscord(Number(criadoEmTopo)),
+            inline: false
+        });
+    }
+
+    if (infoFechar.responsavelId) {
+        camposFechamento.push({
+            name: "🛡️ Responsável",
+            value: `<@${infoFechar.responsavelId}>`,
+            inline: true
+        });
+    }
+
+    if (infoFechar.duracao) {
+        camposFechamento.push({
+            name: `${EMOJIS.relogio} Duração`,
+            value: infoFechar.duracao,
+            inline: true
+        });
+    }
+
+    if (infoFechar.motivo) {
+        camposFechamento.push({
+            name: `${EMOJIS.motivo} Motivo do fechamento`,
+            value: String(infoFechar.motivo).slice(0, 1024),
             inline: false
         });
     }
@@ -2767,12 +2852,21 @@ module.exports = {
         // ================================
 
         if (
+            await extra.handleButton(
+                interaction
+            )
+        ) {
+            return true;
+        }
+
+        if (
             interaction.customId ===
             "ticket_fechar"
         ) {
 
-            return await fecharTicket(
-                interaction
+            return await extra.tratarFechar(
+                interaction,
+                fecharTicket
             );
         }
 
@@ -2782,7 +2876,9 @@ module.exports = {
 
         if (
             interaction.customId ===
-            "ticket_atualizar"
+            "ticket_atualizar" ||
+            interaction.customId ===
+            "ticket_extras_voltar"
         ) {
 
             const resultado =
@@ -3624,6 +3720,15 @@ module.exports = {
 
         await inicializarTickets();
 
+        // Seleções do ticketExtra.js (transferir, membros, extras)
+        if (
+            await extra.handleSelect(
+                interaction
+            )
+        ) {
+            return true;
+        }
+
         // ================================
         // 🎫 MENU PRINCIPAL
         // ================================
@@ -4049,6 +4154,16 @@ module.exports = {
         }
 
         await inicializarTickets();
+
+        // Modais do ticketExtra.js (renomear e motivo ao fechar)
+        if (
+            await extra.handleModal(
+                interaction,
+                { fecharTicket }
+            )
+        ) {
+            return true;
+        }
 
         // ================================
         // 🎫 MOTIVO DO TICKET
