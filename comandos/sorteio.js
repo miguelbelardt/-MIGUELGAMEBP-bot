@@ -208,6 +208,7 @@ function criarConfig(
 
         vencedores: 1,
         mostrarParticipantes: false,
+        marcarEveryone: false,
 
         sorteioId: null,
 
@@ -548,6 +549,29 @@ function criarPainelSorteio(
                     )
                     .setDisabled(
                         encerrado
+                    ),
+
+                // Avisar @everyone ao publicar (só antes de enviar)
+                new ButtonBuilder()
+                    .setCustomId(
+                        `sorteio_everyone_${usuarioId}`
+                    )
+                    .setLabel(
+                        sessoes.get(usuarioId)?.marcarEveryone
+                            ? "@everyone: Sim"
+                            : "@everyone: Não"
+                    )
+                    .setEmoji(
+                        "📣"
+                    )
+                    .setStyle(
+                        sessoes.get(usuarioId)?.marcarEveryone
+                            ? ButtonStyle.Success
+                            : ButtonStyle.Secondary
+                    )
+                    .setDisabled(
+                        enviado ||
+                        encerrado
                     )
             ),
 
@@ -632,6 +656,14 @@ function criarEmbedPainel(
                     config.mostrarParticipantes
                         ? "🟢 Visíveis"
                         : "🔴 Ocultos",
+                inline: true
+            },
+            {
+                name: "📣 Avisar @everyone",
+                value:
+                    config.marcarEveryone
+                        ? "🟢 Sim, ao publicar"
+                        : "🔴 Não",
                 inline: true
             },
             {
@@ -2513,6 +2545,7 @@ module.exports = {
             "sorteio_data",
             "sorteio_aparencia",
             "sorteio_participantes",
+            "sorteio_everyone",
             "sorteio_preview",
             "sorteio_enviar",
             "sorteio_encerrar"
@@ -2921,6 +2954,39 @@ module.exports = {
 
         if (
             tipo ===
+            "sorteio_everyone"
+        ) {
+            if (
+                config.sorteioId
+            ) {
+                return interaction.reply({
+                    content:
+                        `${EMOJIS.erro} O aviso só vale na hora de publicar. Este sorteio já foi enviado.`,
+                    flags:
+                        MessageFlags.Ephemeral
+                });
+            }
+
+            config.marcarEveryone =
+                !config.marcarEveryone;
+
+            return interaction.update({
+                embeds: [
+                    criarEmbedPainel(
+                        config
+                    )
+                ],
+                components:
+                    criarPainelSorteio(
+                        userId,
+                        false,
+                        false
+                    )
+            });
+        }
+
+        if (
+            tipo ===
             "sorteio_participantes"
         ) {
 
@@ -3321,8 +3387,39 @@ module.exports = {
                     config
                 );
 
+                // @everyone só funciona se o bot tiver a permissão
+                // "Mencionar @everyone" nesse canal.
+                let avisoEveryone = null;
+                let marcarEveryone = false;
+
+                if (config.marcarEveryone) {
+                    const euNoServidor =
+                        interaction.guild.members.me;
+
+                    const podeMarcar =
+                        euNoServidor &&
+                        canal
+                            .permissionsFor(
+                                euNoServidor
+                            )
+                            ?.has(
+                                PermissionFlagsBits.MentionEveryone
+                            );
+
+                    if (podeMarcar) {
+                        marcarEveryone = true;
+                    } else {
+                        avisoEveryone =
+                            `${EMOJIS.erro} O sorteio foi enviado, mas **sem marcar @everyone**: me dê a permissão **Mencionar @everyone, @here e todos os cargos** em ${canal}.`;
+                    }
+                }
+
                 const mensagem =
                     await canal.send({
+                        content:
+                            marcarEveryone
+                                ? "@everyone 🎁 **Novo sorteio!** Entre no botão abaixo."
+                                : undefined,
                         embeds: [
                             criarEmbedPreview(
                                 config
@@ -3334,7 +3431,11 @@ module.exports = {
                                 0,
                                 config.mostrarParticipantes,
                                 false
-                            )
+                            ),
+                        allowedMentions:
+                            marcarEveryone
+                                ? { parse: ["everyone"] }
+                                : { parse: [] }
                     });
 
                 await pool.query(
@@ -3357,6 +3458,9 @@ module.exports = {
                 );
 
                 return interaction.update({
+                    content:
+                        avisoEveryone ||
+                        "",
                     embeds: [
                         criarEmbedPainel(
                             config
