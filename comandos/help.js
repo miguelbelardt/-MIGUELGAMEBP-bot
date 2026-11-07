@@ -69,6 +69,7 @@ const SECOES = [
             emojiinfo: "Detalhes de um emoji.",
             idcomando: "Mostra o ID de um Slash Command.",
             avatar: "Mostra o avatar de alguém em tamanho grande.",
+            convites: "Mostra quantas pessoas você convidou.",
             banner: "Mostra o banner de perfil de alguém."
         }
     },
