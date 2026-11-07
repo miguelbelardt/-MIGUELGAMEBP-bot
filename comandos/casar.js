@@ -8,6 +8,7 @@ const {
 } = require("discord.js");
 
 const casamento = require("../casamento.js");
+const configServidor = require("../configServidor.js");
 
 const TEMPO = 2 * 60 * 1000;
 
@@ -119,6 +120,13 @@ module.exports = {
 
     async execute(interaction) {
         try {
+            if (!(await configServidor.obter(interaction.guildId)).casamento) {
+                return interaction.reply({
+                    content: "❌ O casamento está desativado neste servidor.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
             const r = await pedir(
                 interaction.user,
                 interaction.options.getUser("usuario"),
@@ -145,6 +153,10 @@ module.exports = {
         if (!alvo) return message.reply("💍 Marque com quem quer casar. Ex.: `'casar @fulano`");
 
         try {
+            if (!(await configServidor.obter(message.guild?.id)).casamento) {
+                return message.reply("❌ O casamento está desativado neste servidor.");
+            }
+
             const r = await pedir(message.author, alvo, dados => message.reply(dados));
 
             if (r.erro) await message.reply(r.erro);

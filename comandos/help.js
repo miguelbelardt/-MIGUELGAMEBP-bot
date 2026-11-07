@@ -179,6 +179,7 @@ const SECOES = [
             say: "Faz o bot enviar uma mensagem.",
             "say-adm": "Envia uma mensagem privada para um usuário.",
             clear: "Apaga mensagens do canal.",
+            "server-config": "Liga ou desliga recursos do bot neste servidor.",
             "dar-adm": "Dá ou remove a permissão de ADM do bot.",
             "dar-premium": "Dá dias de premium a um usuário.",
             "set-xp": "Define o XP de um usuário.",
