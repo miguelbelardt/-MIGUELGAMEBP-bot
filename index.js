@@ -80,13 +80,6 @@ const DONO_ID = "1124140396516225044";
 const PREFIXO = "'";
 
 // =====================================================
-// ⭐ SISTEMA DE XP
-// =====================================================
-
-const XP_MIN = 5;
-const XP_MAX = 15;
-
-// =====================================================
 // 🗑️ SISTEMA DE MENSAGENS APAGADAS
 // =====================================================
 
@@ -2782,7 +2775,7 @@ client.on(
 );
 
 // =====================================================
-// 💬 COMANDOS POR PREFIXO + ⭐ XP
+// 💬 COMANDOS POR PREFIXO (o XP é do niveis.js)
 // =====================================================
 
 client.on(
@@ -2802,41 +2795,6 @@ client.on(
             message.author.bot
         ) {
             return;
-        }
-
-        if (
-            message.guild
-        ) {
-
-            const quantidadeXP =
-                Math.floor(
-                    Math.random() *
-                    (
-                        XP_MAX -
-                        XP_MIN +
-                        1
-                    )
-                ) +
-                XP_MIN;
-
-            try {
-
-                await adicionarXP(
-                    message.author.id,
-                    quantidadeXP
-                );
-
-                console.log(
-                    `⭐ ${message.author.tag} ganhou ${quantidadeXP} XP`
-                );
-
-            } catch (erro) {
-
-                console.error(
-                    "❌ Erro ao adicionar XP:",
-                    erro
-                );
-            }
         }
 
         const conteudo =
