@@ -7,6 +7,7 @@
 
 const { mysqlPool } = require("./database/database.js");
 const economia = require("./economia.js");
+const configUsuario = require("./configUsuario.js");
 
 let tabelaPronta = false;
 
@@ -50,6 +51,10 @@ async function validarPedido(proponente, alvo) {
 
     if (alvo.bot) {
         return "Bots não casam (ainda).";
+    }
+
+    if (!(await configUsuario.obter(alvo.id)).aceitar_casamento) {
+        return "Essa pessoa não está aceitando pedidos de casamento.";
     }
 
     if (await estado(proponente.id)) {

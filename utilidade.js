@@ -9,6 +9,7 @@
 const { Events } = require("discord.js");
 
 const { mysqlPool } = require("./database/database.js");
+const configUsuario = require("./configUsuario.js");
 
 // =====================================================
 // ⚙️ CONFIGURAÇÕES (pode mexer)
@@ -208,7 +209,20 @@ async function entregarLembretes(client) {
 
             let enviou = false;
 
-            if (l.canal_id) {
+            // Quem escolheu receber lembretes na DM recebe lá primeiro
+            if ((await configUsuario.obter(l.user_id)).lembrete_dm) {
+                try {
+                    const usuarioDm = await client.users.fetch(l.user_id);
+
+                    await usuarioDm.send(conteudo);
+
+                    enviou = true;
+                } catch {
+                    // DM fechada: tenta o canal
+                }
+            }
+
+            if (!enviou && l.canal_id) {
                 try {
                     const canal = await client.channels.fetch(l.canal_id);
 

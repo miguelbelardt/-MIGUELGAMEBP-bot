@@ -29,6 +29,7 @@ const {
 
 const { mysqlPool } = require("./database/database.js");
 const emojis = require("./emojis.js");
+const configUsuario = require("./configUsuario.js");
 
 // =====================================================
 // ⚙️ CONFIGURAÇÕES (pode mexer)
@@ -1042,14 +1043,18 @@ async function aoFechar({ interaction, canal, donoId, criadoEm, motivo }) {
             }).catch(e => console.error("❌ Ticket: erro ao enviar o log com transcrição:", e?.message || e));
         }
 
-        if (dono && config.dm_transcricao) {
+        const aceitaDm = dono
+            ? (await configUsuario.obter(dono.id)).receber_dm
+            : false;
+
+        if (dono && aceitaDm && config.dm_transcricao) {
             await dono.send({
                 content: `🎫 Seu ticket em **${sem(guild.name, 100)}** foi fechado. Segue a transcrição:`,
                 files: anexos()
             }).catch(() => {});
         }
 
-        if (dono && config.avaliacao) {
+        if (dono && aceitaDm && config.avaliacao) {
             pedirAvaliacao({
                 donoUsuario: dono,
                 guildNome: guild.name,

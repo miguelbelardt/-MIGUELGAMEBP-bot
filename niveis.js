@@ -16,6 +16,8 @@ const {
     adicionarXP
 } = require("./database/database.js");
 
+const configUsuario = require("./configUsuario.js");
+
 let canvasLib = null;
 
 try {
@@ -112,7 +114,7 @@ function iniciar(client) {
             const nivelAntes = calcularNivel(antes);
             const nivelDepois = calcularNivel(antes + ganho);
 
-            if (AVISAR_NIVEL && nivelDepois > nivelAntes) {
+            if (AVISAR_NIVEL && nivelDepois > nivelAntes && (await configUsuario.obter(mensagem.author.id)).aviso_nivel) {
                 await mensagem.channel.send({
                     content: `🎉 ${mensagem.author} subiu para o **nível ${nivelDepois}**!`,
                     allowedMentions: { users: [mensagem.author.id] }
