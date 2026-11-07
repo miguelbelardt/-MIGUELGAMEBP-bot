@@ -10,6 +10,7 @@ const { Events } = require("discord.js");
 
 const { mysqlPool } = require("./database/database.js");
 const configUsuario = require("./configUsuario.js");
+const configServidor = require("./configServidor.js");
 
 // =====================================================
 // ⚙️ CONFIGURAÇÕES (pode mexer)
@@ -278,6 +279,10 @@ async function carregarAfk() {
 async function ficarAfk({ usuario, guild, motivo }) {
     if (!guild) return { erro: "Isso só funciona dentro de um servidor." };
 
+    if (!(await configServidor.obter(guild.id)).afk) {
+        return { erro: "O AFK está desativado neste servidor." };
+    }
+
     await prepararTabelas();
 
     const texto = String(motivo || "").trim().slice(0, 200) || "Sem motivo informado.";
@@ -314,6 +319,8 @@ async function tratarMensagemAfk(mensagem) {
     if (mensagem.content.startsWith(PREFIXO)) return;
 
     const guildId = mensagem.guild.id;
+
+    if (!(await configServidor.obter(guildId)).afk) return;
 
     const meu = afkNaMemoria.get(`${guildId}|${mensagem.author.id}`);
 

@@ -17,6 +17,7 @@ const {
 } = require("./database/database.js");
 
 const configUsuario = require("./configUsuario.js");
+const configServidor = require("./configServidor.js");
 
 let canvasLib = null;
 
@@ -91,6 +92,11 @@ function iniciar(client) {
             if (mensagem.content.startsWith(PREFIXO)) return;
             if (!mensagem.content && mensagem.attachments.size === 0) return;
 
+            // Regras do servidor (/server-config)
+            const configDoServidor = await configServidor.obter(mensagem.guild.id);
+
+            if (!configDoServidor.niveis) return;
+
             const agora = Date.now();
             const ultima = ultimaMensagem.get(mensagem.author.id) || 0;
 
@@ -105,8 +111,13 @@ function iniciar(client) {
                 }
             }
 
-            const ganho =
-                XP_MINIMO + Math.floor(Math.random() * (XP_MAXIMO - XP_MINIMO + 1));
+            const ganho = Math.max(
+                1,
+                Math.round(
+                    (XP_MINIMO + Math.floor(Math.random() * (XP_MAXIMO - XP_MINIMO + 1))) *
+                    configDoServidor.multiplicador_xp
+                )
+            );
 
             const antes = await getXP(mensagem.author.id);
             await adicionarXP(mensagem.author.id, ganho);
@@ -114,11 +125,34 @@ function iniciar(client) {
             const nivelAntes = calcularNivel(antes);
             const nivelDepois = calcularNivel(antes + ganho);
 
-            if (AVISAR_NIVEL && nivelDepois > nivelAntes && (await configUsuario.obter(mensagem.author.id)).aviso_nivel) {
-                await mensagem.channel.send({
+            if (
+                AVISAR_NIVEL &&
+                configDoServidor.aviso_nivel &&
+                nivelDepois > nivelAntes &&
+                (await configUsuario.obter(mensagem.author.id)).aviso_nivel
+            ) {
+                const aviso = {
                     content: `🎉 ${mensagem.author} subiu para o **nível ${nivelDepois}**!`,
                     allowedMentions: { users: [mensagem.author.id] }
-                });
+                };
+
+                let destino = mensagem.channel;
+
+                // Canal de avisos escolhido no /server-config
+                if (configDoServidor.canal_nivel) {
+                    const escolhido = await mensagem.guild.channels
+                        .fetch(configDoServidor.canal_nivel)
+                        .catch(() => null);
+
+                    if (escolhido && typeof escolhido.send === "function") destino = escolhido;
+                }
+
+                try {
+                    await destino.send(aviso);
+                } catch (e) {
+                    // sem permissão no canal escolhido: avisa no canal da conversa
+                    if (destino !== mensagem.channel) await mensagem.channel.send(aviso);
+                }
             }
         } catch (erro) {
             console.error("❌ Erro no XP por mensagem:", erro);

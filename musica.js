@@ -29,6 +29,7 @@ const {
 } = require("@discordjs/voice");
 
 const emojis = require("./emojis.js");
+const configServidor = require("./configServidor.js");
 
 // =====================================================
 // ⚙️ CONFIGURAÇÕES
@@ -1335,6 +1336,13 @@ async function rodarSlash(interaction, acao, extra = {}, demorado = false) {
             });
         }
 
+        if (!(await configServidor.obter(interaction.guild.id)).musica) {
+            return interaction.reply({
+                content: `${EMOJIS.erro} A música está desativada neste servidor.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
         // Buscar a música pode levar mais de 3 segundos.
         if (demorado) {
             await interaction.deferReply();
@@ -1398,6 +1406,10 @@ async function rodarPrefixo(message, acao, extra = {}) {
     try {
         if (!message.guild) {
             return;
+        }
+
+        if (!(await configServidor.obter(message.guild.id)).musica) {
+            return message.reply(`${EMOJIS.erro} A música está desativada neste servidor.`);
         }
 
         const resultado =

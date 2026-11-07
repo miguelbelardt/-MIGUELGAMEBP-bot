@@ -156,6 +156,7 @@ require("./banbot.js").iniciar(client);
 require("./contadores.js").iniciar(client);
 require("./convites.js").iniciar(client);
 require("./configUsuario.js").iniciar(client);
+require("./configServidor.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
@@ -2835,6 +2836,14 @@ client.on(
             partes
                 .shift()
                 .toLowerCase();
+
+        // Servidor que desligou os comandos com ' no /server-config
+        if (
+            message.guild &&
+            !(await require("./configServidor.js").obter(message.guild.id)).prefixo
+        ) {
+            return;
+        }
 
         const comando =
             client.commands.get(
