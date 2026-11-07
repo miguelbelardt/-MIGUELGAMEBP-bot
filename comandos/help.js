@@ -134,7 +134,8 @@ const SECOES = [
         comandos: {
             enquete: "Cria uma votação com botões.",
             lembrete: "O bot te avisa depois (criar, listar, remover).",
-            afk: "Fica AFK e avisa quem te marcar."
+            afk: "Fica AFK e avisa quem te marcar.",
+            config: "Liga ou desliga suas configurações pessoais."
         }
     },
     {
