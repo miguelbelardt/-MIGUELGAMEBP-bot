@@ -146,6 +146,19 @@ async function aoEntrar(membro) {
             saiu = FALSE`,
         [membro.guild.id, membro.id, convidador, achado?.codigo || null, Date.now()]
     );
+
+    return montarInfo(membro.guild.id, convidador, achado?.codigo || null);
+}
+
+// Quem convidou + quantas pessoas essa pessoa já convidou no total
+async function montarInfo(guildId, convidadorId, codigo = null) {
+    if (!convidadorId) {
+        return { convidadorId: null, codigo, total: 0, ativos: 0 };
+    }
+
+    const stats = await estatisticas(guildId, convidadorId);
+
+    return { convidadorId, codigo, total: stats.total, ativos: stats.ativos };
 }
 
 async function aoSair(membro) {
@@ -157,12 +170,71 @@ async function aoSair(membro) {
     );
 }
 
+// Cada entrada é processada uma única vez (o listener e a mensagem de
+// boas-vindas compartilham o mesmo resultado).
+const entradas = new Map();
+
+function processarEntrada(membro) {
+    const chave = `${membro.guild.id}|${membro.id}|${membro.joinedTimestamp || 0}`;
+
+    if (!entradas.has(chave)) {
+        const promessa = enfileirar(membro.guild.id, () => aoEntrar(membro));
+
+        entradas.set(chave, promessa);
+
+        setTimeout(() => entradas.delete(chave), 2 * 60 * 1000).unref?.();
+    }
+
+    return entradas.get(chave);
+}
+
+// Usada pela mensagem de boas-vindas: espera um pouco e, se não der, segue sem.
+async function infoEntrada(membro, timeoutMs = 4000) {
+    try {
+        let timer;
+
+        const limite = new Promise(resolve => {
+            timer = setTimeout(() => resolve(null), timeoutMs);
+        });
+
+        const info = await Promise.race([processarEntrada(membro), limite]);
+
+        clearTimeout(timer);
+
+        return info || null;
+    } catch {
+        return null;
+    }
+}
+
+// Usada pela mensagem de saída: quem convidou essa pessoa quando ela entrou.
+async function infoDoMembro(guildId, membroId) {
+    try {
+        await prepararTabela();
+
+        const [[linha]] = await mysqlPool.query(
+            "SELECT convidador_id, codigo FROM convites_entradas WHERE guild_id = ? AND membro_id = ?",
+            [guildId, membroId]
+        );
+
+        if (!linha) return null;
+
+        return await montarInfo(guildId, linha.convidador_id || null, linha.codigo || null);
+    } catch {
+        return null;
+    }
+}
+
 function enfileirar(guildId, tarefa) {
     const anterior = filas.get(guildId) || Promise.resolve();
 
     const proxima = anterior
         .then(tarefa)
-        .catch(e => console.error("❌ Erro nos convites:", e));
+        .catch(e => {
+            console.error("❌ Erro nos convites:", e);
+
+            return null;
+        });
 
     filas.set(guildId, proxima);
 
@@ -270,7 +342,7 @@ function iniciar(client) {
     });
 
     client.on(Events.GuildMemberAdd, membro => {
-        enfileirar(membro.guild.id, () => aoEntrar(membro));
+        processarEntrada(membro);
     });
 
     client.on(Events.GuildMemberRemove, membro => {
@@ -283,5 +355,7 @@ module.exports = {
     estatisticas,
     linksAtuais,
     ranking,
+    infoEntrada,
+    infoDoMembro,
     _teste: { descobrirConvite, aoEntrar, aoSair, fotos, atualizarFoto }
 };
