@@ -991,10 +991,29 @@ async function inicializarBanco() {
     await mysqlPool.query(`
         UPDATE join_config
         SET footer_texto =
-            'Massa Com Chika • Bem-vindo!'
+            '{server} • Bem-vindo!'
         WHERE footer_texto IS NULL
         OR footer_texto = ''
     `);
+
+    // Troca o nome fixo antigo pela variável {server}
+    await mysqlPool.query(`
+        UPDATE join_config
+        SET footer_texto =
+            REPLACE(footer_texto, 'Massa Com Chika', '{server}')
+        WHERE footer_texto LIKE '%Massa Com Chika%'
+    `);
+
+    try {
+        await mysqlPool.query(`
+            UPDATE leave_config
+            SET footer_texto =
+                REPLACE(footer_texto, 'Massa Com Chika', '{server}')
+            WHERE footer_texto LIKE '%Massa Com Chika%'
+        `);
+    } catch (erro) {
+        console.error("⚠️ Não consegui atualizar o footer do leave:", erro?.message || erro);
+    }
 
     await mysqlPool.query(`
         UPDATE join_config
@@ -2321,7 +2340,7 @@ function normalizarConfigJoin(
         footerTexto:
             footer.texto ??
             config.footer_texto ??
-            "Massa Com Chika • Bem-vindo!",
+            "{server} • Bem-vindo!",
 
         footerIcone:
             footer.icone ??
@@ -4107,7 +4126,7 @@ function normalizarConfigLeave(
         footerTexto:
             footer.texto ??
             config.footer_texto ??
-            "Massa Com Chika • Até mais!",
+            "{server} • Até mais!",
 
         footerIcone:
             footer.icone ??
