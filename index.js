@@ -155,6 +155,7 @@ require("./utilidade.js").iniciar(client);
 require("./banbot.js").iniciar(client);
 require("./contadores.js").iniciar(client);
 require("./convites.js").iniciar(client);
+require("./configUsuario.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
