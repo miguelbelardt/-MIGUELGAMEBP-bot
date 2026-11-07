@@ -39,7 +39,9 @@ function substituirVariaveis(texto, dados) {
         .replace(/\{avatar\}/gi, dados.avatar)
         .replace(/\{banner\}/gi, dados.banner || "")
         .replace(/\{members\}/gi, String(dados.members))
-        .replace(/\{server\}/gi, dados.server);
+        .replace(/\{server\}/gi, dados.server)
+        .replace(/\{inviter\}/gi, dados.inviter || "Desconhecido")
+        .replace(/\{invites\}/gi, String(dados.invites ?? 0));
 }
 
 // =====================================================
@@ -349,6 +351,14 @@ async function salvarExtrasJoin(guildId, extras) {
 // =====================================================
 
 async function pegarDadosMembro(membro) {
+    let infoConvite = null;
+
+    try {
+        infoConvite = await require("../convites.js").infoEntrada(membro);
+    } catch {
+        infoConvite = null;
+    }
+
     let usuario = membro.user;
 
     try {
@@ -383,7 +393,11 @@ async function pegarDadosMembro(membro) {
         avatar,
         banner,
         members: await contarMembrosSemBots(membro.guild),
-        server: membro.guild.name
+        server: membro.guild.name,
+        inviter: infoConvite?.convidadorId
+            ? `<@${infoConvite.convidadorId}>`
+            : "Desconhecido",
+        invites: infoConvite?.total ?? 0
     };
 }
 
@@ -578,7 +592,8 @@ function criarEmbedBoasVindas(
         const footer = {
             text:
                 textoFooter ||
-                "Massa Com Chika"
+                dados.server ||
+                "Servidor"
         };
 
         if (
@@ -828,7 +843,10 @@ async function pegarDadosTeste(interaction) {
         members:
             await contarMembrosSemBots(interaction.guild),
         server:
-            interaction.guild.name
+            interaction.guild.name,
+        inviter:
+            `<@${interaction.user.id}>`,
+        invites: 5
     };
 }
 
@@ -876,8 +894,9 @@ function criarPainelJoin(
                 "Use os botões abaixo para configurar o sistema de boas-vindas.\n\n" +
                 "📝 **Mensagem**, 🎨 **Embed**, 👤 **Autor**, 🖼️ **Imagens**, 📌 **Rodapé** e 🧾 **Campos** abrem formulários.\n" +
                 "Os botões **ON/OFF** ligam e desligam cada parte do embed.\n\n" +
-                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`\n" +
-                "`{members}` conta só as pessoas (bots não entram na conta)."
+                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}` `{inviter}` `{invites}`\n" +
+                "`{members}` conta só as pessoas (bots não entram na conta).\n" +
+                "`{inviter}` é quem convidou a pessoa e `{invites}` é o total de convites dessa pessoa."
             )
             .setColor(
                 converterCor(

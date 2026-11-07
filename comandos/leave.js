@@ -38,7 +38,9 @@ function substituirVariaveis(texto, dados) {
         .replaceAll("{avatar}", dados.avatar ?? "")
         .replaceAll("{banner}", dados.banner ?? "")
         .replaceAll("{members}", String(dados.members ?? ""))
-        .replaceAll("{server}", dados.server ?? "");
+        .replaceAll("{server}", dados.server ?? "")
+        .replaceAll("{inviter}", dados.inviter ?? "Desconhecido")
+        .replaceAll("{invites}", String(dados.invites ?? 0));
 }
 
 
@@ -323,6 +325,16 @@ async function salvarExtrasLeave(guildId, extras) {
 
 async function pegarDadosMembro(membro) {
 
+    let infoConvite = null;
+
+    try {
+        infoConvite =
+            await require("../convites.js")
+                .infoDoMembro(membro.guild.id, membro.id);
+    } catch {
+        infoConvite = null;
+    }
+
     let usuario;
 
     try {
@@ -367,7 +379,11 @@ async function pegarDadosMembro(membro) {
         avatar,
         banner,
         members: await contarMembrosSemBots(membro.guild),
-        server: membro.guild.name
+        server: membro.guild.name,
+        inviter: infoConvite?.convidadorId
+            ? `<@${infoConvite.convidadorId}>`
+            : "Desconhecido",
+        invites: infoConvite?.total ?? 0
     };
 }
 
@@ -510,7 +526,8 @@ function criarEmbedSaida(
         const footer = {
             text:
                 textoFooter ||
-                "Massa Com Chika"
+                dados.server ||
+                "Servidor"
         };
 
         const iconeFooter =
@@ -761,7 +778,12 @@ async function pegarDadosTeste(interaction) {
             await contarMembrosSemBots(interaction.guild),
 
         server:
-            interaction.guild.name
+            interaction.guild.name,
+
+        inviter:
+            `<@${interaction.user.id}>`,
+
+        invites: 5
     };
 }
 
@@ -813,8 +835,9 @@ function criarPainelLeave(
                 "Configure abaixo como a mensagem de saída será enviada.\n\n" +
                 "💬 **Mensagem**, 🎨 **Embed**, 👤 **Autor**, 🖼️ **Imagens**, 📝 **Footer** e 🧾 **Campos** abrem formulários.\n" +
                 "Os botões **ON/OFF** ligam e desligam cada parte do embed.\n\n" +
-                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}`\n" +
-                "`{members}` conta só as pessoas (bots não entram na conta)."
+                "Variáveis: `{user}` `{username}` `{userid}` `{avatar}` `{banner}` `{members}` `{server}` `{inviter}` `{invites}`\n" +
+                "`{members}` conta só as pessoas (bots não entram na conta).\n" +
+                "`{inviter}` é quem convidou a pessoa que saiu e `{invites}` é o total de convites dessa pessoa."
             )
             .addFields(
                 {
@@ -869,7 +892,7 @@ function criarPainelLeave(
             )
             .setFooter({
                 text:
-                    "Massa Com Chika • Sistema de Leave"
+                    "Sistema de Leave"
             });
 
     const canalSelect =
