@@ -224,6 +224,29 @@ async function linksAtuais(guild, usuarioId) {
     };
 }
 
+// Quem mais convidou no servidor (ordena por quem ainda está no servidor)
+async function ranking(guildId, limite = 10) {
+    await prepararTabela();
+
+    const max = Math.min(Math.max(Number(limite) || 10, 1), 25);
+
+    const [linhas] = await mysqlPool.query(
+        `SELECT convidador_id, COUNT(*) AS total, COALESCE(SUM(saiu = FALSE), 0) AS ativos
+         FROM convites_entradas
+         WHERE guild_id = ? AND convidador_id IS NOT NULL
+         GROUP BY convidador_id
+         ORDER BY ativos DESC, total DESC
+         LIMIT ${max}`,
+        [guildId]
+    );
+
+    return linhas.map(l => ({
+        usuarioId: l.convidador_id,
+        total: Number(l.total) || 0,
+        ativos: Number(l.ativos) || 0
+    }));
+}
+
 // =====================================================
 // 🚀 INICIAR
 // =====================================================
@@ -259,5 +282,6 @@ module.exports = {
     iniciar,
     estatisticas,
     linksAtuais,
+    ranking,
     _teste: { descobrirConvite, aoEntrar, aoSair, fotos, atualizarFoto }
 };

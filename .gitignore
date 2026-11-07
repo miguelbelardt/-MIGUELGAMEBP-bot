@@ -1,0 +1,7 @@
+# Segredos e dependências: nunca suba isto para o GitHub
+.env
+.env.*
+node_modules/
+npm-debug.log*
+*.log
+.DS_Store
