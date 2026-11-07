@@ -70,6 +70,7 @@ const SECOES = [
             idcomando: "Mostra o ID de um Slash Command.",
             avatar: "Mostra o avatar de alguém em tamanho grande.",
             convites: "Mostra quantas pessoas você convidou.",
+            "convites-ranking": "Mostra quem mais convidou pessoas.",
             banner: "Mostra o banner de perfil de alguém."
         }
     },
