@@ -57,6 +57,7 @@ function criarConfiguracao() {
         autorUrl: "",
         campos: "",
         mensagem: "",
+        botoes: "",
 
         canalId: "",
         mensagemId: "",
@@ -136,6 +137,121 @@ function camposParaTexto(campos) {
         .join("\n");
 }
 
+// Formato (uma linha por botão):
+//   Nome | https://link | emoji (opcional)
+// Botões de link ficam abaixo do embed e funcionam para sempre.
+
+const MAX_BOTOES = 5;
+
+function emojiValido(texto) {
+    if (!texto) {
+        return false;
+    }
+
+    return (
+        /^<a?:\w{2,32}:\d{15,25}>$/.test(texto) ||
+        /^\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic}|\p{Emoji_Modifier})*$/u.test(texto)
+    );
+}
+
+function textoParaBotoes(texto) {
+    if (!texto || typeof texto !== "string") {
+        return [];
+    }
+
+    const botoes = [];
+
+    for (const linha of texto.split("\n")) {
+        if (botoes.length >= MAX_BOTOES) {
+            break;
+        }
+
+        const partes =
+            linha.split("|").map(
+                parte => parte.trim()
+            );
+
+        const nome = partes[0];
+        const url = partes[1];
+
+        if (!nome || !url) {
+            continue;
+        }
+
+        try {
+            const analisada = new URL(url);
+
+            if (
+                analisada.protocol !== "http:" &&
+                analisada.protocol !== "https:"
+            ) {
+                continue;
+            }
+        } catch {
+            continue;
+        }
+
+        if (url.length > 512) {
+            continue;
+        }
+
+        botoes.push({
+            label: nome.slice(0, 80),
+            url,
+            emoji: emojiValido(partes[2]) ? partes[2] : ""
+        });
+    }
+
+    return botoes;
+}
+
+function botoesParaTexto(botoes) {
+    return botoes
+        .map(botao =>
+            `${botao.label} | ${botao.url}${botao.emoji ? ` | ${botao.emoji}` : ""}`
+        )
+        .join("\n");
+}
+
+// Linha de botões de link para anexar na mensagem (vazio se não tiver)
+function criarComponentesBotoes(config) {
+    const botoes =
+        textoParaBotoes(
+            config.botoes
+        );
+
+    if (!botoes.length) {
+        return [];
+    }
+
+    return [
+        new ActionRowBuilder()
+            .addComponents(
+                botoes.map(botao => {
+                    const construido =
+                        new ButtonBuilder()
+                            .setStyle(
+                                ButtonStyle.Link
+                            )
+                            .setLabel(
+                                botao.label
+                            )
+                            .setURL(
+                                botao.url
+                            );
+
+                    if (botao.emoji) {
+                        construido.setEmoji(
+                            botao.emoji
+                        );
+                    }
+
+                    return construido;
+                })
+            )
+    ];
+}
+
 // =====================================================
 // 💾 COLUNAS EXTRAS (link do título/autor, campos, texto)
 // =====================================================
@@ -160,7 +276,8 @@ function garantirColunasExtras() {
                 titulo_url: "TEXT",
                 autor_url: "TEXT",
                 campos: "TEXT",
-                mensagem_texto: "TEXT"
+                mensagem_texto: "TEXT",
+                botoes: "TEXT"
             };
 
             for (const [coluna, definicao] of Object.entries(extras)) {
@@ -195,7 +312,8 @@ async function salvarExtras(id, guildId, config) {
                 titulo_url = ?,
                 autor_url = ?,
                 campos = ?,
-                mensagem_texto = ?
+                mensagem_texto = ?,
+                botoes = ?
             WHERE id = ?
             AND guild_id = ?
             `,
@@ -204,6 +322,7 @@ async function salvarExtras(id, guildId, config) {
                 config.autorUrl || null,
                 config.campos || null,
                 config.mensagem || null,
+                config.botoes || null,
                 id,
                 guildId
             ]
@@ -246,6 +365,7 @@ function criarConfigAPartirDoBanco(dados) {
         autorUrl: dados.autor_url || "",
         campos: dados.campos || "",
         mensagem: dados.mensagem_texto || "",
+        botoes: dados.botoes || "",
 
         canalId: dados.canal_id || "",
         mensagemId: dados.mensagem_id || "",
@@ -721,6 +841,11 @@ function criarPainel(config, usuario = null) {
             config.campos
         ).length;
 
+    const qtdBotoes =
+        textoParaBotoes(
+            config.botoes
+        ).length;
+
     const marca = ativo =>
         ativo ? "✅" : "❌";
 
@@ -737,7 +862,8 @@ function criarPainel(config, usuario = null) {
             `${marca(config.tituloUrl || config.autorUrl)} Links  ` +
             `${marca(qtdCampos)} Campos${qtdCampos ? ` (${qtdCampos})` : ""}\n` +
             `${marca(config.mensagem)} Mensagem  ` +
-            `${marca(config.timestamp)} Horário`
+            `${marca(config.timestamp)} Horário  ` +
+            `${marca(qtdBotoes)} Botões${qtdBotoes ? ` (${qtdBotoes})` : ""}`
     });
 
     // =================================================
@@ -873,6 +999,15 @@ function criarPainel(config, usuario = null) {
                         "embed_mensagem"
                     )
                     .setLabel("💬 Mensagem")
+                    .setStyle(
+                        ButtonStyle.Secondary
+                    ),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        "embed_botoes"
+                    )
+                    .setLabel("🔘 Botões")
                     .setStyle(
                         ButtonStyle.Secondary
                     ),
@@ -2141,6 +2276,56 @@ module.exports = {
         }
 
         // =================================================
+        // 🔘 BOTÕES (links abaixo do embed)
+        // =================================================
+
+        if (
+            interaction.customId ===
+            "embed_botoes"
+        ) {
+            const modal =
+                new ModalBuilder()
+                    .setCustomId(
+                        "embed_modal_botoes"
+                    )
+                    .setTitle(
+                        "🔘 Botões do embed"
+                    );
+
+            const input =
+                new TextInputBuilder()
+                    .setCustomId(
+                        "botoes"
+                    )
+                    .setLabel(
+                        "Nome | Link | Emoji (opcional) — até 5"
+                    )
+                    .setStyle(
+                        TextInputStyle.Paragraph
+                    )
+                    .setRequired(false)
+                    .setPlaceholder(
+                        "Regras | https://exemplo.com/regras | 📜\nSite | https://exemplo.com"
+                    )
+                    .setMaxLength(1500)
+                    .setValue(
+                        config.botoes ||
+                        ""
+                    );
+
+            modal.addComponents(
+                new ActionRowBuilder()
+                    .addComponents(
+                        input
+                    )
+            );
+
+            return interaction.showModal(
+                modal
+            );
+        }
+
+        // =================================================
         // 💬 MENSAGEM (texto acima do embed)
         // =================================================
 
@@ -2238,6 +2423,10 @@ module.exports = {
                 embeds: [
                     resultado.embed
                 ],
+                components:
+                    criarComponentesBotoes(
+                        config
+                    ),
                 ephemeral: true
             });
         }
@@ -2379,7 +2568,10 @@ module.exports = {
                             embeds: [
                                 resultado.embed
                             ],
-                            components: []
+                            components:
+                                criarComponentesBotoes(
+                                    config
+                                )
                         });
 
                         await atualizarEmbedBanco(
@@ -2430,7 +2622,10 @@ module.exports = {
                             embeds: [
                                 resultado.embed
                             ],
-                            components: []
+                            components:
+                                criarComponentesBotoes(
+                                    config
+                                )
                         });
 
                     await atualizarEmbedBanco(
@@ -2504,7 +2699,10 @@ module.exports = {
                         embeds: [
                             resultado.embed
                         ],
-                        components: []
+                        components:
+                            criarComponentesBotoes(
+                                config
+                            )
                     });
 
                 await salvarMensagemEmbed(
@@ -2958,6 +3156,54 @@ module.exports = {
                 interaction,
                 config
             );
+        }
+
+        // =================================================
+        // 🔘 BOTÕES
+        // =================================================
+
+        if (
+            interaction.customId ===
+            "embed_modal_botoes"
+        ) {
+            const texto =
+                interaction.fields
+                    .getTextInputValue(
+                        "botoes"
+                    );
+
+            const aceitos =
+                textoParaBotoes(texto);
+
+            const linhasPreenchidas =
+                texto
+                    .split("\n")
+                    .filter(
+                        linha => linha.trim()
+                    ).length;
+
+            // Guarda já normalizado: só o que foi aceito de verdade
+            config.botoes =
+                botoesParaTexto(aceitos);
+
+            await atualizarPainelEmbed(
+                interaction,
+                config
+            );
+
+            if (linhasPreenchidas > aceitos.length) {
+                await interaction
+                    .followUp({
+                        content:
+                            `⚠️ ${linhasPreenchidas - aceitos.length} linha(s) foram ignoradas. ` +
+                            "Use o formato `Nome | https://link | emoji` (o link precisa começar com http:// ou https://). " +
+                            `O máximo é ${MAX_BOTOES} botões.`,
+                        ephemeral: true
+                    })
+                    .catch(() => {});
+            }
+
+            return;
         }
 
         // =================================================
