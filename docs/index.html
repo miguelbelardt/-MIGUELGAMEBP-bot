@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yogiri Takatou — Bot de Discord</title>
+<meta name="description" content="Yogiri Takatou: bot de Discord com economia, XP, música, tickets, sorteios, convites e moderação. Veja todos os comandos.">
+<meta name="theme-color" content="#0f0d1a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%99%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topo">
+  <a class="marca" href="#inicio"><span class="lua">🌙</span> Yogiri Takatou</a>
+  <nav>
+    <a href="#recursos">Recursos</a>
+    <a href="#comandos">Comandos</a>
+    <a href="#comecar">Como usar</a>
+    <a class="botao botao-pequeno" data-convite href="#">Adicionar ao servidor</a>
+  </nav>
+</header>
+
+<main id="inicio">
+  <section class="heroi">
+    <p class="selo">Bot para Discord • em português</p>
+    <h1>Um bot completo para o seu servidor.</h1>
+    <p class="sub">Economia, níveis, música, tickets, sorteios, convites e moderação — tudo em um bot só, com painéis fáceis de configurar.</p>
+    <div class="acoes">
+      <a class="botao" data-convite href="#">➕ Adicionar ao Discord</a>
+      <a class="botao botao-claro" href="#comandos">Ver comandos</a>
+    </div>
+    <ul class="numeros">
+      <li><strong id="n-comandos">0</strong><span>comandos</span></li>
+      <li><strong id="n-categorias">0</strong><span>categorias</span></li>
+      <li><strong>Grátis</strong><span>para usar</span></li>
+    </ul>
+  </section>
+
+  <section id="recursos" class="secao">
+    <h2>O que ele faz</h2>
+    <div class="grade">
+      <article class="cartao"><span class="icone">💰</span><h3>Economia</h3><p>Daily, trabalho, loja, inventário, premium e ranking de moedas.</p></article>
+      <article class="cartao"><span class="icone">📈</span><h3>XP e níveis</h3><p>Ganhe XP conversando, suba de nível e dispute o ranking do servidor.</p></article>
+      <article class="cartao"><span class="icone">🎵</span><h3>Música</h3><p>Toque músicas na call com fila, loop, volume e embaralhar.</p></article>
+      <article class="cartao"><span class="icone">🎫</span><h3>Tickets</h3><p>Painel de atendimento com assumir, transcrição e avaliação.</p></article>
+      <article class="cartao"><span class="icone">🎁</span><h3>Sorteios</h3><p>Sorteios bonitos com vários vencedores e novo sorteio em um clique.</p></article>
+      <article class="cartao"><span class="icone">🎟️</span><h3>Convites</h3><p>Descubra quem convidou quem e veja o ranking de convites.</p></article>
+      <article class="cartao"><span class="icone">👋</span><h3>Boas-vindas</h3><p>Mensagens de entrada e saída com embed, imagens e variáveis como <code>{inviter}</code>.</p></article>
+      <article class="cartao"><span class="icone">🛡️</span><h3>Moderação</h3><p>Ban, kick, timeout, avisos, logs e limpeza de mensagens.</p></article>
+    </div>
+  </section>
+
+  <section id="comandos" class="secao">
+    <h2>Comandos</h2>
+    <p class="legenda">Use <code>/</code> para comandos de barra ou o prefixo <code>'</code> em vários deles. Comandos com <span class="etiqueta">ADM</span> exigem permissão.</p>
+
+    <div class="ferramentas">
+      <input id="busca" type="search" placeholder="Buscar comando…" aria-label="Buscar comando" autocomplete="off">
+      <label class="chave"><input id="so-livres" type="checkbox"> <span>Esconder comandos de ADM</span></label>
+    </div>
+
+    <div id="abas" class="abas" role="tablist"></div>
+    <div id="lista" class="lista"></div>
+    <p id="vazio" class="vazio" hidden>Nenhum comando encontrado.</p>
+  </section>
+
+  <section id="comecar" class="secao">
+    <h2>Como começar</h2>
+    <ol class="passos">
+      <li><strong>Adicione o bot</strong><span>Clique em “Adicionar ao Discord” e escolha o seu servidor.</span></li>
+      <li><strong>Veja a ajuda</strong><span>Use <code>/help</code> para abrir a Central de Ajuda com tudo organizado.</span></li>
+      <li><strong>Configure</strong><span>Use <code>/server-config</code> para ligar ou desligar recursos e <code>/config</code> para as suas opções pessoais.</span></li>
+    </ol>
+    <div class="acoes centro">
+      <a class="botao" data-convite href="#">➕ Adicionar ao Discord</a>
+    </div>
+  </section>
+</main>
+
+<footer class="rodape">
+  <p>🌙 Yogiri Takatou • Feito por Miguel</p>
+</footer>
+
+<script src="comandos.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
