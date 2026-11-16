@@ -2,7 +2,7 @@
 // ⚙️ CONFIGURAÇÃO — só isto precisa ser preenchido
 // =====================================================
 // ID do bot (Discord Developer Portal → seu app → General Information → Application ID)
-const CLIENT_ID = "COLE_O_CLIENT_ID_AQUI";
+const CLIENT_ID = "1367651687636144169";
 
 // Permissão pedida no convite (8 = Administrador)
 const PERMISSOES = "8";
