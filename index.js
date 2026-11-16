@@ -157,7 +157,6 @@ require("./contadores.js").iniciar(client);
 require("./convites.js").iniciar(client);
 require("./configUsuario.js").iniciar(client);
 require("./configServidor.js").iniciar(client);
-require("./teste-web.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
