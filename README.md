@@ -4,7 +4,7 @@
 
 **Bot de Discord completo, em português: economia, XP, música, tickets, sorteios, convites e moderação.**
 
-[🌐 Site do bot](https://miguelbelardt.github.io/-miguelgamebp-bot) • [➕ Adicionar ao Discord](https://miguelbelardt.github.io/-miguelgamebp-bot) • [📚 Comandos](https://miguelbelardt.github.io/-miguelgamebp-bot/#comandos)
+[🌐 Site do bot](https://miguelbelardt.github.io/-MIGUELGAMEBP-bot) • [➕ Adicionar ao Discord](https://miguelbelardt.github.io/-MIGUELGAMEBP-bot) • [📚 Comandos](https://miguelbelardt.github.io/-MIGUELGAMEBP-bot/#comandos)
 
 </div>
 
@@ -27,7 +27,7 @@
 
 ## 🚀 Como usar
 
-1. **Adicione o bot** ao seu servidor pelo [site](https://miguelbelardt.github.io/-miguelgamebp-bot).
+1. **Adicione o bot** ao seu servidor pelo [site](https://miguelbelardt.github.io/-MIGUELGAMEBP-bot).
 2. Use `/help` para abrir a Central de Ajuda.
 3. Configure com `/server-config` e `/config`.
 

@@ -11,7 +11,7 @@
 // Opcionais (têm valor padrão):
 //   API_URL   endereço público do bot   (https://miguelgamebp-bot.fadehost.app)
 //   SITE_URL  endereço do site          (https://miguelbelardt.github.io)
-//   SITE_PATH pasta do site             (/-miguelgamebp-bot/)
+//   SITE_PATH pasta do site             (/-MIGUELGAMEBP-bot/)
 //
 // No Developer Portal, em OAuth2 → Redirecionamentos, cadastre:
 //   <API_URL>/auth/callback
@@ -27,7 +27,7 @@ const configServidor = require("./configServidor.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
-const SITE_PATH = process.env.SITE_PATH || "/-miguelgamebp-bot/";
+const SITE_PATH = process.env.SITE_PATH || "/-MIGUELGAMEBP-bot/";
 
 const REDIRECT_URI = `${API_URL}/auth/callback`;
 
