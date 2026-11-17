@@ -25,16 +25,24 @@ document.querySelectorAll("[data-convite]").forEach(a => {
   }
 });
 
-const categorias = window.CATEGORIAS || [];
+// Endereço público do bot: a lista de comandos é lida dele, sempre atualizada.
+// Se o bot estiver fora do ar, o site usa a lista salva em comandos.js.
+const API = "https://miguelgamebp-bot.fadehost.app";
+
+let categorias = window.CATEGORIAS || [];
 const abas = document.getElementById("abas");
 const lista = document.getElementById("lista");
 const vazio = document.getElementById("vazio");
 const busca = document.getElementById("busca");
 const soLivres = document.getElementById("so-livres");
 
-const total = categorias.reduce((s, c) => s + c.comandos.length, 0);
-document.getElementById("n-comandos").textContent = total;
-document.getElementById("n-categorias").textContent = categorias.length;
+function atualizarNumeros() {
+  const total = categorias.reduce((s, c) => s + c.comandos.length, 0);
+  document.getElementById("n-comandos").textContent = total;
+  document.getElementById("n-categorias").textContent = categorias.length;
+}
+
+atualizarNumeros();
 
 let atual = "todos";
 
@@ -49,8 +57,13 @@ function criarAba(id, texto) {
   abas.appendChild(b);
 }
 
-criarAba("todos", "Todos");
-categorias.forEach((c, i) => criarAba(String(i), `${c.icone} ${c.nome}`));
+function montarAbas() {
+  abas.replaceChildren();
+  criarAba("todos", "Todos");
+  categorias.forEach((c, i) => criarAba(String(i), `${c.icone} ${c.nome}`));
+}
+
+montarAbas();
 
 function normalizar(t) {
   return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -107,3 +120,45 @@ function desenhar() {
 busca.addEventListener("input", desenhar);
 soLivres.addEventListener("change", desenhar);
 desenhar();
+
+// Junta a lista real do bot com as categorias do comandos.js:
+// o nome, a descrição e o "ADM" vêm do bot; comando novo cai em "Outros".
+function mesclar(base, doBot) {
+  const porNome = new Map(doBot.map(c => [c.nome, c]));
+  const usados = new Set();
+
+  const resultado = base
+    .map(cat => ({
+      icone: cat.icone,
+      nome: cat.nome,
+      comandos: cat.comandos
+        .filter(([nome]) => porNome.has(nome))
+        .map(([nome]) => {
+          const c = porNome.get(nome);
+          usados.add(nome);
+          return [nome, c.descricao, c.adm ? 1 : 0];
+        })
+    }))
+    .filter(cat => cat.comandos.length);
+
+  const novos = doBot
+    .filter(c => !usados.has(c.nome))
+    .map(c => [c.nome, c.descricao, c.adm ? 1 : 0]);
+
+  if (novos.length) resultado.push({ icone: "✨", nome: "Outros", comandos: novos });
+
+  return resultado;
+}
+
+fetch(API + "/api/comandos")
+  .then(r => (r.ok ? r.json() : null))
+  .then(dados => {
+    if (!dados?.comandos?.length) return;
+
+    categorias = mesclar(window.CATEGORIAS || [], dados.comandos);
+    if (atual !== "todos" && !categorias[Number(atual)]) atual = "todos";
+    atualizarNumeros();
+    montarAbas();
+    desenhar();
+  })
+  .catch(() => { /* fica com a lista do comandos.js */ });
