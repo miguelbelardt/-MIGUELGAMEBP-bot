@@ -11,16 +11,6 @@ window.CATEGORIAS = [
     0
    ],
    [
-    "daily",
-    "Resgate sua recompensa diária.",
-    0
-   ],
-   [
-    "daily-notificar",
-    "Gerencie as notificações do seu Daily.",
-    0
-   ],
-   [
     "trabalhar",
     "Trabalhe para ganhar moedas (1 vez por hora).",
     0
