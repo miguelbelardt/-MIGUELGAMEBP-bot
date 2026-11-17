@@ -24,6 +24,7 @@ const crypto = require("crypto");
 const { PermissionFlagsBits, ChannelType } = require("discord.js");
 
 const configServidor = require("./configServidor.js");
+const painelDaily = require("./painelDaily.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -122,7 +123,7 @@ function cabecalhosCors(req, res) {
         res.setHeader("Access-Control-Allow-Origin", SITE_URL);
         res.setHeader("Vary", "Origin");
         res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-        res.setHeader("Access-Control-Allow-Methods", "GET, PUT, OPTIONS");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
         res.setHeader("Access-Control-Max-Age", "600");
     }
 }
@@ -494,6 +495,46 @@ function tratar(req, res) {
         }
 
         if (req.method === "GET" && caminho === "/api/guilds") return listarServidores(req, res);
+
+        if (caminho === "/api/daily" && req.method === "GET") {
+            const s = usuarioDaRequisicao(req);
+
+            if (!s) return json(res, 401, { erro: "Faça login de novo." });
+
+            return json(res, 200, await painelDaily.status(s.id));
+        }
+
+        if (caminho === "/api/daily/resgatar" && req.method === "POST") {
+            const s = usuarioDaRequisicao(req);
+
+            if (!s) return json(res, 401, { erro: "Faça login de novo." });
+
+            if (require("./banbot.js")._banidos.has(s.id)) {
+                return json(res, 403, { erro: "Você está proibido de usar o bot." });
+            }
+
+            const r = await painelDaily.resgatar(s.id);
+
+            if (!r.sucesso) return json(res, 409, { erro: "Você já pegou o daily de hoje." });
+
+            return json(res, 200, {
+                resultado: { recompensa: r.recompensa, sequencia: r.sequencia },
+                ...(await painelDaily.status(s.id))
+            });
+        }
+
+        if (caminho === "/api/daily/notificacao" && req.method === "PUT") {
+            const s = usuarioDaRequisicao(req);
+
+            if (!s) return json(res, 401, { erro: "Faça login de novo." });
+
+            const corpo = await lerCorpo(req);
+            const r = await painelDaily.definirNotificacao(s.id, corpo?.ativa);
+
+            if (r.erro) return json(res, 400, r);
+
+            return json(res, 200, await painelDaily.status(s.id));
+        }
 
         const m = caminho.match(/^\/api\/guilds\/(\d+)\/config$/);
 

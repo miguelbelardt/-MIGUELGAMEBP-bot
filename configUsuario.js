@@ -53,7 +53,7 @@ const OPCOES = {
         emoji: "📩",
         nome: "DMs do bot",
         curto: "DMs do bot",
-        descricao: "O bot pode te mandar DM (transcrição e avaliação de tickets)."
+        descricao: "O bot pode te mandar DM (aviso do daily, transcrição e avaliação de tickets)."
     }
 };
 
@@ -152,10 +152,6 @@ function painel(userId, config) {
 
         return `${config[chave] ? "🟢" : "🔴"} ${o.emoji} **${o.nome}**\n┗ ${o.descricao}`;
     });
-
-    linhas.push(
-        "🔔 **Aviso do Daily**\n┗ Gerencie com `/daily-notificar`."
-    );
 
     const embed = new EmbedBuilder()
         .setColor(0x5865F2)

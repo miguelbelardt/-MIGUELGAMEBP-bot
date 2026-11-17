@@ -2515,27 +2515,9 @@ client.once(
         // 🔔 SISTEMA AUTOMÁTICO DO DAILY
         // =================================================
 
-        const comandoDaily =
-            client.commands.get(
-                "daily"
-            );
-
-        if (
-            comandoDaily &&
-            typeof comandoDaily.iniciarSistemaNotificacoes ===
-                "function"
-        ) {
-
-            comandoDaily.iniciarSistemaNotificacoes(
-                client
-            );
-
-        } else {
-
-            console.log(
-                "⚠️ Sistema automático de notificações do Daily não foi encontrado."
-            );
-        }
+        require("./painelDaily.js").iniciarNotificacoes(
+            client
+        );
 
         // =================================================
         // 🎉 SISTEMA AUTOMÁTICO DOS SORTEIOS
@@ -3609,108 +3591,6 @@ client.on(
         if (
             interaction.isButton()
         ) {
-
-            if (
-                interaction.customId ===
-                "daily_notificar_desativar"
-            ) {
-
-                const comando =
-                    client.commands.get(
-                        "daily-notificar"
-                    );
-
-                if (
-                    comando &&
-                    typeof comando.handleButton ===
-                        "function"
-                ) {
-
-                    try {
-
-                        await comando.handleButton(
-                            interaction
-                        );
-
-                    } catch (erro) {
-
-                        console.error(
-                            "❌ Erro no botão de desativar notificação do Daily:",
-                            erro
-                        );
-
-                        if (
-                            !interaction.replied &&
-                            !interaction.deferred
-                        ) {
-
-                            await interaction.reply({
-                                content:
-                                    "❌ Deu erro ao desativar a notificação do Daily.",
-
-                                flags:
-                                    MessageFlags.Ephemeral
-                            });
-                        }
-                    }
-
-                } else {
-
-                    console.error(
-                        "❌ O comando daily-notificar não foi carregado."
-                    );
-                }
-
-                return;
-            }
-
-            if (
-                interaction.customId ===
-                "daily_notificar"
-            ) {
-
-                const comando =
-                    client.commands.get(
-                        "daily"
-                    );
-
-                if (
-                    comando &&
-                    typeof comando.handleButton ===
-                        "function"
-                ) {
-
-                    try {
-
-                        await comando.handleButton(
-                            interaction
-                        );
-
-                    } catch (erro) {
-
-                        console.error(
-                            "❌ Erro no botão do daily:",
-                            erro
-                        );
-
-                        if (
-                            !interaction.replied &&
-                            !interaction.deferred
-                        ) {
-
-                            await interaction.reply({
-                                content:
-                                    "❌ Deu erro ao executar esse comando.",
-
-                                flags:
-                                    MessageFlags.Ephemeral
-                            });
-                        }
-                    }
-                }
-
-                return;
-            }
 
             if (
                 interaction.customId ===
