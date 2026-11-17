@@ -394,6 +394,45 @@ async function salvarConfig(guild, corpo) {
 }
 
 // =====================================================
+// 📚 LISTA DE COMANDOS (pública, lida direto dos comandos do bot)
+// =====================================================
+
+let cacheComandos = { dados: null, ate: 0 };
+
+function limparDescricao(texto) {
+    return String(texto || "")
+        .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]+/gu, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function listarComandos() {
+    if (cacheComandos.dados && cacheComandos.ate > Date.now()) return cacheComandos.dados;
+
+    const lista = [];
+
+    for (const comando of client.commands?.values?.() || []) {
+        try {
+            const d = comando.data.toJSON();
+
+            lista.push({
+                nome: d.name,
+                descricao: limparDescricao(d.description),
+                adm: d.default_member_permissions != null
+            });
+        } catch {
+            // comando sem "data": ignora
+        }
+    }
+
+    lista.sort((a, b) => a.nome.localeCompare(b.nome));
+
+    cacheComandos = { dados: lista, ate: Date.now() + 5 * 60 * 1000 };
+
+    return lista;
+}
+
+// =====================================================
 // 🚦 ENTRADA: devolve true se a requisição era da API
 // =====================================================
 
@@ -419,14 +458,25 @@ function tratar(req, res) {
         return true;
     }
 
-    if (!ligada() || !client) {
-        json(res, 503, { erro: "Painel ainda não configurado." });
+    if (limitado(req)) {
+        json(res, 429, { erro: "Muitas requisições. Espere um pouco." });
 
         return true;
     }
 
-    if (limitado(req)) {
-        json(res, 429, { erro: "Muitas requisições. Espere um pouco." });
+    // Lista de comandos: pública (não precisa de login)
+    if (req.method === "GET" && caminho === "/api/comandos") {
+        if (!client) {
+            json(res, 503, { erro: "Bot iniciando." });
+        } else {
+            json(res, 200, { comandos: listarComandos() });
+        }
+
+        return true;
+    }
+
+    if (!ligada() || !client) {
+        json(res, 503, { erro: "Painel ainda não configurado." });
 
         return true;
     }
