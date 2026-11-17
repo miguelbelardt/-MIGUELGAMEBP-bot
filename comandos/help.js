@@ -80,8 +80,6 @@ const SECOES = [
         emoji: "💎",
         resumo: "Saldo, recompensas, premium e ranking",
         comandos: {
-            daily: "Resgata sua recompensa diária.",
-            "daily-notificar": "Gerencia o aviso do seu Daily.",
             atm: "Mostra seu saldo de moedas.",
             pay: "Envia moedas para outro usuário.",
             "moedas-ranking": "Ranking de quem tem mais moedas.",
@@ -194,7 +192,7 @@ const IGNORADOS = new Set(["help", "ajuda"]);
 
 const ACESSO_RAPIDO = [
     "play", "perfil", "rank", "loja",
-    "daily", "trabalhar", "serverinfo", "help"
+    "atm", "trabalhar", "serverinfo", "help"
 ];
 
 // =====================================================
