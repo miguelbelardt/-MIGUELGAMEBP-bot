@@ -92,8 +92,13 @@ window.CATEGORIAS = [
     0
    ],
    [
+    "add-xp",
+    "Adiciona XP a um usuário.",
+    1
+   ],
+   [
     "adicionar-xp",
-    "Adiciona XP a um usuário (também /add-xp).",
+    "Adiciona XP a um usuário.",
     1
    ],
    [
@@ -226,7 +231,12 @@ window.CATEGORIAS = [
   "comandos": [
    [
     "help",
-    "Abre a Central de Ajuda (também /ajuda).",
+    "Abre a Central de Ajuda.",
+    0
+   ],
+   [
+    "ajuda",
+    "Abre a Central de Ajuda.",
     0
    ],
    [
