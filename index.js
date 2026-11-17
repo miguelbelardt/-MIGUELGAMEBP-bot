@@ -54,8 +54,13 @@ process.on("warning", aviso => {
 const PORT = process.env.PORT || 3000;
 
 const servidor = http.createServer((req, res) => {
+    // Rotas do painel do site (/auth/... e /api/...)
+    if (require("./painelApi.js").tratar(req, res)) {
+        return;
+    }
+
     res.writeHead(200, {
-        "Content-Type": "text/plain"
+        "Content-Type": "text/plain; charset=utf-8"
     });
 
     res.end(`${nomeBot()} está online! 🤖`);
@@ -157,6 +162,7 @@ require("./contadores.js").iniciar(client);
 require("./convites.js").iniciar(client);
 require("./configUsuario.js").iniciar(client);
 require("./configServidor.js").iniciar(client);
+require("./painelApi.js").iniciar(client);
 
 // =====================================================
 // 👋 SISTEMA DE BOAS-VINDAS
