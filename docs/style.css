@@ -18,7 +18,7 @@ code{font:.9em ui-monospace,Consolas,monospace;background:var(--fundo2);border:1
 
 .botao{display:inline-block;padding:12px 22px;border-radius:12px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--cor),#a066ff);box-shadow:0 8px 24px -10px var(--cor);transition:transform .15s,filter .15s}
 .botao:hover{transform:translateY(-2px);filter:brightness(1.08)}
-.botao-pequeno{padding:8px 14px;font-size:.9rem;color:#fff!important}
+.botao-pequeno{padding:8px 14px;font-size:.9rem;color:#fff!important;white-space:nowrap}
 .botao-claro{background:var(--cartao);color:var(--texto);border:1px solid var(--borda);box-shadow:none}
 .botao[aria-disabled=true]{opacity:.55;cursor:not-allowed}
 
@@ -69,6 +69,7 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 
 @media (max-width:640px){
   .topo nav a:not(.botao){display:none}
+  .topo nav a[data-convite]{display:none}
   .heroi{padding-top:56px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
@@ -113,3 +114,5 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 .ganho small,.sub-ganho{color:var(--suave)}
 .ganho .valor{font-size:clamp(1.8rem,8vw,2.6rem);font-weight:800;color:var(--cor2);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .contador{display:inline-block;min-width:1ch}
+
+#auth-slot{display:contents}

@@ -25,10 +25,8 @@ document.querySelectorAll("[data-convite]").forEach(a => {
   }
 });
 
-// Endereço público do bot: a lista de comandos é lida dele, sempre atualizada.
+// A lista de comandos é lida do bot (API vem do auth.js), sempre atualizada.
 // Se o bot estiver fora do ar, o site usa a lista salva em comandos.js.
-const API = "https://miguelgamebp-bot.fadehost.app";
-
 let categorias = window.CATEGORIAS || [];
 const abas = document.getElementById("abas");
 const lista = document.getElementById("lista");
