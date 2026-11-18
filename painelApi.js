@@ -25,6 +25,7 @@ const { PermissionFlagsBits, ChannelType } = require("discord.js");
 
 const configServidor = require("./configServidor.js");
 const painelDaily = require("./painelDaily.js");
+const painelMensagens = require("./painelMensagens.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -323,9 +324,17 @@ async function listarServidores(req, res) {
     return json(res, 200, { servidores: lista });
 }
 
+function ehCanalDeTexto(canal) {
+    return canal?.type === ChannelType.GuildText || canal?.type === ChannelType.GuildAnnouncement;
+}
+
+function canalValido(guild, id) {
+    return ehCanalDeTexto(guild.channels.cache.get(String(id)));
+}
+
 function canaisDeTexto(guild) {
     return [...guild.channels.cache.values()]
-        .filter(c => c.type === ChannelType.GuildText)
+        .filter(ehCanalDeTexto)
         .sort((a, b) => a.rawPosition - b.rawPosition)
         .map(c => ({ id: c.id, nome: c.name }));
 }
@@ -366,7 +375,7 @@ async function salvarConfig(guild, corpo) {
             if (valor !== null) {
                 const canal = guild.channels.cache.get(String(valor));
 
-                if (!canal || canal.type !== ChannelType.GuildText) {
+                if (!ehCanalDeTexto(canal)) {
                     return { erro: "Canal inválido." };
                 }
 
@@ -551,6 +560,28 @@ function tratar(req, res) {
             if (r.erro) return json(res, 400, r);
 
             return json(res, 200, await lerConfig(guild));
+        }
+
+        const msg = caminho.match(/^\/api\/guilds\/(\d+)\/mensagens\/(entrada|saida)$/);
+
+        if (msg && (req.method === "GET" || req.method === "PUT")) {
+            const guild = await guildAutorizada(req, res, msg[1]);
+
+            if (!guild) return;
+
+            const tipo = msg[2];
+
+            if (req.method === "PUT") {
+                const corpo = await lerCorpo(req);
+                const r = await painelMensagens.salvar(guild, tipo, corpo, canalValido);
+
+                if (r.erro) return json(res, 400, r);
+            }
+
+            return json(res, 200, {
+                ...(await painelMensagens.ler(guild, tipo)),
+                canais: canaisDeTexto(guild)
+            });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
