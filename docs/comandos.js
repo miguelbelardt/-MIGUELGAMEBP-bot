@@ -362,16 +362,6 @@ window.CATEGORIAS = [
   "nome": "Administração",
   "comandos": [
    [
-    "join",
-    "Configura as mensagens de boas-vindas.",
-    1
-   ],
-   [
-    "leave",
-    "Configura as mensagens de saída.",
-    1
-   ],
-   [
     "embed",
     "Painel para criar e gerenciar embeds (com botões de link).",
     1
