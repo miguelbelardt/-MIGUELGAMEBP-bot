@@ -2237,7 +2237,10 @@ for (
                 `✅ Comando carregado: ${comando.data.name}`
             );
 
-        } else {
+        } else if (
+            // arquivos de apoio (sem comando próprio): não é erro
+            !["join.js", "leave.js"].includes(arquivo)
+        ) {
 
             console.log(
                 `⚠️ Comando inválido: ${arquivo}`
