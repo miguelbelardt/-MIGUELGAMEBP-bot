@@ -146,8 +146,6 @@ const SECOES = [
             youtube: "Avisa quando um canal do YouTube posta vídeo.",
             reactrole: "Cargos por reação.",
             embed: "Cria e gerencia embeds.",
-            join: "Configura as boas-vindas.",
-            leave: "Configura a mensagem de saída.",
             logs: "Configura os logs do servidor.",
             contador: "Canal que mostra membros, bots ou canais do servidor."
         }

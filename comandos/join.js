@@ -2714,9 +2714,9 @@ async function tratarInteracao(interaction) {
 // 📤 EXPORTAR
 // =====================================================
 
+// O comando /join foi removido: a configuração agora é feita pelo painel do site.
+// Este arquivo continua existindo porque o bot ainda usa o envio da mensagem.
 module.exports = {
-    data,
-    execute,
     enviarBoasVindas,
     tratarInteracao
 };
