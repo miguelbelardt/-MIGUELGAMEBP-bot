@@ -362,11 +362,6 @@ window.CATEGORIAS = [
   "nome": "Administração",
   "comandos": [
    [
-    "server-config",
-    "Ligue ou desligue os recursos do bot neste servidor.",
-    1
-   ],
-   [
     "join",
     "Configura as mensagens de boas-vindas.",
     1
