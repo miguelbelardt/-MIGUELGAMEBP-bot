@@ -22,14 +22,14 @@
 | 🎟️ **Convites** | Descobre quem convidou quem, `/convites` e `/convites-ranking` |
 | 👋 **Boas-vindas e saída** | Embeds personalizáveis com variáveis como `{user}`, `{server}`, `{inviter}` e `{invites}` |
 | 🛡️ **Moderação** | Ban, kick, timeout, avisos, logs e limpeza de mensagens |
-| ⚙️ **Configurações** | `/config` (pessoal) e `/server-config` (do servidor) para ligar e desligar recursos |
+| ⚙️ **Configurações** | `/config` (pessoal) e o painel do site (do servidor) para ligar e desligar recursos |
 | 🧩 **Embeds** | Editor de embeds com botões de link |
 
 ## 🚀 Como usar
 
 1. **Adicione o bot** ao seu servidor pelo [site](https://miguelbelardt.github.io/-MIGUELGAMEBP-bot).
 2. Use `/help` para abrir a Central de Ajuda.
-3. Configure com `/server-config` e `/config`.
+3. Configure o servidor pelo **Dashboard** do site e o seu perfil com `/config`.
 
 O prefixo para comandos de texto é `'`.
 
