@@ -123,23 +123,55 @@ function telaLogin(app, texto) {
   );
 }
 
-// ---------- botão do cabeçalho: Entrar / Dashboard ----------
+// ---------- botão do cabeçalho: Entrar / Dashboard + menu de páginas ----------
+
+// Páginas do site (para o menu de 3 barras do cabeçalho)
+const PAGINAS = [
+  { href: "index.html", emoji: "🏠", nome: "Início" },
+  { href: "index.html#comandos", emoji: "📜", nome: "Comandos" },
+  { href: "daily.html", emoji: "🎁", nome: "Daily" }
+];
+
+function menuDePaginas() {
+  const atual = (location.pathname.split("/").pop() || "index.html");
+
+  const botao = el("button", {
+    class: "hamburguer hamburguer-topo", type: "button", "aria-label": "Abrir menu do site",
+    "aria-expanded": "false", "aria-haspopup": "true"
+  }, el("i"), el("i"), el("i"));
+
+  const menu = el("div", { class: "menu-painel", hidden: "" },
+    ...PAGINAS.map(p => el("a", {
+      class: "item-menu", href: p.href,
+      "aria-current": p.href === atual ? "page" : "false"
+    }, `${p.emoji} ${p.nome}`)));
+
+  const fechar = () => { menu.hidden = true; botao.setAttribute("aria-expanded", "false"); };
+
+  botao.addEventListener("click", e => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+    botao.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+
+  menu.addEventListener("click", e => e.stopPropagation());
+  document.addEventListener("click", fechar);
+  document.addEventListener("keydown", e => { if (e.key === "Escape") fechar(); });
+
+  return el("div", { class: "menu-area menu-site" }, botao, menu);
+}
 
 function atualizarCabecalho() {
   const slot = document.getElementById("auth-slot");
 
   if (!slot) return;
 
-  if (logado()) {
-    slot.replaceChildren(
-      el("a", { href: "daily.html" }, "Daily"),
-      el("a", { class: "botao botao-pequeno", href: "painel.html" }, "Dashboard")
-    );
-  } else {
-    slot.replaceChildren(
-      el("a", { class: "botao botao-pequeno", href: URL_LOGIN }, "Entrar")
-    );
-  }
+  slot.replaceChildren(
+    logado()
+      ? el("a", { class: "botao botao-pequeno", href: "painel.html" }, "Dashboard")
+      : el("a", { class: "botao botao-pequeno", href: URL_LOGIN }, "Entrar"),
+    menuDePaginas()
+  );
 }
 
 atualizarCabecalho();
