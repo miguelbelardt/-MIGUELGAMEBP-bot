@@ -149,3 +149,13 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 .acoes{position:sticky;bottom:12px;display:flex;justify-content:flex-end;margin-top:12px}
 .acoes .botao{border:0;cursor:pointer;font:inherit;font-weight:600}
 .acoes .botao:disabled{opacity:.6}
+
+.botoes-linha{display:flex;gap:8px;flex-wrap:wrap}
+.botao-pequeno.perigo,.botao.perigo{background:#ED4245;color:#fff;border:0;cursor:pointer}
+.botao-pequeno:disabled{opacity:.5;cursor:not-allowed}
+.linha-campo{display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
+.linha-campo input[type=text]{padding:8px 10px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;min-width:0}
+.linha-campo .lado{font-size:.8rem;color:var(--suave);white-space:nowrap}
+@media(max-width:640px){.linha-campo{grid-template-columns:1fr 1fr}}
+.previa-botao{display:inline-block;padding:6px 14px;border-radius:6px;font-weight:600;color:#fff;background:#5865F2}
+.previa-botao.secondary{background:#4f545c}.previa-botao.success{background:#248046}.previa-botao.danger{background:#da373c}

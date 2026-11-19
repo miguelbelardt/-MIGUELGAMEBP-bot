@@ -50,7 +50,8 @@ async function telaServidores() {
 
 const SECOES = [
   { chave: "geral", emoji: "⚙️", nome: "Geral" },
-  { chave: "mensagens", emoji: "👋", nome: "Boas-vindas e saída" }
+  { chave: "mensagens", emoji: "👋", nome: "Boas-vindas e saída" },
+  { chave: "tickets", emoji: "🎫", nome: "Tickets" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -131,7 +132,8 @@ async function telaServidor(id, secaoInicial = "geral") {
 
     try {
       if (chave === "geral") await secaoGeral(id, info, conteudo);
-      else await secaoMensagens(id, servidor, conteudo);
+      else if (chave === "mensagens") await secaoMensagens(id, servidor, conteudo);
+      else await secaoTickets(id, servidor, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -389,6 +391,290 @@ function formularioMensagem(id, tipo, servidor, d, alvo) {
   );
 
   atualizarPreview();
+}
+
+
+// ---------- Tickets ----------
+
+const ESTILOS_BOTAO = [["Primary", "Azul"], ["Secondary", "Cinza"], ["Success", "Verde"], ["Danger", "Vermelho"]];
+
+// desliga o botão quando a condição é verdadeira
+function semAtributo(botao, desligar) {
+  botao.disabled = !!desligar;
+  return botao;
+}
+
+async function secaoTickets(id, servidor, alvo) {
+  let dados = await chamar(`/api/guilds/${id}/tickets`);
+  let aba = "config";
+  let editando = null; // null = lista, "novo" ou id do modelo
+
+  const base = `/api/guilds/${id}/tickets`;
+
+  // manda para o bot e redesenha com o estado novo
+  async function enviar(metodo, caminho, corpo, ok = "Salvo ✓") {
+    try {
+      dados = await chamar(base + caminho, { method: metodo, ...(corpo ? { body: JSON.stringify(corpo) } : {}) });
+      aviso(ok);
+      return true;
+    } catch (e) {
+      aviso(e.message, true);
+      return false;
+    }
+  }
+
+  const abas = el("div", { class: "abas-msg", role: "tablist" });
+  const corpo = el("div", {});
+
+  function desenhar() {
+    abas.replaceChildren(
+      ...[["config", "⚙️ Configuração"], ["modelos", "🧩 Modelos"]].map(([k, nome]) =>
+        el("button", {
+          class: "aba", type: "button", role: "tab", "aria-selected": String(k === aba),
+          onclick: () => { aba = k; editando = null; desenhar(); }
+        }, nome))
+    );
+
+    if (aba === "config") abaConfig();
+    else if (editando) abaEditor();
+    else abaLista();
+  }
+
+  function seletor(opcoes, valor, vazio) {
+    const sel = el("select", {}, el("option", { value: "" }, vazio), ...opcoes.map(o => el("option", { value: o.id }, o.nome)));
+    sel.value = valor || "";
+    return sel;
+  }
+
+  function linhaSelect(titulo, desc, sel, chave, valorDe = v => v || null) {
+    let atual = sel.value;
+
+    sel.addEventListener("change", async () => {
+      const anterior = atual;
+      atual = sel.value;
+      const ok = await enviar("PUT", "", { [chave]: valorDe(sel.value) });
+
+      if (!ok) { sel.value = anterior; atual = anterior; }
+      else desenhar();
+    });
+
+    return el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, titulo), el("span", {}, desc)), sel);
+  }
+
+  function linhaInterruptor(titulo, desc, chave) {
+    const caixa = el("input", { type: "checkbox", "aria-label": titulo });
+    caixa.checked = !!dados.config[chave];
+
+    caixa.addEventListener("change", async () => {
+      const valor = caixa.checked;
+      const ok = await enviar("PUT", "", { [chave]: valor });
+
+      if (!ok) caixa.checked = !valor;
+    });
+
+    return el("div", { class: "opcao" },
+      el("div", { class: "txt" }, el("b", {}, titulo), el("span", {}, desc)),
+      el("label", { class: "interruptor" }, caixa, el("i")));
+  }
+
+  function abaConfig() {
+    const c = dados.config;
+    const pronto = c.modelo_id && c.canal_painel_id && c.categoria_id;
+
+    const limite = el("select", { "aria-label": "Tickets por pessoa" },
+      ...[1, 2, 3, 4, 5].map(n => el("option", { value: String(n) }, `${n} ticket${n > 1 ? "s" : ""}`)));
+    limite.value = String(c.limite_tickets);
+
+    const botaoPublicar = el("button", { class: "botao", type: "button" },
+      c.publicado ? "📤 Atualizar painel no canal" : "📤 Publicar painel no canal");
+
+    botaoPublicar.disabled = !pronto;
+
+    botaoPublicar.addEventListener("click", async () => {
+      botaoPublicar.disabled = true;
+      await enviar("POST", "/publicar", null, "Painel enviado ✓");
+      desenhar();
+    });
+
+    corpo.replaceChildren(
+      el("div", { class: "aviso" + (c.publicado ? "" : " erro") },
+        c.publicado ? "✅ O painel está publicado no canal escolhido."
+          : pronto ? "O painel ainda não foi enviado. Clique em publicar."
+            : "Escolha o modelo, o canal e a categoria para poder publicar o painel."),
+      el("h2", {}, "Painel"),
+      linhaSelect("🧩 Modelo do painel", "Qual modelo aparece no painel (crie na aba Modelos).", seletor(dados.modelos.map(m => ({ id: m.id, nome: m.nome })), c.modelo_id, "— escolha um modelo —"), "modelo_id"),
+      linhaSelect("📢 Canal do painel", "Se trocar, o painel antigo é apagado.", seletor(dados.canais.map(x => ({ id: x.id, nome: "#" + x.nome })), c.canal_painel_id, "— escolha um canal —"), "canal_painel_id"),
+      linhaSelect("📁 Categoria dos tickets", "Onde os canais dos tickets são criados.", seletor(dados.categorias, c.categoria_id, "— escolha uma categoria —"), "categoria_id"),
+      linhaSelect("👥 Cargo mencionado", "Cargo avisado quando um ticket abre (opcional).", seletor(dados.cargos.map(x => ({ id: x.id, nome: "@" + x.nome })), c.cargo_mencao_id, "Nenhum"), "cargo_mencao_id"),
+      linhaInterruptor("🔢 Número no nome do canal", "Ex.: ticket-0012.", "contador_nome"),
+      el("div", { class: "acoes" }, botaoPublicar),
+      el("h2", {}, "Extras"),
+      linhaSelect("👤 Tickets por pessoa", "Quantos tickets abertos cada pessoa pode ter.", limite, "limite_tickets", v => Number(v)),
+      linhaSelect("📁 Canal de transcrições", "Recebe aviso de abertura, fechamento e a transcrição.", seletor(dados.canais.map(x => ({ id: x.id, nome: "#" + x.nome })), c.canal_transcricao_id, "Nenhum"), "canal_transcricao_id"),
+      linhaInterruptor("📩 Transcrição na DM do dono", "Envia a transcrição para quem abriu o ticket.", "dm_transcricao"),
+      linhaInterruptor("⭐ Avaliação do atendimento", "Pede uma nota ao fechar.", "avaliacao"),
+      linhaInterruptor("📝 Pedir motivo ao fechar", "Pergunta o motivo antes de fechar.", "pedir_motivo_fechar")
+    );
+  }
+
+  function abaLista() {
+    const ativo = dados.config.modelo_id;
+
+    corpo.replaceChildren(
+      el("p", { class: "legenda" }, `Modelos de painel (${dados.modelos.length}/${dados.maxModelos}).`),
+      ...dados.modelos.map(m =>
+        el("div", { class: "opcao" },
+          el("div", { class: "txt" }, el("b", {}, (m.id === ativo ? "✅ " : "🧩 ") + m.nome), el("span", {}, m.id === ativo ? "Em uso no painel" : (m.titulo || "Sem título"))),
+          el("div", { class: "botoes-linha" },
+            el("button", { class: "botao botao-pequeno", type: "button", onclick: () => { editando = m.id; desenhar(); } }, "Editar"),
+            semAtributo(el("button", {
+              class: "botao botao-pequeno perigo", type: "button",
+              onclick: async () => {
+                if (!confirm(`Apagar o modelo "${m.nome}"?`)) return;
+                if (await enviar("DELETE", `/modelos/${m.id}`, null, "Modelo apagado ✓")) desenhar();
+              }
+            }, "Apagar"), m.id === ativo)))),
+      el("div", { class: "acoes" },
+        semAtributo(el("button", {
+          class: "botao", type: "button",
+          onclick: () => { editando = "novo"; desenhar(); }
+        }, "➕ Novo modelo"), dados.modelos.length >= dados.maxModelos))
+    );
+  }
+
+  function abaEditor() {
+    const novo = editando === "novo";
+    const m = novo
+      ? { nome: "", autor_nome: "", autor_icone: "", autor_url: "", titulo: "🎫 Abra um Ticket", titulo_url: "", descricao: "Clique no botão abaixo para abrir um ticket.", cor: "#5865F2", imagem: "", thumbnail: "", rodape: "", rodape_icone: "", botao_texto: "Fazer Ticket", botao_emoji: "", botao_estilo: "Primary", mostrar_horario: false, campos: [] }
+      : dados.modelos.find(x => x.id === editando);
+
+    if (!m) { editando = null; desenhar(); return; }
+
+    const campos = {};
+
+    function texto(chave, titulo, { multilinha = false, max = 256, dica = "" } = {}) {
+      const campo = multilinha ? el("textarea", { rows: "4", maxlength: String(max) }) : el("input", { type: "text", maxlength: String(max) });
+      campo.value = m[chave] ?? "";
+      campo.addEventListener("input", previa);
+      campos[chave] = () => campo.value;
+      return el("label", { class: "campo" }, el("b", {}, titulo), campo, dica ? el("span", {}, dica) : "");
+    }
+
+    function interruptor(chave, titulo) {
+      const caixa = el("input", { type: "checkbox", "aria-label": titulo });
+      caixa.checked = !!m[chave];
+      caixa.addEventListener("change", previa);
+      campos[chave] = () => caixa.checked;
+      return el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, titulo)), el("label", { class: "interruptor" }, caixa, el("i")));
+    }
+
+    const cor = el("input", { type: "color", "aria-label": "Cor do embed" });
+    cor.value = m.cor.toLowerCase();
+    cor.addEventListener("input", previa);
+    campos.cor = () => cor.value.toUpperCase();
+
+    const estilo = el("select", { "aria-label": "Cor do botão" }, ...ESTILOS_BOTAO.map(([v, n]) => el("option", { value: v }, n)));
+    estilo.value = m.botao_estilo;
+    campos.botao_estilo = () => estilo.value;
+
+    // campos do embed (nome | valor | lado a lado)
+    const listaCampos = el("div", { class: "lista-campos" });
+    const linhasCampos = [];
+
+    function novaLinha(c = { nome: "", valor: "", inline: false }) {
+      const nome = el("input", { type: "text", maxlength: "256", placeholder: "Nome" });
+      const valor = el("input", { type: "text", maxlength: "1024", placeholder: "Valor" });
+      const lado = el("input", { type: "checkbox", "aria-label": "Lado a lado" });
+      nome.value = c.nome; valor.value = c.valor; lado.checked = !!c.inline;
+      nome.addEventListener("input", previa); valor.addEventListener("input", previa);
+
+      const linha = el("div", { class: "linha-campo" }, nome, valor,
+        el("label", { class: "lado" }, lado, " lado a lado"),
+        el("button", { class: "botao botao-pequeno perigo", type: "button", "aria-label": "Remover campo", onclick: () => { linhasCampos.splice(linhasCampos.indexOf(item), 1); linha.remove(); previa(); } }, "✕"));
+      const item = { ler: () => ({ nome: nome.value, valor: valor.value, inline: lado.checked }) };
+
+      linhasCampos.push(item);
+      listaCampos.append(linha);
+    }
+
+    m.campos.forEach(novaLinha);
+    campos.campos = () => linhasCampos.map(i => i.ler());
+
+    const botaoCampo = el("button", { class: "botao botao-pequeno", type: "button", onclick: () => {
+      if (linhasCampos.length >= dados.maxCampos) { aviso(`No máximo ${dados.maxCampos} campos.`, true); return; }
+      novaLinha(); previa();
+    } }, "➕ Adicionar campo");
+
+    const pre = el("div", { class: "previa" });
+
+    function previa() {
+      const v = k => campos[k]();
+      const emb = el("div", { class: "previa-embed" });
+      emb.style.borderLeftColor = v("cor");
+
+      if (v("autor_nome").trim()) emb.append(el("div", { class: "previa-autor" }, v("autor_nome")));
+      if (v("titulo").trim()) emb.append(el("b", {}, v("titulo")));
+      if (v("descricao").trim()) emb.append(el("p", {}, v("descricao")));
+      for (const c of v("campos")) if (c.nome.trim() && c.valor.trim()) emb.append(el("p", {}, el("b", {}, c.nome), "\n" + c.valor));
+      if (v("rodape").trim() || v("mostrar_horario")) emb.append(el("small", {}, [v("rodape").trim(), v("mostrar_horario") ? "agora" : ""].filter(Boolean).join(" • ")));
+
+      pre.replaceChildren(el("small", { class: "legenda" }, "Prévia"), emb,
+        el("div", {}, el("span", { class: "previa-botao " + v("botao_estilo").toLowerCase() }, `${v("botao_emoji") ? v("botao_emoji") + " " : ""}${v("botao_texto") || "Fazer Ticket"}`)));
+    }
+
+    const salvar = el("button", { class: "botao", type: "button" }, novo ? "➕ Criar modelo" : "💾 Salvar");
+
+    salvar.addEventListener("click", async () => {
+      const dadosForm = {};
+      for (const [k, f] of Object.entries(campos)) dadosForm[k] = f();
+
+      salvar.disabled = true;
+
+      const ok = novo
+        ? await enviar("POST", "/modelos", dadosForm, "Modelo criado ✓")
+        : await enviar("PUT", `/modelos/${editando}`, dadosForm, dadosForm && dados.config.modelo_id === editando ? "Salvo e painel atualizado ✓" : "Salvo ✓");
+
+      salvar.disabled = false;
+
+      if (ok) { editando = null; desenhar(); }
+    });
+
+    corpo.replaceChildren(
+      el("button", { class: "link", type: "button", onclick: () => { editando = null; desenhar(); } }, "← Modelos"),
+      el("h2", {}, novo ? "Novo modelo" : "Editar modelo"),
+      texto("nome", "Nome do modelo (só para você)", { max: 100 }),
+      texto("autor_nome", "Autor"),
+      texto("autor_icone", "Ícone do autor (link)", { max: 1000 }),
+      texto("autor_url", "Link do autor", { max: 1000 }),
+      texto("titulo", "Título"),
+      texto("titulo_url", "Link do título", { max: 1000 }),
+      texto("descricao", "Descrição", { multilinha: true, max: 4000 }),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "🎨 Cor do embed")), cor),
+      texto("imagem", "Imagem grande (link)", { max: 1000 }),
+      texto("thumbnail", "Miniatura (link)", { max: 1000 }),
+      texto("rodape", "Rodapé", { max: 2048 }),
+      texto("rodape_icone", "Ícone do rodapé (link)", { max: 1000 }),
+      interruptor("mostrar_horario", "Mostrar data e hora"),
+      el("h2", {}, "Campos"),
+      listaCampos, botaoCampo,
+      el("h2", {}, "Botão"),
+      texto("botao_texto", "Texto do botão", { max: 80 }),
+      texto("botao_emoji", "Emoji do botão", { max: 100, dica: "Um emoji normal ou um personalizado como <:nome:123456789012345678>." }),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "Cor do botão")), estilo),
+      pre,
+      el("div", { class: "acoes" }, salvar)
+    );
+
+    estilo.addEventListener("change", previa);
+    previa();
+  }
+
+  alvo.replaceChildren(
+    el("p", { class: "legenda" }, "O mesmo sistema do /ticket, agora aqui no site."),
+    abas, corpo
+  );
+
+  desenhar();
 }
 
 function tela() {
