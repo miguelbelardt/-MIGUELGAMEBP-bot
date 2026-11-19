@@ -372,11 +372,6 @@ window.CATEGORIAS = [
     1
    ],
    [
-    "reactrole",
-    "Sistema de Reaction Role.",
-    1
-   ],
-   [
     "registrar",
     "Cria e configura o sistema de registro.",
     1
