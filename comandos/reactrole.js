@@ -4047,9 +4047,9 @@ async function execute(interaction) {
 // 📦 EXPORT
 // =====================================================
 
+// O comando /reactrole foi removido: a configuração agora é feita pelo painel do site.
+// Este arquivo continua existindo porque o bot ainda usa as reações e os cargos.
 module.exports = {
-    data,
-    execute,
     handleReaction,
     tratarInteracao
 };

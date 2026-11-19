@@ -143,7 +143,6 @@ const SECOES = [
         comandos: {
             criarcall: "Sistema de calls temporárias.",
             youtube: "Avisa quando um canal do YouTube posta vídeo.",
-            reactrole: "Cargos por reação.",
             embed: "Cria e gerencia embeds.",
             logs: "Configura os logs do servidor.",
             contador: "Canal que mostra membros, bots ou canais do servidor."
