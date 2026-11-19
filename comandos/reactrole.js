@@ -4053,3 +4053,25 @@ module.exports = {
     handleReaction,
     tratarInteracao
 };
+
+// Usado pelo painel do site (painelReactRole.js)
+module.exports._painel = {
+    normalizarEmoji,
+    chaveEmoji,
+    parseCampos,
+    garantirTabela,
+    buscarCargos,
+    buscarConfig,
+    buscarConfigMensagem,
+    criarConfig,
+    atualizarConfig,
+    excluirConfigDoBanco,
+    salvarCargo,
+    removerCargoReacao,
+    removerReacaoDaMensagem,
+    adicionarReacoes,
+    aplicarMensagem,
+    criarEmbed,
+    sincronizarCargos
+};
+
