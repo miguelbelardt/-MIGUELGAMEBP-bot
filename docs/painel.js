@@ -51,7 +51,8 @@ async function telaServidores() {
 const SECOES = [
   { chave: "geral", emoji: "⚙️", nome: "Geral" },
   { chave: "mensagens", emoji: "👋", nome: "Boas-vindas e saída" },
-  { chave: "tickets", emoji: "🎫", nome: "Tickets" }
+  { chave: "tickets", emoji: "🎫", nome: "Tickets" },
+  { chave: "reactrole", emoji: "🎭", nome: "Reaction Role" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -133,7 +134,8 @@ async function telaServidor(id, secaoInicial = "geral") {
     try {
       if (chave === "geral") await secaoGeral(id, info, conteudo);
       else if (chave === "mensagens") await secaoMensagens(id, servidor, conteudo);
-      else await secaoTickets(id, servidor, conteudo);
+      else if (chave === "tickets") await secaoTickets(id, servidor, conteudo);
+      else await secaoReactRole(id, servidor, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -675,6 +677,263 @@ async function secaoTickets(id, servidor, alvo) {
   );
 
   desenhar();
+}
+
+
+// ---------- Reaction Role ----------
+
+async function secaoReactRole(id, servidor, alvo) {
+  const base = `/api/guilds/${id}/reactroles`;
+  let dados = await chamar(base);
+  let editando = null; // null = lista | "novo" | id da configuração
+
+  async function enviar(metodo, caminho, corpo, ok) {
+    try {
+      dados = await chamar(base + caminho, { method: metodo, ...(corpo ? { body: JSON.stringify(corpo) } : {}) });
+
+      const avisos = dados.resultado?.avisos || [];
+
+      if (avisos.length) aviso(avisos[0], true);
+      else aviso(ok);
+
+      return true;
+    } catch (e) {
+      aviso(e.message, true);
+      return false;
+    }
+  }
+
+  const nomeCargo = cid => dados.cargos.find(c => c.id === cid)?.nome || "cargo apagado";
+  const nomeCanal = cid => dados.canais.find(c => c.id === cid)?.nome || "canal desconhecido";
+
+  function lista() {
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, "Mensagens em que quem reage ganha um cargo. É o mesmo sistema do /reactrole."),
+      ...(dados.lista.length ? [] : [el("div", { class: "aviso" }, "Nenhuma mensagem de Reaction Role ainda.")]),
+      ...dados.lista.map(c => {
+        const resumo = c.somente_reacoes ? "Mensagem já existente no servidor"
+          : (c.embed_titulo || c.content || "Sem título").slice(0, 60);
+
+        return el("div", { class: "opcao rr-item" },
+          el("div", { class: "txt" },
+            el("b", {}, `${c.habilitado ? "🎭" : "⏸️"} ${resumo}`),
+            el("span", {}, `#${nomeCanal(c.canal_id)} • ` + c.cargos.map(x => `${x.emoji.includes(":") ? "⭐" : x.emoji} ${nomeCargo(x.cargo_id)}`).join(" • ")),
+            el("a", { href: `https://discord.com/channels/${id}/${c.canal_id}/${c.mensagem_id}`, target: "_blank", rel: "noopener noreferrer" }, "Abrir mensagem no Discord")),
+          el("div", { class: "botoes-linha" },
+            el("button", { class: "botao botao-pequeno", type: "button", onclick: () => { editando = c.id; editor(); } }, "Editar"),
+            el("button", {
+              class: "botao botao-pequeno perigo", type: "button",
+              onclick: async () => {
+                if (!confirm(c.somente_reacoes
+                  ? "Remover esta configuração? A mensagem NÃO será apagada, só as reações do bot."
+                  : "Apagar a mensagem no Discord e esta configuração?")) return;
+                if (await enviar("DELETE", `/${c.id}`, null, "Apagado ✓")) lista();
+              }
+            }, "Apagar")));
+      }),
+      el("div", { class: "acoes" }, el("button", { class: "botao", type: "button", onclick: () => { editando = "novo"; editor(); } }, "➕ Nova mensagem"))
+    );
+  }
+
+  function editor() {
+    const novo = editando === "novo";
+    const c = novo
+      ? { modo: "nova", canal_id: "", mensagem_id: "", somente_reacoes: false, habilitado: true, content: "", embed_habilitado: true, embed_titulo: "🎭 Escolha seus cargos", embed_url: "", embed_descricao: "Reaja para receber o cargo.", embed_cor: "#5865F2", embed_autor_nome: "", embed_autor_icone: "", imagem: "", thumbnail: "", footer_habilitado: false, footer_texto: "", footer_icone: "", embed_timestamp: false, embed_campos: [], cargos: [] }
+      : { ...dados.lista.find(x => x.id === editando) };
+
+    if (!c.id && !novo) { editando = null; lista(); return; }
+
+    const campos = {};
+    const modo = el("select", { "aria-label": "Tipo de mensagem" },
+      el("option", { value: "nova" }, "Criar uma mensagem nova"),
+      el("option", { value: "existente" }, "Usar uma mensagem que já existe"));
+    modo.value = c.somente_reacoes ? "existente" : "nova";
+
+    const canal = el("select", { "aria-label": "Canal" }, el("option", { value: "" }, "— escolha um canal —"),
+      ...dados.canais.map(x => el("option", { value: x.id }, "#" + x.nome)));
+    canal.value = c.canal_id || "";
+    if (!novo) canal.disabled = true;
+
+    const idMsg = el("input", { type: "text", inputmode: "numeric", placeholder: "ID da mensagem", maxlength: "20" });
+    idMsg.value = c.mensagem_id || "";
+    if (!novo) idMsg.disabled = true;
+
+    const blocoMsg = el("div", {});
+    const caixaExistente = el("div", {});
+
+    function texto(chave, titulo, { multilinha = false, max = 256, dica = "" } = {}) {
+      const campo = multilinha ? el("textarea", { rows: "4", maxlength: String(max) }) : el("input", { type: "text", maxlength: String(max) });
+      campo.value = c[chave] ?? "";
+      campo.addEventListener("input", previa);
+      campos[chave] = () => campo.value;
+      return el("label", { class: "campo" }, el("b", {}, titulo), campo, dica ? el("span", {}, dica) : "");
+    }
+
+    function interruptor(chave, titulo) {
+      const caixa = el("input", { type: "checkbox", "aria-label": titulo });
+      caixa.checked = !!c[chave];
+      caixa.addEventListener("change", previa);
+      campos[chave] = () => caixa.checked;
+      return el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, titulo)), el("label", { class: "interruptor" }, caixa, el("i")));
+    }
+
+    const cor = el("input", { type: "color", "aria-label": "Cor do embed" });
+    cor.value = c.embed_cor.toLowerCase();
+    cor.addEventListener("input", previa);
+    campos.embed_cor = () => cor.value.toUpperCase();
+
+    // campos extras do embed
+    const listaCampos = el("div", { class: "lista-campos" });
+    const linhasCampos = [];
+
+    function novaLinhaCampo(x = { nome: "", valor: "", inline: false }) {
+      const nome = el("input", { type: "text", maxlength: "256", placeholder: "Nome" });
+      const valor = el("input", { type: "text", maxlength: "1024", placeholder: "Valor" });
+      const lado = el("input", { type: "checkbox", "aria-label": "Lado a lado" });
+      nome.value = x.nome; valor.value = x.valor; lado.checked = !!x.inline;
+      nome.addEventListener("input", previa); valor.addEventListener("input", previa);
+      const item = { ler: () => ({ nome: nome.value, valor: valor.value, inline: lado.checked }) };
+      const linha = el("div", { class: "linha-campo" }, nome, valor, el("label", { class: "lado" }, lado, " lado a lado"),
+        el("button", { class: "botao botao-pequeno perigo", type: "button", "aria-label": "Remover campo", onclick: () => { linhasCampos.splice(linhasCampos.indexOf(item), 1); linha.remove(); previa(); } }, "✕"));
+      linhasCampos.push(item);
+      listaCampos.append(linha);
+    }
+
+    c.embed_campos.forEach(novaLinhaCampo);
+    campos.embed_campos = () => linhasCampos.map(i => i.ler());
+
+    // reações e cargos
+    const listaPares = el("div", { class: "lista-campos" });
+    const pares = [];
+
+    function novoPar(x = { emoji: "", cargo_id: "" }) {
+      const emoji = el("input", { type: "text", maxlength: "60", placeholder: "Emoji", "aria-label": "Emoji" });
+      emoji.value = x.emoji && x.emoji.includes(":") && !x.emoji.startsWith("<") ? `<:${x.emoji}>` : x.emoji;
+      const cargo = el("select", { "aria-label": "Cargo" }, el("option", { value: "" }, "— cargo —"),
+        ...dados.cargos.map(r => { const o = el("option", { value: r.id }, "@" + r.nome + (r.gerenciavel ? "" : " (acima do bot)")); o.disabled = !r.gerenciavel; return o; }));
+      cargo.value = x.cargo_id;
+      const item = { ler: () => ({ emoji: emoji.value, cargo_id: cargo.value }) };
+      const linha = el("div", { class: "linha-par" }, emoji, cargo,
+        el("button", { class: "botao botao-pequeno perigo", type: "button", "aria-label": "Remover reação", onclick: () => { pares.splice(pares.indexOf(item), 1); linha.remove(); } }, "✕"));
+      pares.push(item);
+      listaPares.append(linha);
+    }
+
+    c.cargos.forEach(novoPar);
+    if (!pares.length) novoPar();
+
+    const pre = el("div", { class: "previa" });
+
+    function previa() {
+      if (c.somente_reacoes || modo.value === "existente") { pre.replaceChildren(); return; }
+
+      const v = k => campos[k]();
+      const parts = [];
+
+      if (v("content").trim()) parts.push(el("p", { class: "previa-texto" }, v("content")));
+
+      if (v("embed_habilitado")) {
+        const emb = el("div", { class: "previa-embed" });
+        emb.style.borderLeftColor = v("embed_cor");
+        if (v("embed_autor_nome").trim()) emb.append(el("div", { class: "previa-autor" }, v("embed_autor_nome")));
+        if (v("embed_titulo").trim()) emb.append(el("b", {}, v("embed_titulo")));
+        if (v("embed_descricao").trim()) emb.append(el("p", {}, v("embed_descricao")));
+        for (const x of v("embed_campos")) if (x.nome.trim() && x.valor.trim()) emb.append(el("p", {}, el("b", {}, x.nome), "\n" + x.valor));
+        if (v("footer_habilitado") && v("footer_texto").trim()) emb.append(el("small", {}, v("footer_texto")));
+        parts.push(emb);
+      }
+
+      pre.replaceChildren(el("small", { class: "legenda" }, "Prévia"), ...parts);
+    }
+
+    blocoMsg.append(
+      texto("content", "Texto fora do embed", { multilinha: true, max: 2000 }),
+      interruptor("embed_habilitado", "Usar embed"),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "🎨 Cor do embed")), cor),
+      texto("embed_titulo", "Título"),
+      texto("embed_url", "Link do título", { max: 1000 }),
+      texto("embed_descricao", "Descrição", { multilinha: true, max: 4000 }),
+      texto("embed_autor_nome", "Autor"),
+      texto("embed_autor_icone", "Ícone do autor (link)", { max: 1000 }),
+      texto("imagem", "Imagem grande (link)", { max: 1000 }),
+      texto("thumbnail", "Miniatura (link)", { max: 1000 }),
+      interruptor("footer_habilitado", "Mostrar rodapé"),
+      texto("footer_texto", "Texto do rodapé", { max: 2048 }),
+      texto("footer_icone", "Ícone do rodapé (link)", { max: 1000 }),
+      interruptor("embed_timestamp", "Mostrar data e hora"),
+      el("h2", {}, "Campos"),
+      listaCampos,
+      el("button", { class: "botao botao-pequeno", type: "button", onclick: () => {
+        if (linhasCampos.length >= dados.maxCampos) { aviso(`No máximo ${dados.maxCampos} campos.`, true); return; }
+        novaLinhaCampo(); previa();
+      } }, "➕ Adicionar campo"),
+      pre
+    );
+
+    caixaExistente.append(el("label", { class: "campo" }, el("b", {}, "ID da mensagem"), idMsg,
+      el("span", {}, "No Discord: clique com o botão direito na mensagem → Copiar ID da mensagem. O bot só põe as reações; o texto fica como está.")));
+
+    function alternar() {
+      const existente = modo.value === "existente";
+      blocoMsg.hidden = existente || c.somente_reacoes;
+      caixaExistente.hidden = !(existente && novo);
+      previa();
+    }
+
+    modo.addEventListener("change", alternar);
+    if (!novo) modo.disabled = true;
+
+    const habilitado = el("input", { type: "checkbox", "aria-label": "Ativo" });
+    habilitado.checked = !!c.habilitado;
+
+    const salvar = el("button", { class: "botao", type: "button" }, novo ? "➕ Criar e enviar" : "💾 Salvar");
+
+    salvar.addEventListener("click", async () => {
+      const existente = modo.value === "existente" || c.somente_reacoes;
+      const corpo = { cargos: pares.map(p => p.ler()).filter(p => p.emoji.trim() || p.cargo_id) };
+
+      if (!existente) for (const [k, f] of Object.entries(campos)) corpo[k] = f();
+
+      if (novo) {
+        corpo.modo = modo.value;
+        corpo.canal_id = canal.value;
+        if (existente) corpo.mensagem_id = idMsg.value.trim();
+      } else {
+        corpo.habilitado = habilitado.checked;
+      }
+
+      salvar.disabled = true;
+
+      const ok = novo
+        ? await enviar("POST", "", corpo, "Criado ✓")
+        : await enviar("PUT", `/${editando}`, corpo, "Salvo ✓");
+
+      salvar.disabled = false;
+
+      if (ok) { editando = null; lista(); }
+    });
+
+    alvo.replaceChildren(
+      el("button", { class: "link", type: "button", onclick: () => { editando = null; lista(); } }, "← Mensagens"),
+      el("h2", {}, novo ? "Nova mensagem de Reaction Role" : "Editar Reaction Role"),
+      ...(novo ? [el("label", { class: "campo" }, el("b", {}, "Tipo"), modo), el("label", { class: "campo" }, el("b", {}, "Canal"), canal)] : [el("p", { class: "legenda" }, `Canal: #${nomeCanal(c.canal_id)}`)]),
+      ...(novo ? [] : [el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "Ativo"), el("span", {}, "Desligado, as reações não dão cargo.")), el("label", { class: "interruptor" }, habilitado, el("i")))]),
+      caixaExistente,
+      blocoMsg,
+      el("h2", {}, "Reações e cargos"),
+      el("p", { class: "legenda" }, "Um emoji normal (🎮) ou personalizado no formato <:nome:123456789012345678>. Até " + dados.maxPares + " reações."),
+      listaPares,
+      el("button", { class: "botao botao-pequeno", type: "button", onclick: () => {
+        if (pares.length >= dados.maxPares) { aviso(`No máximo ${dados.maxPares} reações.`, true); return; }
+        novoPar();
+      } }, "➕ Adicionar reação"),
+      el("div", { class: "acoes" }, salvar)
+    );
+
+    alternar();
+  }
+
+  lista();
 }
 
 function tela() {

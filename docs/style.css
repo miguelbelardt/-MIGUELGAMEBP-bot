@@ -165,3 +165,8 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 .menu-site .menu-painel{left:auto;right:0}
 .topo nav .menu-site a.item-menu{display:block;color:var(--texto)}
 .topo nav .menu-site a.item-menu[aria-current=page]{background:var(--cor);color:#fff}
+
+.linha-par{display:grid;grid-template-columns:110px 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+.linha-par input,.linha-par select{padding:8px 10px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;min-width:0}
+.rr-item .txt a{font-size:.85rem;color:var(--cor2)}
+.secao [hidden]{display:none!important}
