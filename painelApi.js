@@ -27,6 +27,7 @@ const configServidor = require("./configServidor.js");
 const painelDaily = require("./painelDaily.js");
 const painelMensagens = require("./painelMensagens.js");
 const painelTickets = require("./painelTickets.js");
+const painelReactRole = require("./painelReactRole.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -36,7 +37,7 @@ const REDIRECT_URI = `${API_URL}/auth/callback`;
 
 const SESSAO_MS = 12 * 60 * 60 * 1000;
 const STATE_MS = 10 * 60 * 1000;
-const LIMITE_CORPO = 10 * 1024;
+const LIMITE_CORPO = 24 * 1024;
 const LIMITE_REQ_POR_MIN = 90;
 
 let client = null;
@@ -614,6 +615,25 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelTickets.ler(guild)), resultado: r || undefined });
+        }
+
+        const rr = caminho.match(/^\/api\/guilds\/(\d+)\/reactroles(?:\/(\d+))?$/);
+
+        if (rr) {
+            const guild = await guildAutorizada(req, res, rr[1]);
+
+            if (!guild) return;
+
+            let r = null;
+
+            if (req.method === "POST" && !rr[2]) r = await painelReactRole.criar(guild, await lerCorpo(req));
+            else if (req.method === "PUT" && rr[2]) r = await painelReactRole.salvar(guild, rr[2], await lerCorpo(req));
+            else if (req.method === "DELETE" && rr[2]) r = await painelReactRole.apagar(guild, rr[2]);
+            else if (req.method !== "GET" || rr[2]) return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelReactRole.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
