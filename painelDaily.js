@@ -32,7 +32,7 @@ const VERIFICAR_A_CADA_MS = 30 * 1000;
 
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
 const SITE_PATH = process.env.SITE_PATH || "/-MIGUELGAMEBP-bot/";
-const LINK_PAINEL = `${SITE_URL}${SITE_PATH}painel.html`;
+const LINK_DAILY = `${SITE_URL}${SITE_PATH}daily.html`;
 
 const EMOJIS = {
     sino: "<:Notification_Bell:1543405169952170048>",
@@ -209,7 +209,7 @@ async function definirNotificacao(userId, ativa, agora = Date.now()) {
 
     const inicioHoje = inicioDoDiaBrasilia(new Date(agora));
 
-    if (ultimo < inicioHoje) return { erro: "Seu daily já está disponível! Resgate no painel." };
+    if (ultimo < inicioHoje) return { erro: "Seu daily já está disponível! Resgate no site." };
 
     await salvarNotificacaoDaily(userId, true, horarioDaNotificacao(inicioHoje));
 
@@ -277,7 +277,7 @@ async function verificarNotificacoes(client) {
                         `Olá, ${discordUser}!\n\n` +
                         `${EMOJIS.lua} Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
                         `${EMOJIS.sequencia} Se você resgatar hoje, sua sequência será de **${proxima} dia(s)**!\n\n` +
-                        `${EMOJIS.dinheiro} Resgate no painel:\n${LINK_PAINEL}`
+                        `${EMOJIS.dinheiro} Resgate no site:\n${LINK_DAILY}`
                     )
                     .setFooter({ text: "Não esqueça de pegar seu Daily hoje!" });
 
