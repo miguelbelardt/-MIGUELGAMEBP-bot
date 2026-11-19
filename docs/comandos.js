@@ -367,11 +367,6 @@ window.CATEGORIAS = [
     1
    ],
    [
-    "ticket",
-    "Configura o sistema de tickets.",
-    1
-   ],
-   [
     "sorteio",
     "Cria ou edita um sorteio.",
     1
