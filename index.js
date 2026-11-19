@@ -2297,6 +2297,9 @@ async function registrarComandos() {
         of client.commands
     ) {
 
+        // comandos "ocultos" continuam carregados (botões, menus...), mas não viram /comando
+        if (comando.oculto) continue;
+
         try {
 
             const dados =
