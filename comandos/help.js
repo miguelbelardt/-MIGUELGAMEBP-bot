@@ -102,7 +102,6 @@ const SECOES = [
         emoji: "🎫",
         resumo: "Tickets, registro e sugestões",
         comandos: {
-            ticket: "Configura o sistema de tickets.",
             registrar: "Cria e configura o registro do servidor.",
             sugestao: "Envia uma sugestão para o dono do bot."
         }

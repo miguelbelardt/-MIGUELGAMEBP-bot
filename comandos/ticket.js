@@ -2700,75 +2700,22 @@ module.exports = {
                 "Configura o sistema de tickets"
             ),
 
+    // O /ticket não aparece mais no Discord (ver "oculto" abaixo): a configuração
+    // agora é feita pelo painel do site. Este arquivo continua carregado porque
+    // os botões, menus e janelas dos tickets passam por aqui.
+    oculto: true,
+
     async execute(
         interaction
     ) {
 
-        if (!interaction.guild) {
+        return interaction.reply({
+            content:
+                "🎫 A configuração de tickets agora fica no **painel do site** (Dashboard → seu servidor → ☰ → Tickets).",
 
-            return interaction.reply({
-                content:
-                    "❌ O comando `/ticket` só pode ser usado dentro de um servidor.",
-
-                flags:
-                    MessageFlags.Ephemeral
-            });
-        }
-
-        try {
-
-            await inicializarTickets();
-
-            const resultado =
-                await pool.query(
-                    `
-                    SELECT *
-                    FROM ticket_modelos
-                    WHERE guild_id = $1
-                    ORDER BY id ASC
-                    `,
-                    [
-                        interaction.guildId
-                    ]
-                );
-
-            await interaction.reply(
-                criarPainel(
-                    resultado.rows
-                )
-            );
-
-        } catch (erro) {
-
-            console.error(
-                "❌ Erro no comando /ticket:",
-                erro
-            );
-
-            if (
-                interaction.replied
-            ) {
-
-                await interaction.editReply({
-                    content:
-                        "❌ Ocorreu um erro ao abrir a configuração de tickets.",
-
-                    embeds: [],
-
-                    components: []
-                });
-
-            } else {
-
-                await interaction.reply({
-                    content:
-                        "❌ Ocorreu um erro ao abrir a configuração de tickets.",
-
-                    flags:
-                        MessageFlags.Ephemeral
-                });
-            }
-        }
+            flags:
+                MessageFlags.Ephemeral
+        });
     },
 
     // ================================
