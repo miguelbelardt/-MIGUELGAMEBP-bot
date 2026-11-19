@@ -4686,3 +4686,10 @@ module.exports = {
         return false;
     }
 };
+
+// Usado pelo painel do site (painelTickets.js)
+module.exports._painel = {
+    inicializarTickets,
+    atualizarPainelPublicado,
+    apagarPainelAntigo
+};
