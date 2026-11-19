@@ -26,6 +26,7 @@ const { PermissionFlagsBits, ChannelType } = require("discord.js");
 const configServidor = require("./configServidor.js");
 const painelDaily = require("./painelDaily.js");
 const painelMensagens = require("./painelMensagens.js");
+const painelTickets = require("./painelTickets.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -124,7 +125,7 @@ function cabecalhosCors(req, res) {
         res.setHeader("Access-Control-Allow-Origin", SITE_URL);
         res.setHeader("Vary", "Origin");
         res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         res.setHeader("Access-Control-Max-Age", "600");
     }
 }
@@ -582,6 +583,37 @@ function tratar(req, res) {
                 ...(await painelMensagens.ler(guild, tipo)),
                 canais: canaisDeTexto(guild)
             });
+        }
+
+        const tk = caminho.match(/^\/api\/guilds\/(\d+)\/tickets(?:\/(publicar)|\/modelos(?:\/(\d+))?)?$/);
+
+        if (tk) {
+            const guild = await guildAutorizada(req, res, tk[1]);
+
+            if (!guild) return;
+
+            const metodo = req.method;
+            const ehModelos = caminho.includes("/modelos");
+            let r = null;
+
+            if (tk[2] === "publicar") {
+                if (metodo !== "POST") return json(res, 405, { erro: "Método não permitido." });
+
+                r = await painelTickets.publicar(guild);
+            } else if (ehModelos) {
+                if (metodo === "POST" && !tk[3]) r = await painelTickets.criarModelo(guild, await lerCorpo(req));
+                else if (metodo === "PUT" && tk[3]) r = await painelTickets.salvarModelo(guild, tk[3], await lerCorpo(req));
+                else if (metodo === "DELETE" && tk[3]) r = await painelTickets.apagarModelo(guild, tk[3]);
+                else return json(res, 405, { erro: "Método não permitido." });
+            } else if (metodo === "PUT") {
+                r = await painelTickets.salvarConfig(guild, await lerCorpo(req));
+            } else if (metodo !== "GET") {
+                return json(res, 405, { erro: "Método não permitido." });
+            }
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelTickets.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
