@@ -40,6 +40,10 @@ const VERIFICAR_A_CADA_MS = 30 * 1000;
 
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
 const SITE_PATH = process.env.SITE_PATH || "/-MIGUELGAMEBP-bot/";
+// Imagem do aviso (opcional): coloque o link de uma imagem aqui, ou na variável
+// DAILY_IMAGEM da FadeHost. Vazio = sem imagem.
+const IMAGEM_AVISO = (process.env.DAILY_IMAGEM || "").trim();
+
 const LINK_DAILY = `${SITE_URL}${SITE_PATH}daily.html`;
 
 const EMOJIS = {
@@ -272,10 +276,20 @@ function montarCartao(discordUser, proxima) {
                 `${EMOJIS.dinheiro} Resgate pelo botão abaixo:`
             )
         )
-        .addActionRowComponents(new ActionRowBuilder().addComponents(botaoResgatar()))
-        .addTextDisplayComponents(
-            new TextDisplayBuilder().setContent("-# Não esqueça de pegar seu Daily hoje!")
+        .addActionRowComponents(new ActionRowBuilder().addComponents(botaoResgatar()));
+
+    // imagem entre o botão e o rodapé (igual ao cartão da Loritta)
+    const { MediaGalleryBuilder, MediaGalleryItemBuilder } = discord;
+
+    if (IMAGEM_AVISO && typeof MediaGalleryBuilder === "function" && typeof MediaGalleryItemBuilder === "function") {
+        cartao.addMediaGalleryComponents(
+            new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(IMAGEM_AVISO))
         );
+    }
+
+    cartao.addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("-# Não esqueça de pegar seu Daily hoje!")
+    );
 
     return { components: [cartao], flags: MessageFlags.IsComponentsV2 };
 }
@@ -290,6 +304,8 @@ function montarEmbed(discordUser, proxima) {
             `${EMOJIS.dinheiro} [Clique aqui e resgate](${LINK_DAILY})`
         )
         .setFooter({ text: "Não esqueça de pegar seu Daily hoje!" });
+
+    if (IMAGEM_AVISO) embed.setImage(IMAGEM_AVISO);
 
     return {
         embeds: [embed],
