@@ -372,11 +372,6 @@ window.CATEGORIAS = [
     1
    ],
    [
-    "youtube",
-    "Avisa quando um canal do YouTube posta vídeo novo.",
-    1
-   ],
-   [
     "say",
     "Faz o bot enviar uma mensagem.",
     1

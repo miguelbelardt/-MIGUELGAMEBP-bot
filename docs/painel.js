@@ -56,7 +56,8 @@ const SECOES = [
   { chave: "logs", emoji: "📜", nome: "Logs" },
   { chave: "sorteios", emoji: "🎉", nome: "Sorteios" },
   { chave: "criarcall", emoji: "📞", nome: "Criar Call" },
-  { chave: "embeds", emoji: "🧩", nome: "Embeds" }
+  { chave: "embeds", emoji: "🧩", nome: "Embeds" },
+  { chave: "youtube", emoji: "🎬", nome: "YouTube" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -143,7 +144,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       else if (chave === "logs") await secaoLogs(id, conteudo);
       else if (chave === "sorteios") await secaoSorteios(id, conteudo);
       else if (chave === "criarcall") await secaoCriarCall(id, conteudo);
-      else await secaoEmbeds(id, conteudo);
+      else if (chave === "embeds") await secaoEmbeds(id, conteudo);
+      else await secaoYouTube(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -1558,6 +1560,107 @@ async function secaoEmbeds(id, alvo) {
   }
 
   lista();
+}
+
+
+// ---------- YouTube ----------
+
+async function secaoYouTube(id, alvo) {
+  const base = `/api/guilds/${id}/youtube`;
+  let d = await chamar(base);
+
+  function seletor(valor) {
+    const s = el("select", {}, el("option", { value: "" }, "— escolha um canal —"),
+      ...d.canais.map(c => el("option", { value: c.id }, "#" + c.nome)));
+    s.value = valor || "";
+    return s;
+  }
+
+  // roda uma ação com o botão travado e já redesenha a tela com a resposta
+  async function agir(botao, caminho, metodo, corpo, ok, redesenhar = true) {
+    botao.disabled = true;
+
+    try {
+      const r = await chamar(caminho, { method: metodo, body: corpo ? JSON.stringify(corpo) : undefined });
+      d = r;
+      aviso(typeof ok === "function" ? ok(r.resultado) : ok);
+      if (redesenhar) desenhar();
+      return true;
+    } catch (e) {
+      aviso(e.message, true);
+      return false;
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  function formularioAdicionar() {
+    const canal = el("input", { type: "text", maxlength: "300", placeholder: "https://youtube.com/@nome, @nome ou UC…" });
+    const destino = seletor("");
+    const msg = el("textarea", { rows: "3", maxlength: "2000" });
+    msg.value = d.mensagemPadrao;
+    const botao = el("button", { class: "botao", type: "button" }, "➕ Adicionar canal");
+
+    botao.addEventListener("click", async () => {
+      if (!canal.value.trim()) return aviso("Informe o canal do YouTube.", true);
+      if (!destino.value) return aviso("Escolha o canal do Discord onde os avisos serão enviados.", true);
+
+      botao.textContent = "Procurando o canal…";
+
+      const feito = await agir(botao, base, "POST", { canal: canal.value, destino_id: destino.value, mensagem: msg.value },
+        r => `Canal “${r?.nome}” adicionado ✓`);
+
+      if (!feito) botao.textContent = "➕ Adicionar canal";
+    });
+
+    return el("div", { class: "cartao-embed bloco" },
+      el("b", {}, "Adicionar canal do YouTube"),
+      el("label", { class: "campo" }, el("b", {}, "Canal do YouTube"), canal),
+      el("label", { class: "campo" }, el("b", {}, "Enviar os avisos em"), destino),
+      el("label", { class: "campo" }, el("b", {}, "Mensagem"), msg,
+        el("span", {}, "Variáveis: {link} (obrigatória), {titulo} e {canal}.")),
+      el("div", { class: "acoes-cartao" }, botao));
+  }
+
+  function cartao(i) {
+    const destino = seletor(i.destino_id);
+    const msg = el("textarea", { rows: "3", maxlength: "2000" });
+    msg.value = i.mensagem;
+
+    const salvar = el("button", { class: "botao botao-pequeno", type: "button" }, "💾 Salvar");
+    const testar = el("button", { class: "botao botao-pequeno botao-claro", type: "button" }, "🧪 Testar");
+    const remover = el("button", { class: "botao botao-pequeno botao-claro", type: "button" }, "🗑️ Remover");
+
+    salvar.addEventListener("click", () => {
+      if (!destino.value) return aviso("Escolha o canal do Discord.", true);
+      agir(salvar, `${base}/${i.id}`, "PUT", { destino_id: destino.value, mensagem: msg.value }, "Salvo ✓", false);
+    });
+
+    testar.addEventListener("click", () =>
+      agir(testar, `${base}/${i.id}/testar`, "POST", null, r => `Teste enviado em #${r?.destino} ✓ (usa a mensagem salva)`, false));
+
+    remover.addEventListener("click", () => {
+      if (!confirm(`Remover “${i.canal_nome}”? O bot para de avisar os vídeos desse canal.`)) return;
+      agir(remover, `${base}/${i.id}`, "DELETE", null, "Canal removido ✓");
+    });
+
+    return el("div", { class: "cartao-embed bloco" },
+      el("a", { href: i.canal_url, target: "_blank", rel: "noopener noreferrer" }, el("b", {}, "📺 " + i.canal_nome)),
+      el("label", { class: "campo" }, el("b", {}, "Enviar os avisos em"), destino),
+      el("label", { class: "campo" }, el("b", {}, "Mensagem"), msg,
+        el("span", {}, "Variáveis: {link} (obrigatória), {titulo} e {canal}.")),
+      el("div", { class: "acoes-cartao" }, salvar, testar, remover));
+  }
+
+  function desenhar() {
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, `Avisa no Discord quando um canal do YouTube posta vídeo novo. O bot confere a cada ${d.intervaloMin} minutos e só avisa vídeos publicados daqui pra frente. Até ${d.max} canais por servidor (${d.inscricoes.length}/${d.max}).`),
+      ...d.inscricoes.map(cartao),
+      d.inscricoes.length < d.max ? formularioAdicionar() : el("div", { class: "aviso" }, "Limite de canais atingido. Remova um para adicionar outro.")
+    );
+  }
+
+  desenhar();
 }
 
 

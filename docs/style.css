@@ -197,3 +197,7 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 .secao .linha-item .mini{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--suave);padding-top:10px}
 .secao .previa-campo{display:flex;flex-direction:column;margin-top:6px}
 .botao-pequeno.botao-claro{color:var(--texto)!important}
+
+/* YouTube */
+.secao .cartao-embed.bloco{flex-direction:column;align-items:stretch}
+.secao .cartao-embed.bloco textarea,.secao .cartao-embed.bloco input[type=text]{padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;width:100%}
