@@ -29,6 +29,7 @@ const painelMensagens = require("./painelMensagens.js");
 const painelTickets = require("./painelTickets.js");
 const painelReactRole = require("./painelReactRole.js");
 const painelLogs = require("./painelLogs.js");
+const painelSorteio = require("./painelSorteio.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -653,6 +654,26 @@ function tratar(req, res) {
             }
 
             return json(res, 200, await painelLogs.ler(guild));
+        }
+
+        const so = caminho.match(/^\/api\/guilds\/(\d+)\/sorteios(?:\/(\d+)(?:\/(encerrar|sortear))?)?$/);
+
+        if (so) {
+            const guild = await guildAutorizada(req, res, so[1]);
+
+            if (!guild) return;
+
+            let r = null;
+
+            if (req.method === "POST" && !so[2]) r = await painelSorteio.criar(guild, await lerCorpo(req), usuarioDaRequisicao(req).id);
+            else if (req.method === "PUT" && so[2] && !so[3]) r = await painelSorteio.salvar(guild, so[2], await lerCorpo(req));
+            else if (req.method === "POST" && so[2] && so[3] === "encerrar") r = await painelSorteio.encerrar(guild, so[2]);
+            else if (req.method === "POST" && so[2] && so[3] === "sortear") r = await painelSorteio.sortearDeNovo(guild, so[2]);
+            else if (req.method !== "GET" || so[2]) return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelSorteio.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
