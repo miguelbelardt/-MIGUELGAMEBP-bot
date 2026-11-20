@@ -1192,36 +1192,16 @@ module.exports = {
                 PermissionFlagsBits.Administrator
             ),
 
-    // =================================================
-    // 🚀 /EMBED
-    // =================================================
+    // O /embed não aparece mais no Discord (ver "oculto"): os embeds agora são
+    // criados, editados e enviados pelo painel do site. O arquivo continua carregado
+    // porque o index.js ainda procura este módulo pelo nome.
+    oculto: true,
 
     async execute(interaction) {
-        if (!interaction.guild) {
-            return interaction.reply({
-                content:
-                    "❌ Este comando só pode ser usado dentro de um servidor.",
-                ephemeral: true
-            });
-        }
-
-        if (!isAdmin(interaction)) {
-            return interaction.reply({
-                content:
-                    "❌ Você precisa da permissão de **Administrador do Discord** para usar este comando.",
-                ephemeral: true
-            });
-        }
-
-        const painel =
-            criarPainelPrincipal();
-
         return interaction.reply({
-            embeds:
-                painel.embeds,
-            components:
-                painel.components,
-            ephemeral: true
+            content:
+                "🧩 Os embeds agora são feitos no **painel do site** (Dashboard → seu servidor → ☰ → Embeds).",
+            flags: MessageFlags.Ephemeral
         });
     },
 
@@ -3227,4 +3207,19 @@ module.exports = {
             );
         }
     }
+};
+
+// Usado pelo painel do site (painelEmbed.js)
+module.exports._painel = {
+    MAX_CAMPOS,
+    MAX_BOTOES,
+    criarEmbed,
+    criarComponentesBotoes,
+    textoParaCampos,
+    camposParaTexto,
+    textoParaBotoes,
+    botoesParaTexto,
+    validarURL,
+    emojiValido,
+    garantirColunasExtras
 };
