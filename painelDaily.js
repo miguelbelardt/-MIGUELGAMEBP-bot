@@ -10,7 +10,15 @@
 // "iniciar", coloque:
 //   require("./painelDaily.js").iniciarNotificacoes(client);
 
-const { EmbedBuilder } = require("discord.js");
+const discord = require("discord.js");
+
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    MessageFlags
+} = discord;
 
 const {
     getSaldo,
@@ -224,6 +232,92 @@ function dmFechada(erro) {
     return erro?.code === 50007;
 }
 
+// =====================================================
+// 📩 MENSAGEM DO AVISO (botão dentro do cartão)
+// =====================================================
+// O Discord não deixa colocar botão dentro de um embed comum. Por isso, quando a
+// versão do discord.js tem os "componentes V2", o aviso vira um cartão com o botão
+// no meio (como o da Loritta). Se não tiver, vai um embed com o link no texto
+// ([Clique aqui e resgate](link)) e o botão logo abaixo.
+
+function botaoResgatar() {
+    return new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
+        .setLabel("Resgatar daily")
+        .setEmoji("🎁")
+        .setURL(LINK_DAILY);
+}
+
+function textoDoAviso(discordUser, proxima) {
+    return (
+        `${EMOJIS.lua} Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
+        `${EMOJIS.sequencia} Se você resgatar hoje, sua sequência será de **${proxima} dia(s)**!`
+    );
+}
+
+function montarCartao(discordUser, proxima) {
+    const { ContainerBuilder, TextDisplayBuilder } = discord;
+
+    if (typeof ContainerBuilder !== "function" || typeof TextDisplayBuilder !== "function" || !MessageFlags?.IsComponentsV2) {
+        return null;
+    }
+
+    const cartao = new ContainerBuilder()
+        .setAccentColor(0x5865F2)
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                `## ${EMOJIS.sino} Seu Daily está disponível!\n\n` +
+                `Olá, ${discordUser}!\n\n` +
+                textoDoAviso(discordUser, proxima) + "\n\n" +
+                `${EMOJIS.dinheiro} Resgate pelo botão abaixo:`
+            )
+        )
+        .addActionRowComponents(new ActionRowBuilder().addComponents(botaoResgatar()))
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("-# Não esqueça de pegar seu Daily hoje!")
+        );
+
+    return { components: [cartao], flags: MessageFlags.IsComponentsV2 };
+}
+
+function montarEmbed(discordUser, proxima) {
+    const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`${EMOJIS.sino} Seu Daily está disponível!`)
+        .setDescription(
+            `Olá, ${discordUser}!\n\n` +
+            textoDoAviso(discordUser, proxima) + "\n\n" +
+            `${EMOJIS.dinheiro} [Clique aqui e resgate](${LINK_DAILY})`
+        )
+        .setFooter({ text: "Não esqueça de pegar seu Daily hoje!" });
+
+    return {
+        embeds: [embed],
+        components: [new ActionRowBuilder().addComponents(botaoResgatar())]
+    };
+}
+
+async function enviarAviso(discordUser, proxima) {
+    let cartao = null;
+
+    try {
+        cartao = montarCartao(discordUser, proxima);
+    } catch {
+        cartao = null;
+    }
+
+    if (cartao) {
+        try {
+            return await discordUser.send(cartao);
+        } catch (erro) {
+            // DM fechada não adianta tentar de novo; outro erro: tenta o embed simples
+            if (dmFechada(erro)) throw erro;
+        }
+    }
+
+    return discordUser.send(montarEmbed(discordUser, proxima));
+}
+
 async function verificarNotificacoes(client) {
     try {
         const [usuarios] = await mysqlPool.query(
@@ -270,18 +364,7 @@ async function verificarNotificacoes(client) {
             try {
                 const discordUser = await client.users.fetch(userId);
 
-                const embed = new EmbedBuilder()
-                    .setColor(0x5865F2)
-                    .setTitle(`${EMOJIS.sino} Seu Daily está disponível!`)
-                    .setDescription(
-                        `Olá, ${discordUser}!\n\n` +
-                        `${EMOJIS.lua} Um novo dia começou e sua recompensa diária já está disponível!\n\n` +
-                        `${EMOJIS.sequencia} Se você resgatar hoje, sua sequência será de **${proxima} dia(s)**!\n\n` +
-                        `${EMOJIS.dinheiro} Resgate no site:\n${LINK_DAILY}`
-                    )
-                    .setFooter({ text: "Não esqueça de pegar seu Daily hoje!" });
-
-                await discordUser.send({ embeds: [embed] });
+                await enviarAviso(discordUser, proxima);
 
                 console.log(`🔔 Notificação do Daily enviada para ${discordUser.tag}`);
 
@@ -320,5 +403,5 @@ module.exports = {
     resgatar,
     definirNotificacao,
     iniciarNotificacoes,
-    _teste: { inicioDoDiaBrasilia, sortearRecompensa, verificarNotificacoes }
+    _teste: { inicioDoDiaBrasilia, sortearRecompensa, verificarNotificacoes, montarCartao, montarEmbed, enviarAviso }
 };
