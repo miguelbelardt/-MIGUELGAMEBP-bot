@@ -1890,40 +1890,16 @@ module.exports = {
     // ⚙️ EXECUTAR /LOGS
     // =================================================
 
+    // O /logs não aparece mais no Discord (ver "oculto"): a configuração agora é
+    // feita pelo painel do site. O arquivo continua carregado porque o bot usa
+    // o registro dos logs e os botões/menus passam por aqui.
+    oculto: true,
+
     async execute(interaction) {
 
-        if (
-            !interaction.memberPermissions?.has(
-                "Administrator"
-            )
-        ) {
-            return interaction.reply({
-                content:
-                    "❌ Você precisa ser administrador para configurar os logs.",
-                ephemeral: true
-            });
-        }
-
-        const subcomando =
-            interaction.options.getSubcommand();
-
-        if (
-            subcomando === "status"
-        ) {
-            return mostrarStatus(
-                interaction
-            );
-        }
-
         return interaction.reply({
-            embeds: [
-                criarEmbedConfig()
-            ],
-            components: [
-                new ActionRowBuilder().addComponents(
-                    criarMenuTipos()
-                )
-            ],
+            content:
+                "📜 A configuração dos logs agora fica no **painel do site** (Dashboard → seu servidor → ☰ → Logs).",
             ephemeral: true
         });
     },
