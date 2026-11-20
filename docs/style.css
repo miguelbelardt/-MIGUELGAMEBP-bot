@@ -176,3 +176,11 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 
 .opcao input[type=number],.opcao input[type=date],.opcao input[type=time]{padding:8px 10px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit}
 .opcao input[type=number]{width:80px}
+
+/* Criar Call */
+.secao .grade-campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.secao .grade-emoji{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.secao .previa-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.secao .previa-botao{padding:6px 12px;border-radius:8px;background:#4e5058;color:#fff;font-size:.85rem}
+.secao .campo input[type=color]{width:64px;height:40px;padding:2px;cursor:pointer}
+.secao .campo select{padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;width:100%}

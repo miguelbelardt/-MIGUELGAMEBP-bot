@@ -377,11 +377,6 @@ window.CATEGORIAS = [
     1
    ],
    [
-    "criarcall",
-    "Sistema de calls personalizadas (temporárias).",
-    1
-   ],
-   [
     "youtube",
     "Avisa quando um canal do YouTube posta vídeo novo.",
     1
