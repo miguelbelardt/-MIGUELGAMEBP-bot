@@ -426,6 +426,9 @@ function listarComandos() {
     const lista = [];
 
     for (const comando of client.commands?.values?.() || []) {
+        // comandos "ocultos" (movidos para o painel) não aparecem na lista do site
+        if (comando.oculto) continue;
+
         try {
             const d = comando.data.toJSON();
 
