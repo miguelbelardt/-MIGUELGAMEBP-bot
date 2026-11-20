@@ -367,11 +367,6 @@ window.CATEGORIAS = [
     1
    ],
    [
-    "sorteio",
-    "Cria ou edita um sorteio.",
-    1
-   ],
-   [
     "registrar",
     "Cria e configura o sistema de registro.",
     1

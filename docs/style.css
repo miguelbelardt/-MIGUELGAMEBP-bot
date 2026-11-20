@@ -173,3 +173,6 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 
 .grupo-log{margin-bottom:18px}
 .grupo-log .opcao.sub{margin-left:14px}
+
+.opcao input[type=number],.opcao input[type=date],.opcao input[type=time]{padding:8px 10px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit}
+.opcao input[type=number]{width:80px}

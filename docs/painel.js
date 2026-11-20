@@ -53,7 +53,8 @@ const SECOES = [
   { chave: "mensagens", emoji: "👋", nome: "Boas-vindas e saída" },
   { chave: "tickets", emoji: "🎫", nome: "Tickets" },
   { chave: "reactrole", emoji: "🎭", nome: "Reaction Role" },
-  { chave: "logs", emoji: "📜", nome: "Logs" }
+  { chave: "logs", emoji: "📜", nome: "Logs" },
+  { chave: "sorteios", emoji: "🎉", nome: "Sorteios" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -137,7 +138,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       else if (chave === "mensagens") await secaoMensagens(id, servidor, conteudo);
       else if (chave === "tickets") await secaoTickets(id, servidor, conteudo);
       else if (chave === "reactrole") await secaoReactRole(id, servidor, conteudo);
-      else await secaoLogs(id, conteudo);
+      else if (chave === "logs") await secaoLogs(id, conteudo);
+      else await secaoSorteios(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -999,6 +1001,182 @@ async function secaoLogs(id, alvo) {
   }
 
   desenhar();
+}
+
+
+// ---------- Sorteios ----------
+
+async function secaoSorteios(id, alvo) {
+  const base = `/api/guilds/${id}/sorteios`;
+  let dados = await chamar(base);
+  let editando = null; // null = lista | "novo" | id
+
+  async function enviar(metodo, caminho, corpo, ok) {
+    try {
+      dados = await chamar(base + caminho, { method: metodo, ...(corpo ? { body: JSON.stringify(corpo) } : {}) });
+      aviso(dados.resultado?.aviso || ok, !!dados.resultado?.aviso);
+      return true;
+    } catch (e) {
+      aviso(e.message, true);
+      return false;
+    }
+  }
+
+  const nomeCanal = cid => dados.canais.find(c => c.id === cid)?.nome || "canal desconhecido";
+  const paraInput = d => d.split("/").reverse().join("-"); // dd/mm/aaaa -> aaaa-mm-dd
+  const deInput = v => v.split("-").reverse().join("/");
+
+  function lista() {
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, "Sorteios do servidor. O horário de encerramento é o de Brasília."),
+      ...(dados.lista.length ? [] : [el("div", { class: "aviso" }, "Nenhum sorteio ainda.")]),
+      ...dados.lista.map(s => {
+        const detalhe = s.encerrado
+          ? `Encerrado • ${s.inscritos} inscrito(s) • ${s.vencedores_ids.length} vencedor(es)`
+          : `Termina em ${s.data} às ${s.horario} • ${s.inscritos} inscrito(s) • ${s.vencedores} vencedor(es)`;
+
+        const botoes = [];
+
+        if (!s.encerrado) {
+          botoes.push(
+            el("button", { class: "botao botao-pequeno", type: "button", onclick: () => { editando = s.id; editor(); } }, "Editar"),
+            el("button", {
+              class: "botao botao-pequeno perigo", type: "button",
+              onclick: async () => {
+                if (!confirm("Encerrar este sorteio agora e sortear os vencedores?")) return;
+                if (await enviar("POST", `/${s.id}/encerrar`, null, "Sorteio encerrado ✓")) lista();
+              }
+            }, "Encerrar agora"));
+        } else {
+          botoes.push(el("button", {
+            class: "botao botao-pequeno", type: "button",
+            onclick: async () => {
+              if (!confirm("Sortear de novo? Só entram quem ainda não foi sorteado nesta rodada.")) return;
+              if (await enviar("POST", `/${s.id}/sortear`, null, "Novo sorteio feito ✓")) lista();
+            }
+          }, "Sortear de novo"));
+        }
+
+        return el("div", { class: "opcao rr-item" },
+          el("div", { class: "txt" },
+            el("b", {}, `${s.encerrado ? "🏁" : "🎉"} ${s.titulo}`),
+            el("span", {}, `#${nomeCanal(s.canal_id)} • ${detalhe}`),
+            el("a", { href: `https://discord.com/channels/${id}/${s.canal_id}/${s.mensagem_id}`, target: "_blank", rel: "noopener noreferrer" }, "Abrir no Discord")),
+          el("div", { class: "botoes-linha" }, ...botoes));
+      }),
+      el("div", { class: "acoes" }, el("button", { class: "botao", type: "button", onclick: () => { editando = "novo"; editor(); } }, "➕ Novo sorteio"))
+    );
+  }
+
+  function editor() {
+    const novo = editando === "novo";
+    const s = novo
+      ? { canal_id: "", titulo: "", descricao: "", premio: "", cor: "#5865F2", vencedores: 1, data: "", horario: "", mostrar_participantes: false, autor_nome: "", autor_icone: "", imagem: "", thumbnail: "", rodape: "", rodape_icone: "" }
+      : dados.lista.find(x => x.id === editando);
+
+    if (!s) { editando = null; lista(); return; }
+
+    const campos = {};
+
+    function texto(chave, titulo, { multilinha = false, max = 256, dica = "" } = {}) {
+      const campo = multilinha ? el("textarea", { rows: "4", maxlength: String(max) }) : el("input", { type: "text", maxlength: String(max) });
+      campo.value = s[chave] ?? "";
+      campo.addEventListener("input", previa);
+      campos[chave] = () => campo.value;
+      return el("label", { class: "campo" }, el("b", {}, titulo), campo, dica ? el("span", {}, dica) : "");
+    }
+
+    function interruptor(chave, titulo, desc) {
+      const caixa = el("input", { type: "checkbox", "aria-label": titulo });
+      caixa.checked = !!s[chave];
+      campos[chave] = () => caixa.checked;
+      return el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, titulo), desc ? el("span", {}, desc) : ""), el("label", { class: "interruptor" }, caixa, el("i")));
+    }
+
+    const canal = el("select", { "aria-label": "Canal" }, el("option", { value: "" }, "— escolha um canal —"),
+      ...dados.canais.map(x => el("option", { value: x.id }, "#" + x.nome)));
+    canal.value = s.canal_id || "";
+    if (!novo) canal.disabled = true;
+
+    const cor = el("input", { type: "color", "aria-label": "Cor do embed" });
+    cor.value = s.cor.toLowerCase();
+    cor.addEventListener("input", previa);
+    campos.cor = () => cor.value.toUpperCase();
+
+    const venc = el("input", { type: "number", min: "1", max: "20", step: "1", "aria-label": "Vencedores" });
+    venc.value = String(s.vencedores);
+    campos.vencedores = () => Number(venc.value);
+
+    const data = el("input", { type: "date", "aria-label": "Data de encerramento" });
+    data.value = s.data ? paraInput(s.data) : "";
+    const hora = el("input", { type: "time", "aria-label": "Horário de encerramento" });
+    hora.value = s.horario || "";
+
+    const pre = el("div", { class: "previa" });
+
+    function previa() {
+      const v = k => campos[k]();
+      const emb = el("div", { class: "previa-embed" });
+      emb.style.borderLeftColor = v("cor");
+
+      if (v("autor_nome").trim()) emb.append(el("div", { class: "previa-autor" }, v("autor_nome")));
+      emb.append(el("b", {}, v("titulo") || "Título do sorteio"));
+      emb.append(el("p", {}, v("descricao") || "Descrição do sorteio"));
+      if (v("premio").trim()) emb.append(el("p", {}, el("b", {}, "Prêmio"), "\n" + v("premio")));
+      if (v("rodape").trim()) emb.append(el("small", {}, v("rodape")));
+
+      pre.replaceChildren(el("small", { class: "legenda" }, "Prévia (a mensagem real tem o botão de participar)"), emb);
+    }
+
+    const salvar = el("button", { class: "botao", type: "button" }, novo ? "🎉 Criar e enviar" : "💾 Salvar");
+
+    salvar.addEventListener("click", async () => {
+      if (!data.value || !hora.value) { aviso("Escolha a data e o horário de encerramento.", true); return; }
+
+      const corpo = {};
+      for (const [k, f] of Object.entries(campos)) corpo[k] = f();
+
+      corpo.data = deInput(data.value);
+      corpo.horario = hora.value;
+
+      if (novo) corpo.canal_id = canal.value;
+
+      salvar.disabled = true;
+
+      const ok = novo ? await enviar("POST", "", corpo, "Sorteio enviado ✓") : await enviar("PUT", `/${editando}`, corpo, "Salvo ✓");
+
+      salvar.disabled = false;
+
+      if (ok) { editando = null; lista(); }
+    });
+
+    alvo.replaceChildren(
+      el("button", { class: "link", type: "button", onclick: () => { editando = null; lista(); } }, "← Sorteios"),
+      el("h2", {}, novo ? "Novo sorteio" : "Editar sorteio"),
+      ...(novo ? [el("label", { class: "campo" }, el("b", {}, "Canal"), canal)] : [el("p", { class: "legenda" }, `Canal: #${nomeCanal(s.canal_id)}`)]),
+      texto("titulo", "Título"),
+      texto("descricao", "Descrição", { multilinha: true, max: 4000 }),
+      texto("premio", "Prêmio", { max: 1024 }),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "🏆 Vencedores"), el("span", {}, "De 1 a 20.")), venc),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "📅 Data de encerramento")), data),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "⏰ Horário (Brasília)")), hora),
+      interruptor("mostrar_participantes", "Botão para ver os participantes"),
+      ...(novo ? [interruptor("marcar_everyone", "Marcar @everyone", "O bot precisa da permissão de mencionar @everyone no canal.")] : []),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "🎨 Cor do embed")), cor),
+      texto("autor_nome", "Autor"),
+      texto("autor_icone", "Ícone do autor (link)", { max: 1000 }),
+      texto("imagem", "Imagem grande (link)", { max: 1000 }),
+      texto("thumbnail", "Miniatura (link)", { max: 1000 }),
+      texto("rodape", "Rodapé", { max: 2048 }),
+      texto("rodape_icone", "Ícone do rodapé (link)", { max: 1000 }),
+      pre,
+      el("div", { class: "acoes" }, salvar)
+    );
+
+    previa();
+  }
+
+  lista();
 }
 
 function tela() {
