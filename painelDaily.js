@@ -42,7 +42,7 @@ const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").rep
 const SITE_PATH = process.env.SITE_PATH || "/-MIGUELGAMEBP-bot/";
 // Imagem do aviso (opcional): coloque o link de uma imagem aqui, ou na variável
 // DAILY_IMAGEM da FadeHost. Vazio = sem imagem.
-const IMAGEM_AVISO = (process.env.DAILY_IMAGEM || "").trim();
+const IMAGEM_AVISO = (process.env.DAILY_IMAGEM || "https://cdn.discordapp.com/attachments/1553800812751495309/1573261596476579950/file_000000006b54820e8227b6d886bbf968.png?ex=6b015d8a&is=6b000c0a&hm=4a44c07f9bb4513eb00ae82466de7a40fafc0a0e2263931eba276a8204cda2c1&").trim();
 
 const LINK_DAILY = `${SITE_URL}${SITE_PATH}daily.html`;
 
