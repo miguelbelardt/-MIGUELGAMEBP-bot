@@ -32,6 +32,7 @@ const painelLogs = require("./painelLogs.js");
 const painelSorteio = require("./painelSorteio.js");
 const painelCriarCall = require("./painelCriarCall.js");
 const painelEmbed = require("./painelEmbed.js");
+const painelYouTube = require("./painelYouTube.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -719,6 +720,26 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelEmbed.ler(guild)), resultado: r || undefined });
+        }
+
+        const yt = caminho.match(/^\/api\/guilds\/(\d+)\/youtube(?:\/(\d+)(?:\/(testar))?)?$/);
+
+        if (yt) {
+            const guild = await guildAutorizada(req, res, yt[1]);
+
+            if (!guild) return;
+
+            let r = null;
+
+            if (req.method === "POST" && !yt[2]) r = await painelYouTube.adicionar(guild, await lerCorpo(req));
+            else if (req.method === "PUT" && yt[2] && !yt[3]) r = await painelYouTube.editar(guild, yt[2], await lerCorpo(req));
+            else if (req.method === "DELETE" && yt[2] && !yt[3]) r = await painelYouTube.remover(guild, yt[2]);
+            else if (req.method === "POST" && yt[2] && yt[3]) r = await painelYouTube.testar(guild, yt[2]);
+            else if (req.method !== "GET" || yt[2]) return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelYouTube.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
