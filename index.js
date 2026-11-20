@@ -2239,7 +2239,7 @@ for (
 
         } else if (
             // arquivos de apoio (sem comando próprio): não é erro
-            !["join.js", "leave.js", "reactrole.js"].includes(arquivo)
+            !["join.js", "leave.js", "reactrole.js", "criarcall.js"].includes(arquivo)
         ) {
 
             console.log(

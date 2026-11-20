@@ -30,6 +30,7 @@ const painelTickets = require("./painelTickets.js");
 const painelReactRole = require("./painelReactRole.js");
 const painelLogs = require("./painelLogs.js");
 const painelSorteio = require("./painelSorteio.js");
+const painelCriarCall = require("./painelCriarCall.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -677,6 +678,24 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelSorteio.ler(guild)), resultado: r || undefined });
+        }
+
+        const cc = caminho.match(/^\/api\/guilds\/(\d+)\/criarcall(?:\/(publicar))?$/);
+
+        if (cc) {
+            const guild = await guildAutorizada(req, res, cc[1]);
+
+            if (!guild) return;
+
+            let r = null;
+
+            if (req.method === "PUT" && !cc[2]) r = await painelCriarCall.salvar(guild, await lerCorpo(req));
+            else if (req.method === "POST" && cc[2]) r = await painelCriarCall.publicar(guild);
+            else if (req.method !== "GET" || cc[2]) return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelCriarCall.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
