@@ -54,7 +54,8 @@ const SECOES = [
   { chave: "tickets", emoji: "🎫", nome: "Tickets" },
   { chave: "reactrole", emoji: "🎭", nome: "Reaction Role" },
   { chave: "logs", emoji: "📜", nome: "Logs" },
-  { chave: "sorteios", emoji: "🎉", nome: "Sorteios" }
+  { chave: "sorteios", emoji: "🎉", nome: "Sorteios" },
+  { chave: "criarcall", emoji: "📞", nome: "Criar Call" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -139,7 +140,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       else if (chave === "tickets") await secaoTickets(id, servidor, conteudo);
       else if (chave === "reactrole") await secaoReactRole(id, servidor, conteudo);
       else if (chave === "logs") await secaoLogs(id, conteudo);
-      else await secaoSorteios(id, conteudo);
+      else if (chave === "sorteios") await secaoSorteios(id, conteudo);
+      else await secaoCriarCall(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -1178,6 +1180,157 @@ async function secaoSorteios(id, alvo) {
 
   lista();
 }
+
+// ---------- Criar Call ----------
+
+async function secaoCriarCall(id, alvo) {
+  const base = `/api/guilds/${id}/criarcall`;
+  let d = await chamar(base);
+
+  const campos = {};
+
+  function texto(chave, titulo, { multilinha = false, max = 256, dica = "", ph = "" } = {}) {
+    const campo = multilinha
+      ? el("textarea", { rows: "3", maxlength: String(max) })
+      : el("input", { type: "text", maxlength: String(max) });
+    campo.value = d[chave] ?? "";
+    if (ph) campo.placeholder = ph;
+    campo.addEventListener("input", previa);
+    campos[chave] = () => campo.value;
+    return el("label", { class: "campo" }, el("b", {}, titulo), campo, dica ? el("span", {}, dica) : "");
+  }
+
+  function seletor(chave, titulo, lista, vazio, dica) {
+    const sel = el("select", { "aria-label": titulo }, el("option", { value: "" }, vazio),
+      ...lista.map(c => el("option", { value: c.id }, (chave === "canal_id" ? "#" : "") + c.nome)));
+    sel.value = d[chave] || "";
+    campos[chave] = () => sel.value || null;
+    return el("label", { class: "campo" }, el("b", {}, titulo), sel, dica ? el("span", {}, dica) : "");
+  }
+
+  const categoria = seletor("categoria_id", "Categoria das calls", d.categorias, "— sem categoria —", "Onde as calls temporárias serão criadas.");
+  const canal = seletor("canal_id", "Canal do painel", d.canais, "— escolha um canal —", "Onde a mensagem com os botões fica.");
+
+  const cor = el("input", { type: "color", "aria-label": "Cor do embed" });
+  cor.value = d.embed_cor.toLowerCase();
+  cor.addEventListener("input", previa);
+  campos.embed_cor = () => cor.value.toUpperCase();
+
+  const emojis = {};
+  const gradeEmojis = el("div", { class: "grade-emoji" },
+    ...Object.entries(d.emojis).map(([k, e]) => {
+      const campo = el("input", { type: "text", maxlength: "64", placeholder: e.padrao });
+      campo.value = e.valor === e.padrao ? "" : e.valor;
+      campo.addEventListener("input", previa);
+      emojis[k] = () => campo.value.trim() || e.padrao;
+      return el("label", { class: "campo" }, el("b", {}, e.nome), campo);
+    }));
+
+  const caixaPrevia = el("div", { class: "previa" });
+
+  function previa() {
+    const emb = el("div", { class: "previa-embed" });
+    emb.style.borderLeftColor = campos.embed_cor();
+
+    if (campos.embed_titulo().trim()) emb.append(el("b", {}, campos.embed_titulo()));
+    if (campos.embed_descricao().trim()) emb.append(el("p", {}, campos.embed_descricao()));
+    if (campos.embed_rodape().trim()) emb.append(el("small", {}, campos.embed_rodape()));
+
+    const botoes = el("div", { class: "previa-botoes" },
+      ...Object.entries(d.emojis).map(([k, e]) => el("span", { class: "previa-botao" }, `${emojis[k]()} ${e.nome}`)));
+
+    caixaPrevia.replaceChildren(emb, botoes);
+  }
+
+  const titulo = texto("embed_titulo", "Título", { max: 256 });
+  const descricao = texto("embed_descricao", "Descrição", { multilinha: true, max: 4096 });
+  const rodape = texto("embed_rodape", "Rodapé", { max: 2048 });
+  const rodapeIcone = texto("embed_rodape_icone", "Ícone do rodapé (link)", { max: 500, ph: "https://…" });
+  const thumb = texto("embed_thumbnail", "Miniatura (link)", { max: 500, ph: "https://…" });
+  const imagem = texto("embed_imagem", "Imagem grande (link)", { max: 500, ph: "https://…" });
+
+  const status = el("p", { class: "legenda" });
+
+  function atualizarStatus() {
+    status.textContent = d.publicado ? "✅ O painel já está publicado no canal escolhido." : "⚠️ O painel ainda não foi publicado.";
+  }
+
+  function montar() {
+    const emojisPayload = {};
+    for (const k of Object.keys(emojis)) emojisPayload[k] = emojis[k]();
+
+    return {
+      categoria_id: campos.categoria_id(),
+      canal_id: campos.canal_id(),
+      embed_titulo: campos.embed_titulo(),
+      embed_descricao: campos.embed_descricao(),
+      embed_cor: campos.embed_cor(),
+      embed_rodape: campos.embed_rodape(),
+      embed_rodape_icone: campos.embed_rodape_icone(),
+      embed_thumbnail: campos.embed_thumbnail(),
+      embed_imagem: campos.embed_imagem(),
+      emojis: emojisPayload
+    };
+  }
+
+  const salvar = el("button", { class: "botao", type: "button" }, "💾 Salvar");
+  const publicar = el("button", { class: "botao botao-claro", type: "button" }, "📤 Publicar / atualizar painel");
+
+  async function enviar(botao, caminho, metodo, ok) {
+    botao.disabled = true;
+
+    try {
+      d = await chamar(caminho, { method: metodo, body: metodo === "PUT" ? JSON.stringify(montar()) : undefined });
+      atualizarStatus();
+      aviso(ok);
+    } catch (e) {
+      aviso(e.message, true);
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  salvar.addEventListener("click", () => {
+    if (!campos.canal_id()) { aviso("Escolha o canal do painel antes de salvar.", true); return; }
+    enviar(salvar, base, "PUT", "Salvo ✓ (o painel publicado também foi atualizado)");
+  });
+
+  publicar.addEventListener("click", async () => {
+    if (!campos.canal_id()) { aviso("Escolha o canal do painel primeiro.", true); return; }
+
+    publicar.disabled = true;
+
+    try {
+      d = await chamar(base, { method: "PUT", body: JSON.stringify(montar()) });
+      d = await chamar(`${base}/publicar`, { method: "POST" });
+      atualizarStatus();
+      aviso("Painel publicado ✓");
+    } catch (e) {
+      aviso(e.message, true);
+    } finally {
+      publicar.disabled = false;
+    }
+  });
+
+  alvo.replaceChildren(
+    el("p", { class: "legenda" }, "A mesma configuração do antigo /criarcall, agora aqui no site. Os membros criam a call pelos botões do painel."),
+    status,
+    el("div", { class: "grade-campos" }, categoria, canal),
+    titulo, descricao,
+    el("label", { class: "campo" }, el("b", {}, "Cor"), cor),
+    rodape, rodapeIcone, thumb, imagem,
+    el("h2", {}, "Emojis dos botões"),
+    el("p", { class: "legenda" }, "Deixe em branco para usar o padrão. Aceita emoji comum ou personalizado (<:nome:id>)."),
+    gradeEmojis,
+    el("h2", {}, "Prévia"),
+    caixaPrevia,
+    el("div", { class: "acoes" }, salvar, publicar)
+  );
+
+  atualizarStatus();
+  previa();
+}
+
 
 function tela() {
   if (!logado()) return telaLogin(app, "Autorize o aplicativo para configurar o bot nos servidores onde você é administrador.");
