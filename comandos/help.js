@@ -138,9 +138,8 @@ const SECOES = [
         id: "sistemas",
         nome: "Sistemas",
         emoji: "📦",
-        resumo: "Calls, logs, YouTube e ferramentas do servidor",
+        resumo: "Contador e ferramentas do servidor",
         comandos: {
-            youtube: "Avisa quando um canal do YouTube posta vídeo.",
             contador: "Canal que mostra membros, bots ou canais do servidor."
         }
     },
