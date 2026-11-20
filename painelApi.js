@@ -31,6 +31,7 @@ const painelReactRole = require("./painelReactRole.js");
 const painelLogs = require("./painelLogs.js");
 const painelSorteio = require("./painelSorteio.js");
 const painelCriarCall = require("./painelCriarCall.js");
+const painelEmbed = require("./painelEmbed.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -696,6 +697,28 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelCriarCall.ler(guild)), resultado: r || undefined });
+        }
+
+        const em = caminho.match(/^\/api\/guilds\/(\d+)\/embeds(?:\/(\d+))?$/);
+
+        if (em) {
+            const guild = await guildAutorizada(req, res, em[1]);
+
+            if (!guild) return;
+
+            const eu = usuarioDaRequisicao(req);
+            const nomeUsuario = guild.members?.cache?.get(eu.id)?.user?.username || null;
+
+            let r = null;
+
+            if (req.method === "POST" && !em[2]) r = await painelEmbed.criar(guild, await lerCorpo(req), eu.id, nomeUsuario);
+            else if (req.method === "PUT" && em[2]) r = await painelEmbed.salvar(guild, em[2], await lerCorpo(req), nomeUsuario);
+            else if (req.method === "DELETE" && em[2]) r = await painelEmbed.excluir(guild, em[2]);
+            else if (req.method !== "GET" || em[2]) return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelEmbed.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
