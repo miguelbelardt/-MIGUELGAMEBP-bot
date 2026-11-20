@@ -1827,9 +1827,22 @@ async function execute(interaction) {
     });
 }
 
+// O comando /criarcall foi removido: a configuração agora é feita pelo painel do site.
+// Este arquivo continua existindo porque o bot ainda cria e apaga as calls.
 module.exports = {
-    data,
-    execute,
     iniciar,
     tratarInteracao
+};
+
+// Usado pelo painel do site (painelCriarCall.js)
+module.exports._painel = {
+    BOTOES,
+    PADRAO,
+    carregarConfig,
+    salvarConfig,
+    urlValida,
+    normalizarCor,
+    normalizarEmoji,
+    atualizarPublicacao,
+    criarPainelPublico
 };
