@@ -362,11 +362,6 @@ window.CATEGORIAS = [
   "nome": "Administração",
   "comandos": [
    [
-    "embed",
-    "Painel para criar e gerenciar embeds (com botões de link).",
-    1
-   ],
-   [
     "registrar",
     "Cria e configura o sistema de registro.",
     1

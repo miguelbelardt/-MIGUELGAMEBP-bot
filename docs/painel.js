@@ -55,7 +55,8 @@ const SECOES = [
   { chave: "reactrole", emoji: "🎭", nome: "Reaction Role" },
   { chave: "logs", emoji: "📜", nome: "Logs" },
   { chave: "sorteios", emoji: "🎉", nome: "Sorteios" },
-  { chave: "criarcall", emoji: "📞", nome: "Criar Call" }
+  { chave: "criarcall", emoji: "📞", nome: "Criar Call" },
+  { chave: "embeds", emoji: "🧩", nome: "Embeds" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -141,7 +142,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       else if (chave === "reactrole") await secaoReactRole(id, servidor, conteudo);
       else if (chave === "logs") await secaoLogs(id, conteudo);
       else if (chave === "sorteios") await secaoSorteios(id, conteudo);
-      else await secaoCriarCall(id, conteudo);
+      else if (chave === "criarcall") await secaoCriarCall(id, conteudo);
+      else await secaoEmbeds(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -1329,6 +1331,233 @@ async function secaoCriarCall(id, alvo) {
 
   atualizarStatus();
   previa();
+}
+
+
+// ---------- Embeds ----------
+
+async function secaoEmbeds(id, alvo) {
+  const base = `/api/guilds/${id}/embeds`;
+  let d = await chamar(base);
+
+  function lista() {
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, "Crie mensagens com embed e envie para qualquer canal. É o antigo /embed, agora aqui no site."),
+      el("div", { class: "acoes-topo" },
+        el("button", { class: "botao botao-pequeno", type: "button", onclick: () => editor(null) }, "➕ Novo embed")),
+      ...(d.embeds.length ? d.embeds.map(cartao) : [el("div", { class: "aviso" }, "Nenhum embed ainda. Clique em “Novo embed”.")])
+    );
+  }
+
+  function cartao(e) {
+    const canal = d.canais.find(c => c.id === e.canal_id);
+
+    const apagar = el("button", { class: "botao botao-pequeno botao-claro", type: "button" }, "🗑️ Apagar");
+    apagar.addEventListener("click", async () => {
+      if (!confirm(`Apagar o embed “${e.nome}”? A mensagem no Discord também será apagada.`)) return;
+
+      apagar.disabled = true;
+
+      try {
+        d = await chamar(`${base}/${e.id}`, { method: "DELETE" });
+        aviso("Embed apagado ✓");
+        lista();
+      } catch (er) {
+        apagar.disabled = false;
+        aviso(er.message, true);
+      }
+    });
+
+    return el("div", { class: "cartao-embed" },
+      el("div", { class: "txt" },
+        el("b", {}, e.nome),
+        el("span", {}, [e.titulo || e.descricao.slice(0, 60) || "(sem título)", canal ? ` • #${canal.nome}` : " • canal removido"].join(""))),
+      el("div", { class: "acoes-cartao" },
+        e.link ? el("a", { class: "botao botao-pequeno botao-claro", href: e.link, target: "_blank", rel: "noopener noreferrer" }, "Abrir") : "",
+        el("button", { class: "botao botao-pequeno", type: "button", onclick: () => editor(e) }, "✏️ Editar"),
+        apagar));
+  }
+
+  function editor(e) {
+    const novo = !e;
+    const v = e || {
+      nome: "Embed", mensagem: "", titulo: "", titulo_url: "", descricao: "", cor: "#5865F2", imagem: "", thumbnail: "",
+      autor: "", autor_icone: "", autor_url: "", rodape: "", rodape_icone: "", timestamp: false, campos: [], botoes: [], canal_id: null
+    };
+
+    const ler = {};
+
+    function txt(chave, titulo, { multi = false, max = 256, ph = "" } = {}) {
+      const c = multi ? el("textarea", { rows: "4", maxlength: String(max) }) : el("input", { type: "text", maxlength: String(max) });
+      c.value = v[chave] ?? "";
+      if (ph) c.placeholder = ph;
+      c.addEventListener("input", previa);
+      ler[chave] = () => c.value;
+      return el("label", { class: "campo" }, el("b", {}, titulo), c);
+    }
+
+    const canal = el("select", { "aria-label": "Canal" }, el("option", { value: "" }, "— escolha um canal —"),
+      ...d.canais.map(c => el("option", { value: c.id }, "#" + c.nome)));
+    canal.value = v.canal_id || "";
+    ler.canal_id = () => canal.value || null;
+
+    const cor = el("input", { type: "color", "aria-label": "Cor" });
+    cor.value = v.cor.toLowerCase();
+    cor.addEventListener("input", previa);
+    ler.cor = () => cor.value.toUpperCase();
+
+    const hora = el("input", { type: "checkbox", "aria-label": "Mostrar horário" });
+    hora.checked = !!v.timestamp;
+    hora.addEventListener("change", previa);
+    ler.timestamp = () => hora.checked;
+
+    // ----- campos -----
+    let campos = v.campos.map(c => ({ ...c }));
+    const caixaCampos = el("div", {});
+
+    function desenharCampos() {
+      caixaCampos.replaceChildren(...campos.map((c, i) => {
+        const n = el("input", { type: "text", maxlength: "256", placeholder: "Nome" });
+        const val = el("textarea", { rows: "2", maxlength: "1024", placeholder: "Valor" });
+        const inl = el("input", { type: "checkbox", "aria-label": "Lado a lado" });
+        n.value = c.nome; val.value = c.valor; inl.checked = !!c.inline;
+        n.addEventListener("input", () => { c.nome = n.value; previa(); });
+        val.addEventListener("input", () => { c.valor = val.value; previa(); });
+        inl.addEventListener("change", () => { c.inline = inl.checked; previa(); });
+
+        return el("div", { class: "linha-item" }, n, val,
+          el("label", { class: "mini" }, inl, " lado a lado"),
+          el("button", { class: "botao botao-pequeno botao-claro", type: "button", "aria-label": "Remover campo",
+            onclick: () => { campos.splice(i, 1); desenharCampos(); previa(); } }, "✕"));
+      }));
+    }
+
+    const addCampo = el("button", { class: "botao botao-pequeno botao-claro", type: "button", onclick: () => {
+      if (campos.length >= d.maxCampos) return aviso(`O máximo é ${d.maxCampos} campos.`, true);
+      campos.push({ nome: "", valor: "", inline: false }); desenharCampos(); previa();
+    } }, "➕ Adicionar campo");
+
+    // ----- botões de link -----
+    let botoes = v.botoes.map(b => ({ ...b }));
+    const caixaBotoes = el("div", {});
+
+    function desenharBotoes() {
+      caixaBotoes.replaceChildren(...botoes.map((b, i) => {
+        const t = el("input", { type: "text", maxlength: "80", placeholder: "Texto do botão" });
+        const u = el("input", { type: "text", maxlength: "512", placeholder: "https://…" });
+        const em = el("input", { type: "text", maxlength: "64", placeholder: "Emoji (opcional)" });
+        t.value = b.texto; u.value = b.url; em.value = b.emoji || "";
+        t.addEventListener("input", () => { b.texto = t.value; previa(); });
+        u.addEventListener("input", () => { b.url = u.value; });
+        em.addEventListener("input", () => { b.emoji = em.value; previa(); });
+
+        return el("div", { class: "linha-item" }, t, u, em,
+          el("button", { class: "botao botao-pequeno botao-claro", type: "button", "aria-label": "Remover botão",
+            onclick: () => { botoes.splice(i, 1); desenharBotoes(); previa(); } }, "✕"));
+      }));
+    }
+
+    const addBotao = el("button", { class: "botao botao-pequeno botao-claro", type: "button", onclick: () => {
+      if (botoes.length >= d.maxBotoes) return aviso(`O máximo é ${d.maxBotoes} botões.`, true);
+      botoes.push({ texto: "", url: "", emoji: "" }); desenharBotoes(); previa();
+    } }, "➕ Adicionar botão de link");
+
+    // ----- prévia -----
+    const caixaPrevia = el("div", { class: "previa" });
+
+    function previa() {
+      const partes = [];
+
+      if (ler.mensagem().trim()) partes.push(el("p", { class: "previa-texto" }, ler.mensagem()));
+
+      const emb = el("div", { class: "previa-embed" });
+      emb.style.borderLeftColor = ler.cor();
+
+      if (ler.autor().trim()) emb.append(el("div", { class: "previa-autor" }, ler.autor()));
+      if (ler.titulo().trim()) emb.append(el("b", {}, ler.titulo()));
+      if (ler.descricao().trim()) emb.append(el("p", {}, ler.descricao()));
+
+      for (const c of campos) {
+        if (c.nome.trim() || c.valor.trim()) emb.append(el("div", { class: "previa-campo" }, el("b", {}, c.nome), el("span", {}, c.valor)));
+      }
+
+      if (ler.rodape().trim() || ler.timestamp()) emb.append(el("small", {}, [ler.rodape(), ler.timestamp() ? "agora" : ""].filter(Boolean).join(" • ")));
+
+      partes.push(emb);
+
+      if (botoes.length) {
+        partes.push(el("div", { class: "previa-botoes" },
+          ...botoes.map(b => el("span", { class: "previa-botao" }, `${b.emoji ? b.emoji + " " : ""}${b.texto || "Botão"}`))));
+      }
+
+      caixaPrevia.replaceChildren(...partes);
+    }
+
+    const nome = txt("nome", "Nome (só para você se organizar)", { max: 100 });
+    const msg = txt("mensagem", "Texto acima do embed (opcional)", { multi: true, max: 2000 });
+    const autor = txt("autor", "Autor", { max: 256 });
+    const autorIcone = txt("autor_icone", "Ícone do autor (link)", { max: 1000, ph: "https://…" });
+    const autorUrl = txt("autor_url", "Link do autor", { max: 1000, ph: "https://…" });
+    const titulo = txt("titulo", "Título", { max: 256 });
+    const tituloUrl = txt("titulo_url", "Link do título", { max: 1000, ph: "https://…" });
+    const descricao = txt("descricao", "Descrição", { multi: true, max: 4096 });
+    const thumb = txt("thumbnail", "Miniatura (link)", { max: 1000, ph: "https://…" });
+    const imagem = txt("imagem", "Imagem grande (link)", { max: 1000, ph: "https://…" });
+    const rodape = txt("rodape", "Rodapé", { max: 2048 });
+    const rodapeIcone = txt("rodape_icone", "Ícone do rodapé (link)", { max: 1000, ph: "https://…" });
+
+    function montar() {
+      const o = {};
+      for (const k of Object.keys(ler)) o[k] = ler[k]();
+      o.campos = campos.map(c => ({ nome: c.nome, valor: c.valor, inline: !!c.inline }));
+      o.botoes = botoes.map(b => ({ texto: b.texto, url: b.url, emoji: (b.emoji || "").trim() }));
+      return o;
+    }
+
+    const enviar = el("button", { class: "botao", type: "button" }, novo ? "📤 Enviar embed" : "💾 Salvar e atualizar mensagem");
+    const cancelar = el("button", { class: "botao botao-claro", type: "button", onclick: lista }, "← Voltar");
+
+    enviar.addEventListener("click", async () => {
+      if (!ler.canal_id()) return aviso("Escolha o canal onde o embed será enviado.", true);
+
+      enviar.disabled = true;
+
+      try {
+        d = await chamar(novo ? base : `${base}/${e.id}`, { method: novo ? "POST" : "PUT", body: JSON.stringify(montar()) });
+        aviso(novo ? "Embed enviado ✓" : "Embed atualizado ✓");
+        lista();
+      } catch (er) {
+        enviar.disabled = false;
+        aviso(er.message, true);
+      }
+    });
+
+    alvo.replaceChildren(
+      el("h2", {}, novo ? "Novo embed" : "Editar embed"),
+      el("div", { class: "grade-campos" }, nome, el("label", { class: "campo" }, el("b", {}, "Canal"), canal)),
+      msg,
+      el("div", { class: "grade-campos" }, autor, autorIcone, autorUrl),
+      el("div", { class: "grade-campos" }, titulo, tituloUrl),
+      descricao,
+      el("div", { class: "grade-campos" }, thumb, imagem),
+      el("div", { class: "grade-campos" }, rodape, rodapeIcone),
+      el("div", { class: "opcao" },
+        el("div", { class: "txt" }, el("b", {}, "Cor")), cor),
+      el("div", { class: "opcao" },
+        el("div", { class: "txt" }, el("b", {}, "Mostrar horário"), el("span", {}, "Aparece no rodapé do embed.")),
+        el("label", { class: "interruptor" }, hora, el("i"))),
+      el("h2", {}, "Campos"), caixaCampos, addCampo,
+      el("h2", {}, "Botões de link"), caixaBotoes, addBotao,
+      el("h2", {}, "Prévia"), caixaPrevia,
+      el("div", { class: "acoes" }, cancelar, enviar)
+    );
+
+    desenharCampos();
+    desenharBotoes();
+    previa();
+  }
+
+  lista();
 }
 
 
