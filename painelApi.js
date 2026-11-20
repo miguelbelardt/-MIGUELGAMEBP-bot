@@ -28,6 +28,7 @@ const painelDaily = require("./painelDaily.js");
 const painelMensagens = require("./painelMensagens.js");
 const painelTickets = require("./painelTickets.js");
 const painelReactRole = require("./painelReactRole.js");
+const painelLogs = require("./painelLogs.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -634,6 +635,24 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelReactRole.ler(guild)), resultado: r || undefined });
+        }
+
+        const lg = caminho.match(/^\/api\/guilds\/(\d+)\/logs$/);
+
+        if (lg) {
+            const guild = await guildAutorizada(req, res, lg[1]);
+
+            if (!guild) return;
+
+            if (req.method === "PUT") {
+                const r = await painelLogs.salvar(guild, await lerCorpo(req));
+
+                if (r.erro) return json(res, 400, r);
+            } else if (req.method !== "GET") {
+                return json(res, 405, { erro: "Método não permitido." });
+            }
+
+            return json(res, 200, await painelLogs.ler(guild));
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
