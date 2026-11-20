@@ -377,11 +377,6 @@ window.CATEGORIAS = [
     1
    ],
    [
-    "logs",
-    "Configura o sistema de logs.",
-    1
-   ],
-   [
     "contador",
     "Canal que mostra membros, bots ou canais do servidor.",
     1
