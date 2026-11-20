@@ -170,3 +170,6 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 .linha-par input,.linha-par select{padding:8px 10px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;min-width:0}
 .rr-item .txt a{font-size:.85rem;color:var(--cor2)}
 .secao [hidden]{display:none!important}
+
+.grupo-log{margin-bottom:18px}
+.grupo-log .opcao.sub{margin-left:14px}

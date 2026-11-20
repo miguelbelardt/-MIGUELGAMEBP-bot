@@ -52,7 +52,8 @@ const SECOES = [
   { chave: "geral", emoji: "⚙️", nome: "Geral" },
   { chave: "mensagens", emoji: "👋", nome: "Boas-vindas e saída" },
   { chave: "tickets", emoji: "🎫", nome: "Tickets" },
-  { chave: "reactrole", emoji: "🎭", nome: "Reaction Role" }
+  { chave: "reactrole", emoji: "🎭", nome: "Reaction Role" },
+  { chave: "logs", emoji: "📜", nome: "Logs" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -135,7 +136,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       if (chave === "geral") await secaoGeral(id, info, conteudo);
       else if (chave === "mensagens") await secaoMensagens(id, servidor, conteudo);
       else if (chave === "tickets") await secaoTickets(id, servidor, conteudo);
-      else await secaoReactRole(id, servidor, conteudo);
+      else if (chave === "reactrole") await secaoReactRole(id, servidor, conteudo);
+      else await secaoLogs(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -934,6 +936,69 @@ async function secaoReactRole(id, servidor, alvo) {
   }
 
   lista();
+}
+
+
+// ---------- Logs ----------
+
+async function secaoLogs(id, alvo) {
+  const base = `/api/guilds/${id}/logs`;
+  let dados = await chamar(base);
+
+  async function salvar(tipos) {
+    try {
+      dados = await chamar(base, { method: "PUT", body: JSON.stringify({ tipos }) });
+      aviso("Salvo ✓");
+      return true;
+    } catch (e) {
+      aviso(e.message, true);
+      return false;
+    }
+  }
+
+  function seletor(valor, vazio) {
+    const sel = el("select", {}, el("option", { value: "" }, vazio),
+      ...dados.canais.map(c => el("option", { value: c.id }, "#" + c.nome)));
+    sel.value = valor || "";
+    return sel;
+  }
+
+  function desenhar() {
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, "Escolha o canal de cada log. Sem canal, aquele log fica desligado. As mudanças são salvas na hora."),
+      ...dados.grupos.map(g => {
+        const todos = seletor("", "Mesmo canal para todos…");
+
+        todos.addEventListener("change", async () => {
+          if (!todos.value) return;
+
+          const tipos = {};
+          for (const i of g.itens) tipos[i.tipo] = todos.value;
+
+          await salvar(tipos);
+          desenhar();
+        });
+
+        return el("div", { class: "grupo-log" },
+          el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, g.nome)), todos),
+          ...g.itens.map(i => {
+            const sel = seletor(i.canal_id, "Desligado");
+            let atual = sel.value;
+
+            sel.addEventListener("change", async () => {
+              const anterior = atual;
+              atual = sel.value;
+
+              if (!(await salvar({ [i.tipo]: sel.value || null }))) { sel.value = anterior; atual = anterior; }
+            });
+
+            return el("div", { class: "opcao sub" }, el("div", { class: "txt" }, el("b", {}, i.nome), el("span", {}, i.descricao)), sel);
+          }));
+      })
+    );
+  }
+
+  desenhar();
 }
 
 function tela() {
