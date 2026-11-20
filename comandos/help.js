@@ -115,7 +115,6 @@ const SECOES = [
             ppt: "Pedra, Papel e Tesoura contra o bot.",
             pptduo: "Desafia alguém para Pedra, Papel e Tesoura.",
             ship: "Chance de duas pessoas darem match.",
-            sorteio: "Cria e gerencia sorteios.",
             "8ball": "Faça uma pergunta para a bola 8 mágica.",
             dado: "Rola um ou mais dados.",
             casar: "Peça alguém em casamento (gasta 1 anel da loja).",

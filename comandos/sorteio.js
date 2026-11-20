@@ -2274,185 +2274,21 @@ module.exports = {
                 InteractionContextType.Guild
             ),
 
-    // ================================
-    // /SORTEIO
-    // ================================
+    // O /sorteio não aparece mais no Discord (ver "oculto"): sorteios agora são
+    // criados e editados pelo painel do site. O arquivo continua carregado porque
+    // o encerramento automático, o botão de participar e os menus passam por aqui.
+    oculto: true,
 
     async execute(
         interaction
     ) {
 
-        if (
-            !interaction.inGuild()
-        ) {
-            return interaction.reply({
-                content:
-                    `${EMOJIS.erro} Este comando só pode ser usado em servidores.`,
-                flags:
-                    MessageFlags.Ephemeral
-            });
-        }
-
-        if (
-            !interaction.memberPermissions.has(
-                PermissionFlagsBits.Administrator
-            )
-        ) {
-            return interaction.reply({
-                content:
-                    `${EMOJIS.erro} Você precisa ser administrador para criar ou editar sorteios.`,
-                flags:
-                    MessageFlags.Ephemeral
-            });
-        }
-
-        await prepararBanco();
-
-        const sorteioId =
-            interaction.options.getInteger(
-                "id"
-            );
-
-        // ================================
-        // ✏️ EDITAR SORTEIO EXISTENTE
-        // ================================
-
-        if (sorteioId) {
-            const sorteio =
-                await buscarSorteio(
-                    sorteioId
-                );
-
-            if (!sorteio) {
-                return interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Não encontrei um sorteio com esse ID.`,
-                    flags:
-                        MessageFlags.Ephemeral
-                });
-            }
-
-            if (
-                String(
-                    sorteio.guild_id
-                ) !==
-                String(
-                    interaction.guildId
-                )
-            ) {
-                return interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Esse sorteio pertence a outro servidor.`,
-                    flags:
-                        MessageFlags.Ephemeral
-                });
-            }
-
-            if (
-                String(
-                    sorteio.criador_id
-                ) !==
-                String(
-                    interaction.user.id
-                )
-            ) {
-                return interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Apenas quem criou esse sorteio pode editá-lo.`,
-                    flags:
-                        MessageFlags.Ephemeral
-                });
-            }
-
-            if (
-                sorteio.encerrado
-            ) {
-                return interaction.reply({
-                    content:
-                        `${EMOJIS.erro} Esse sorteio já foi encerrado e não pode mais ser editado.`,
-                    flags:
-                        MessageFlags.Ephemeral
-                });
-            }
-
-            const config =
-                criarConfigDoSorteio(
-                    sorteio,
-                    interaction.user.id,
-                    interaction.guildId
-                );
-
-            config.painelCanalId =
-                interaction.channelId;
-
-            sessoes.set(
-                interaction.user.id,
-                config
-            );
-
-            await interaction.reply({
-                embeds: [
-                    criarEmbedPainel(
-                        config
-                    )
-                ],
-                components:
-                    criarPainelSorteio(
-                        interaction.user.id,
-                        true,
-                        false
-                    ),
-                flags:
-                    MessageFlags.Ephemeral
-            });
-
-            const mensagem =
-                await interaction.fetchReply();
-
-            config.painelMensagemId =
-                mensagem.id;
-
-            return;
-        }
-
-        // ================================
-        // 🎉 CRIAR NOVO SORTEIO
-        // ================================
-
-        const config =
-            criarConfig(
-                interaction.guildId,
-                interaction.user.id
-            );
-
-        sessoes.set(
-            interaction.user.id,
-            config
-        );
-
-        await interaction.reply({
-            embeds: [
-                criarEmbedPainel(
-                    config
-                )
-            ],
-            components:
-                criarPainelSorteio(
-                    interaction.user.id,
-                    false
-                ),
+        return interaction.reply({
+            content:
+                "🎉 Os sorteios agora são criados no **painel do site** (Dashboard → seu servidor → ☰ → Sorteios).",
             flags:
                 MessageFlags.Ephemeral
         });
-
-        const mensagem =
-            await interaction.fetchReply();
-
-        config.painelMensagemId =
-            mensagem.id;
-
-        config.painelCanalId =
-            interaction.channelId;
     },
 
     // ================================
@@ -3971,4 +3807,23 @@ module.exports = {
     finalizarSorteio,
 
     atualizarMensagemSorteio
+};
+
+// Usado pelo painel do site (painelSorteio.js)
+module.exports._painel = {
+    criarConfig,
+    criarSorteio,
+    salvarExtrasSorteio,
+    converterData,
+    formatarData,
+    criarEmbedPreview,
+    criarBotoesSorteio,
+    buscarSorteio,
+    buscarParticipantes,
+    atualizarMensagemSorteio,
+    finalizarSorteio,
+    sortearVencedores,
+    lerVencedoresIds,
+    criarEmbedResultado,
+    criarBotoesResultado
 };
