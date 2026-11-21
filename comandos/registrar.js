@@ -5407,44 +5407,15 @@ const data =
 // ▶️ EXECUTAR
 // =====================================================
 
+// O /registrar não aparece mais no Discord (ver "oculto"): o sistema de registro
+// agora é configurado pelo painel do site. O arquivo continua carregado porque os
+// botões do registro (membros se registrando) passam por handleInteraction.
 async function execute(interaction) {
-    if (!interaction.guild) {
-        return interaction.reply({
-            content:
-                `${EMOJIS.erro} Este comando só pode ser usado em um servidor.`,
-            flags: EPHEMERAL
-        });
-    }
-
-    if (!podeConfigurar(interaction)) {
-        return interaction.reply({
-            content:
-                `${EMOJIS.erro} Você precisa da permissão **Gerenciar Servidor** para usar este comando.`,
-            flags: EPHEMERAL
-        });
-    }
-
-    try {
-        await mostrarPainel(interaction);
-    } catch (erro) {
-        console.error(
-            "❌ Erro ao executar /registrar:",
-            erro
-        );
-
-        if (
-            interaction.replied ||
-            interaction.deferred
-        ) {
-            return;
-        }
-
-        return interaction.reply({
-            content:
-                `${EMOJIS.erro} Não foi possível abrir o sistema de registro. Verifique o console do bot.`,
-            flags: EPHEMERAL
-        });
-    }
+    return interaction.reply({
+        content:
+            "📝 O sistema de registro agora é configurado no **painel do site** (Dashboard → seu servidor → ☰ → Registro).",
+        flags: EPHEMERAL
+    });
 }
 
 // =====================================================
@@ -5453,6 +5424,21 @@ async function execute(interaction) {
 
 module.exports = {
     data,
+    oculto: true,
     execute,
     handleInteraction
+};
+
+// Usado pelo painel do site (painelRegistro.js)
+module.exports._painel = {
+    MAX_PAGINAS,
+    MAX_BOTOES,
+    ESTILOS_BOTOES,
+    garantirConfiguracao,
+    garantirColunasExtrasRegistro,
+    atualizarMensagemRegistro,
+    criarEmbedPainelInicial,
+    criarComponentesPainelInicial,
+    urlValida,
+    normalizarCor
 };
