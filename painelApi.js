@@ -34,6 +34,7 @@ const painelCriarCall = require("./painelCriarCall.js");
 const painelEmbed = require("./painelEmbed.js");
 const painelYouTube = require("./painelYouTube.js");
 const painelRegistro = require("./painelRegistro.js");
+const painelContador = require("./painelContador.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -769,6 +770,26 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelRegistro.ler(guild)), resultado: r || undefined });
+        }
+
+        const co = caminho.match(/^\/api\/guilds\/(\d+)\/contadores(?:\/(atualizar|\d+))?$/);
+
+        if (co) {
+            const guild = await guildAutorizada(req, res, co[1]);
+
+            if (!guild) return;
+
+            let r = null;
+
+            if (req.method === "POST" && !co[2]) r = await painelContador.adicionar(guild, await lerCorpo(req));
+            else if (req.method === "POST" && co[2] === "atualizar") r = await painelContador.atualizarAgora(guild);
+            else if (req.method === "PUT" && co[2] && co[2] !== "atualizar") r = await painelContador.editar(guild, co[2], await lerCorpo(req));
+            else if (req.method === "DELETE" && co[2] && co[2] !== "atualizar") r = await painelContador.remover(guild, co[2]);
+            else if (req.method !== "GET" || co[2]) return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelContador.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });

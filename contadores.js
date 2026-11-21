@@ -5,6 +5,9 @@
 // sozinho. Tipos: membros (sem bots), bots, total (membros + bots),
 // canais de texto e canais de voz.
 //
+// Os contadores agora são configurados pelo painel do site (painelContador.js);
+// o antigo comando /contador foi removido.
+//
 // Para ligar: no index.js, junto das outras linhas "iniciar", coloque:
 //   require("./contadores.js").iniciar(client);
 //
@@ -343,6 +346,11 @@ function iniciar(client) {
 
 module.exports = {
     TIPOS,
+    MAX_POR_SERVIDOR,
+    TIPOS_DE_CANAL_ACEITOS,
+    prepararTabela,
+    renomear,
+    atualizarContador,
     iniciar,
     adicionar,
     remover,
