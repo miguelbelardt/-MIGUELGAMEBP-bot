@@ -213,3 +213,20 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 .secao .linha-botao{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr)) auto auto;gap:8px;align-items:center;margin-bottom:8px}
 .secao .linha-botao input[type=text],.secao .linha-botao select{padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;width:100%}
 .secao .linha-botao .botao{border:0;cursor:pointer;font:inherit;font-weight:600}
+
+/* Embeds V2 */
+.secao .bloco-v2{border:1px solid var(--borda);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--cartao)}
+.secao .cab-bloco{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.secao .acoes-bloco{display:flex;gap:6px}
+.secao .acoes-bloco .botao,.secao .bloco-v2 .botao{border:0;cursor:pointer;font:inherit;font-weight:600}
+.secao .bloco-v2 textarea,.secao .bloco-v2 input[type=text],.secao .bloco-v2 select{padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;width:100%}
+.secao .bloco-v2 .mini{display:inline-flex;align-items:center;gap:6px;margin-right:14px}
+.secao .previa-v2{border-left:4px solid var(--cor);background:var(--cartao);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;white-space:pre-wrap;word-break:break-word}
+.secao .previa-v2 hr{border:0;border-top:1px solid var(--borda);width:100%}
+.secao .previa-v2 hr.sem-linha{border-top-color:transparent}
+.secao .v2-imagens{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px}
+.secao .v2-imagens img,.secao .v2-secao img{max-width:100%;border-radius:8px}
+.secao .v2-secao{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.secao .v2-secao img{max-width:90px}
+.secao textarea[spellcheck]{font-family:ui-monospace,monospace;font-size:.85rem;width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto)}
+.secao [hidden]{display:none!important}

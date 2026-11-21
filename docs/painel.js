@@ -1340,10 +1340,166 @@ async function secaoCriarCall(id, alvo) {
 }
 
 
+// ---------- Embeds: JSON (importar / exportar) ----------
+
+function corParaHex(n) {
+  const v = Number(n);
+  return Number.isFinite(v) && v >= 0 && v <= 0xFFFFFF ? "#" + v.toString(16).padStart(6, "0").toUpperCase() : "#5865F2";
+}
+
+function emojiParaTexto(e) {
+  if (!e) return "";
+  if (typeof e === "string") return e;
+  if (e.id && e.name) return `<${e.animated ? "a" : ""}:${e.name}:${e.id}>`;
+  return e.name || "";
+}
+
+function botoesDeLinha(linhas) {
+  const lista = [];
+  for (const linha of linhas || []) {
+    for (const c of linha?.components || []) {
+      if (c?.type === 2 && c.url) lista.push({ texto: String(c.label || "").slice(0, 80), url: String(c.url), emoji: emojiParaTexto(c.emoji) });
+    }
+  }
+  return lista;
+}
+
+function blocosDeComponentes(comps, aviso) {
+  const blocos = [];
+
+  for (const c of comps || []) {
+    if (c?.type === 10) blocos.push({ tipo: "texto", texto: String(c.content || "") });
+    else if (c?.type === 14) blocos.push({ tipo: "separador", linha: c.divider !== false, grande: c.spacing === 2 });
+    else if (c?.type === 12) {
+      const imagens = (c.items || []).map(i => ({ url: String(i?.media?.url || i?.media || ""), descricao: String(i?.description || "") })).filter(i => i.url);
+      if (imagens.length) blocos.push({ tipo: "imagens", imagens: imagens.slice(0, 10) });
+    } else if (c?.type === 9) {
+      const texto = (c.components || []).map(x => x?.content || "").join("\n");
+      const a = c.accessory;
+
+      if (a?.type === 11) blocos.push({ tipo: "secao", texto, acessorio: { tipo: "imagem", url: String(a.media?.url || a.media || "") } });
+      else if (a?.type === 2 && a.url) blocos.push({ tipo: "secao", texto, acessorio: { tipo: "botao", texto: String(a.label || "").slice(0, 80), url: String(a.url), emoji: emojiParaTexto(a.emoji) } });
+      else { blocos.push({ tipo: "texto", texto }); aviso.push("uma seção sem imagem/botão de link virou texto"); }
+    } else if (c?.type === 1) {
+      const botoes = botoesDeLinha([c]).slice(0, 5);
+      if (botoes.length) blocos.push({ tipo: "botoes", botoes });
+      if ((c.components || []).some(x => x?.type !== 2 || !x.url)) aviso.push("botões que não são de link foram ignorados");
+    } else if (c?.type === 17) blocos.push(...blocosDeComponentes(c.components, aviso));
+    else if (c) aviso.push("alguns componentes não suportados foram ignorados");
+  }
+
+  return blocos;
+}
+
+// Aceita: mensagem do Discord/Discohook ({content, embeds, components}), um embed solto,
+// uma lista de embeds, ou uma mensagem V2 ({flags, components:[{type:17,...}]}).
+function converterJSON(texto) {
+  const limpo = String(texto || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+
+  if (!limpo) throw new Error("Cole um JSON primeiro.");
+
+  let obj;
+
+  try { obj = JSON.parse(limpo); } catch { throw new Error("Esse texto não é um JSON válido."); }
+
+  const avisos = [];
+  const comps = Array.isArray(obj) && obj[0]?.type ? obj : obj?.components;
+  const ehV2 = Array.isArray(comps) && (comps.some(c => c?.type === 17 || c?.type === 10 || c?.type === 9 || c?.type === 12) || (Number(obj?.flags) & 32768));
+
+  if (ehV2) {
+    const container = comps.find(c => c?.type === 17);
+    const blocos = blocosDeComponentes(comps, avisos).slice(0, 20);
+
+    if (!blocos.length) throw new Error("Não encontrei blocos V2 nesse JSON.");
+
+    return {
+      modo: "v2",
+      v2: { cor: container?.accent_color != null ? corParaHex(container.accent_color) : "#5865F2", spoiler: !!container?.spoiler, blocos },
+      aviso: avisos.length ? "⚠ Importado, mas " + [...new Set(avisos)].join("; ") + "." : ""
+    };
+  }
+
+  let lista = Array.isArray(obj) ? obj : obj?.embeds || (obj?.embed ? [obj.embed] : null);
+  let emb;
+
+  if (lista) emb = lista[0];
+  else if (obj && typeof obj === "object" && ("title" in obj || "description" in obj || "fields" in obj || "author" in obj || "footer" in obj || "image" in obj)) emb = obj;
+
+  if (lista && lista.length > 1) avisos.push(`só o 1º embed foi importado (o JSON tinha ${lista.length})`);
+
+  if (!emb && !obj?.content) throw new Error("Não achei nenhum embed nesse JSON.");
+
+  emb = emb || {};
+
+  const campos = (emb.fields || []).slice(0, 25).map(f => ({ nome: String(f.name || ""), valor: String(f.value || ""), inline: !!f.inline }));
+
+  if ((emb.fields || []).length > 25) avisos.push("só os 25 primeiros campos foram importados");
+
+  return {
+    modo: "classico",
+    classico: {
+      mensagem: String(obj?.content || "").slice(0, 2000),
+      titulo: String(emb.title || ""), titulo_url: String(emb.url || ""),
+      descricao: String(emb.description || ""),
+      cor: corParaHex(emb.color),
+      imagem: String(emb.image?.url || ""), thumbnail: String(emb.thumbnail?.url || ""),
+      autor: String(emb.author?.name || ""), autor_icone: String(emb.author?.icon_url || ""), autor_url: String(emb.author?.url || ""),
+      rodape: String(emb.footer?.text || ""), rodape_icone: String(emb.footer?.icon_url || ""),
+      timestamp: !!emb.timestamp,
+      campos,
+      botoes: botoesDeLinha(obj?.components).slice(0, 5)
+    },
+    aviso: avisos.length ? "⚠ Importado, mas " + avisos.join("; ") + "." : ""
+  };
+}
+
+function paraJsonClassico(c) {
+  const emb = {};
+
+  if (c.titulo) emb.title = c.titulo;
+  if (c.titulo_url) emb.url = c.titulo_url;
+  if (c.descricao) emb.description = c.descricao;
+  emb.color = parseInt(c.cor.slice(1), 16);
+  if (c.autor) emb.author = { name: c.autor, ...(c.autor_icone ? { icon_url: c.autor_icone } : {}), ...(c.autor_url ? { url: c.autor_url } : {}) };
+  if (c.rodape) emb.footer = { text: c.rodape, ...(c.rodape_icone ? { icon_url: c.rodape_icone } : {}) };
+  if (c.imagem) emb.image = { url: c.imagem };
+  if (c.thumbnail) emb.thumbnail = { url: c.thumbnail };
+  if (c.timestamp) emb.timestamp = new Date().toISOString();
+  if (c.campos.length) emb.fields = c.campos.map(f => ({ name: f.nome, value: f.valor, inline: f.inline }));
+
+  const saida = { content: c.mensagem || undefined, embeds: [emb] };
+
+  if (c.botoes.length) {
+    saida.components = [{ type: 1, components: c.botoes.map(b => ({ type: 2, style: 5, label: b.texto, url: b.url, ...(b.emoji ? { emoji: emojiDeTexto(b.emoji) } : {}) })) }];
+  }
+
+  return saida;
+}
+
+function emojiDeTexto(texto) {
+  const m = /^<(a?):(\w{2,32}):(\d{15,25})>$/.exec(texto || "");
+  return m ? { id: m[3], name: m[2], animated: m[1] === "a" } : { name: texto };
+}
+
+function paraJsonV2(c) {
+  const botao = b => ({ type: 2, style: 5, label: b.texto, url: b.url, ...(b.emoji ? { emoji: emojiDeTexto(b.emoji) } : {}) });
+
+  const filhos = c.blocos.map(b => {
+    if (b.tipo === "texto") return { type: 10, content: b.texto };
+    if (b.tipo === "separador") return { type: 14, divider: b.linha !== false, spacing: b.grande ? 2 : 1 };
+    if (b.tipo === "imagens") return { type: 12, items: b.imagens.map(i => ({ media: { url: i.url }, ...(i.descricao ? { description: i.descricao } : {}) })) };
+    if (b.tipo === "secao") return { type: 9, components: [{ type: 10, content: b.texto }], accessory: b.acessorio.tipo === "imagem" ? { type: 11, media: { url: b.acessorio.url } } : botao(b.acessorio) };
+    return { type: 1, components: b.botoes.map(botao) };
+  });
+
+  return { flags: 32768, components: [{ type: 17, accent_color: parseInt(c.cor.slice(1), 16), ...(c.spoiler ? { spoiler: true } : {}), components: filhos }] };
+}
+
 // ---------- Embeds ----------
 
 async function secaoEmbeds(id, alvo) {
   const base = `/api/guilds/${id}/embeds`;
+  const base_ = base;
   let d = await chamar(base);
 
   function lista() {
@@ -1377,19 +1533,22 @@ async function secaoEmbeds(id, alvo) {
     return el("div", { class: "cartao-embed" },
       el("div", { class: "txt" },
         el("b", {}, e.nome),
-        el("span", {}, [e.titulo || e.descricao.slice(0, 60) || "(sem título)", canal ? ` • #${canal.nome}` : " • canal removido"].join(""))),
+        el("span", {}, [e.modo === "v2" ? "✨ V2 • " + (e.v2?.blocos?.find(b => b.tipo === "texto")?.texto || "").slice(0, 50) : (e.titulo || e.descricao.slice(0, 60) || "(sem título)"), canal ? ` • #${canal.nome}` : " • canal removido"].join(""))),
       el("div", { class: "acoes-cartao" },
         e.link ? el("a", { class: "botao botao-pequeno botao-claro", href: e.link, target: "_blank", rel: "noopener noreferrer" }, "Abrir") : "",
         el("button", { class: "botao botao-pequeno", type: "button", onclick: () => editor(e) }, "✏️ Editar"),
         apagar));
   }
 
-  function editor(e) {
+  function editor(e, sobre = null) {
     const novo = !e;
-    const v = e || {
+    const base = e || {
       nome: "Embed", mensagem: "", titulo: "", titulo_url: "", descricao: "", cor: "#5865F2", imagem: "", thumbnail: "",
       autor: "", autor_icone: "", autor_url: "", rodape: "", rodape_icone: "", timestamp: false, campos: [], botoes: [], canal_id: null
     };
+    const v = sobre?.classico ? { ...base, ...sobre.classico, canal_id: base.canal_id, nome: sobre.classico.nome || base.nome } : base;
+    const v2ini = sobre?.v2 || e?.v2 || { cor: "#5865F2", spoiler: false, blocos: [{ tipo: "texto", texto: "" }] };
+    let modo = sobre?.modo || e?.modo || "classico";
 
     const ler = {};
 
@@ -1405,7 +1564,9 @@ async function secaoEmbeds(id, alvo) {
     const canal = el("select", { "aria-label": "Canal" }, el("option", { value: "" }, "— escolha um canal —"),
       ...d.canais.map(c => el("option", { value: c.id }, "#" + c.nome)));
     canal.value = v.canal_id || "";
-    ler.canal_id = () => canal.value || null;
+
+    const nomeEmbed = el("input", { type: "text", maxlength: "100" });
+    nomeEmbed.value = (sobre?.v2 ? (e?.nome || "Embed") : v.nome) || "Embed";
 
     const cor = el("input", { type: "color", "aria-label": "Cor" });
     cor.value = v.cor.toLowerCase();
@@ -1468,7 +1629,7 @@ async function secaoEmbeds(id, alvo) {
       botoes.push({ texto: "", url: "", emoji: "" }); desenharBotoes(); previa();
     } }, "➕ Adicionar botão de link");
 
-    // ----- prévia -----
+    // ----- prévia (clássico) -----
     const caixaPrevia = el("div", { class: "previa" });
 
     function previa() {
@@ -1499,7 +1660,6 @@ async function secaoEmbeds(id, alvo) {
       caixaPrevia.replaceChildren(...partes);
     }
 
-    const nome = txt("nome", "Nome (só para você se organizar)", { max: 100 });
     const msg = txt("mensagem", "Texto acima do embed (opcional)", { multi: true, max: 2000 });
     const autor = txt("autor", "Autor", { max: 256 });
     const autorIcone = txt("autor_icone", "Ícone do autor (link)", { max: 1000, ph: "https://…" });
@@ -1512,25 +1672,244 @@ async function secaoEmbeds(id, alvo) {
     const rodape = txt("rodape", "Rodapé", { max: 2048 });
     const rodapeIcone = txt("rodape_icone", "Ícone do rodapé (link)", { max: 1000, ph: "https://…" });
 
-    function montar() {
-      const o = {};
+    function montarClassico() {
+      const o = { modo: "classico", nome: nomeEmbed.value, canal_id: canal.value || null };
       for (const k of Object.keys(ler)) o[k] = ler[k]();
       o.campos = campos.map(c => ({ nome: c.nome, valor: c.valor, inline: !!c.inline }));
       o.botoes = botoes.map(b => ({ texto: b.texto, url: b.url, emoji: (b.emoji || "").trim() }));
       return o;
     }
 
-    const enviar = el("button", { class: "botao", type: "button" }, novo ? "📤 Enviar embed" : "💾 Salvar e atualizar mensagem");
+    // ----- V2 -----
+    let blocos = JSON.parse(JSON.stringify(v2ini.blocos));
+    const corV2 = el("input", { type: "color", "aria-label": "Cor do cartão" });
+    corV2.value = (v2ini.cor || "#5865F2").toLowerCase();
+    corV2.addEventListener("input", previaV2);
+    const spoiler = el("input", { type: "checkbox", "aria-label": "Spoiler" });
+    spoiler.checked = !!v2ini.spoiler;
+    const listaBlocos = el("div", {});
+    const caixaPreviaV2 = el("div", { class: "previa" });
+
+    function campoV2(rotulo, controle) { return el("label", { class: "campo" }, el("b", {}, rotulo), controle); }
+
+    function inputV2(valor, max, ph, aoMudar, multi = false) {
+      const c = multi ? el("textarea", { rows: "4", maxlength: String(max) }) : el("input", { type: "text", maxlength: String(max) });
+      c.value = valor || "";
+      if (ph) c.placeholder = ph;
+      c.addEventListener("input", () => { aoMudar(c.value); previaV2(); });
+      return c;
+    }
+
+    function mini(rotulo, onclick, classe = "botao-claro") {
+      return el("button", { class: `botao botao-pequeno ${classe}`.trim(), type: "button", onclick }, rotulo);
+    }
+
+    function linhaBotaoV2(lista, i, redesenhar) {
+      const b = lista[i];
+
+      return el("div", { class: "linha-item" },
+        inputV2(b.texto, 80, "Texto do botão", x => { b.texto = x; }),
+        inputV2(b.url, 1000, "https://…", x => { b.url = x; }),
+        inputV2(b.emoji, 64, "Emoji (opcional)", x => { b.emoji = x; }),
+        mini("✕", () => { lista.splice(i, 1); redesenhar(); }));
+    }
+
+    function editorBloco(b, i) {
+      const cab = el("div", { class: "cab-bloco" },
+        el("b", {}, { texto: "📝 Texto", separador: "➖ Separador", imagens: "🖼️ Imagens", secao: "🧩 Seção", botoes: "🔘 Botões" }[b.tipo]),
+        el("span", { class: "acoes-bloco" },
+          mini("↑", () => { if (i > 0) { [blocos[i - 1], blocos[i]] = [blocos[i], blocos[i - 1]]; desenharBlocos(); } }),
+          mini("↓", () => { if (i < blocos.length - 1) { [blocos[i + 1], blocos[i]] = [blocos[i], blocos[i + 1]]; desenharBlocos(); } }),
+          mini("✕", () => { blocos.splice(i, 1); desenharBlocos(); })));
+
+      let corpo = [];
+
+      if (b.tipo === "texto") {
+        corpo = [campoV2("Texto (aceita markdown do Discord: # título, **negrito**, etc.)", inputV2(b.texto, 4000, "", x => { b.texto = x; }, true))];
+      } else if (b.tipo === "separador") {
+        const linha = el("input", { type: "checkbox" }); linha.checked = b.linha !== false;
+        const grande = el("input", { type: "checkbox" }); grande.checked = !!b.grande;
+        linha.addEventListener("change", () => { b.linha = linha.checked; previaV2(); });
+        grande.addEventListener("change", () => { b.grande = grande.checked; previaV2(); });
+        corpo = [el("label", { class: "mini" }, linha, " mostrar linha"), el("label", { class: "mini" }, grande, " espaço grande")];
+      } else if (b.tipo === "imagens") {
+        const area = el("div", {});
+        const desenhar = () => {
+          area.replaceChildren(...b.imagens.map((im, k) => el("div", { class: "linha-item" },
+            inputV2(im.url, 1000, "https://… (link da imagem)", x => { im.url = x; }),
+            inputV2(im.descricao, 1024, "Descrição (opcional)", x => { im.descricao = x; }),
+            mini("✕", () => { b.imagens.splice(k, 1); desenhar(); previaV2(); }))),
+            b.imagens.length < 10 ? mini("➕ Imagem", () => { b.imagens.push({ url: "", descricao: "" }); desenhar(); }) : "");
+        };
+        desenhar();
+        corpo = [area];
+      } else if (b.tipo === "secao") {
+        const acc = el("div", {});
+        const tipoAcc = el("select", {}, el("option", { value: "imagem" }, "Imagem ao lado"), el("option", { value: "botao" }, "Botão de link ao lado"));
+        tipoAcc.value = b.acessorio.tipo;
+        const desenharAcc = () => {
+          const a = b.acessorio;
+          acc.replaceChildren(a.tipo === "imagem"
+            ? campoV2("Link da imagem", inputV2(a.url, 1000, "https://…", x => { a.url = x; }))
+            : el("div", { class: "linha-item" },
+              inputV2(a.texto, 80, "Texto do botão", x => { a.texto = x; }),
+              inputV2(a.url, 1000, "https://…", x => { a.url = x; }),
+              inputV2(a.emoji, 64, "Emoji (opcional)", x => { a.emoji = x; })));
+        };
+        tipoAcc.addEventListener("change", () => {
+          b.acessorio = tipoAcc.value === "imagem" ? { tipo: "imagem", url: "" } : { tipo: "botao", texto: "", url: "", emoji: "" };
+          desenharAcc(); previaV2();
+        });
+        desenharAcc();
+        corpo = [campoV2("Texto", inputV2(b.texto, 4000, "", x => { b.texto = x; }, true)), campoV2("Item ao lado do texto", tipoAcc), acc];
+      } else {
+        const area = el("div", {});
+        const desenhar = () => {
+          area.replaceChildren(...b.botoes.map((_, k) => linhaBotaoV2(b.botoes, k, () => { desenhar(); previaV2(); })),
+            b.botoes.length < 5 ? mini("➕ Botão", () => { b.botoes.push({ texto: "", url: "", emoji: "" }); desenhar(); }) : "");
+        };
+        desenhar();
+        corpo = [area];
+      }
+
+      return el("div", { class: "bloco-v2" }, cab, ...corpo);
+    }
+
+    function desenharBlocos() {
+      listaBlocos.replaceChildren(...blocos.map(editorBloco));
+      previaV2();
+    }
+
+    function novoBloco(tipo) {
+      if (blocos.length >= 20) return aviso("O máximo é 20 blocos.", true);
+
+      blocos.push({
+        texto: { tipo: "texto", texto: "" },
+        separador: { tipo: "separador", linha: true, grande: false },
+        imagens: { tipo: "imagens", imagens: [{ url: "", descricao: "" }] },
+        secao: { tipo: "secao", texto: "", acessorio: { tipo: "imagem", url: "" } },
+        botoes: { tipo: "botoes", botoes: [{ texto: "", url: "", emoji: "" }] }
+      }[tipo]);
+
+      desenharBlocos();
+    }
+
+    function previaV2() {
+      const cartao = el("div", { class: "previa-v2" });
+      cartao.style.borderLeftColor = corV2.value;
+
+      for (const b of blocos) {
+        if (b.tipo === "texto") cartao.append(el("div", { class: "v2-texto" }, b.texto));
+        else if (b.tipo === "separador") cartao.append(el("hr", { class: b.linha === false ? "sem-linha" : "", style: `margin:${b.grande ? 16 : 6}px 0` }));
+        else if (b.tipo === "imagens") {
+          cartao.append(el("div", { class: "v2-imagens" }, ...b.imagens.filter(i => /^https?:\/\//i.test(i.url || "")).map(i =>
+            el("img", { src: i.url, alt: i.descricao || "", referrerpolicy: "no-referrer", loading: "lazy" }))));
+        } else if (b.tipo === "secao") {
+          const a = b.acessorio;
+          cartao.append(el("div", { class: "v2-secao" },
+            el("div", { class: "v2-texto" }, b.texto),
+            a.tipo === "imagem"
+              ? (/^https?:\/\//i.test(a.url || "") ? el("img", { src: a.url, alt: "", referrerpolicy: "no-referrer", loading: "lazy" }) : "")
+              : el("span", { class: "previa-botao" }, `${a.emoji ? a.emoji + " " : ""}${a.texto || "Botão"}`)));
+        } else {
+          cartao.append(el("div", { class: "previa-botoes" }, ...b.botoes.map(x => el("span", { class: "previa-botao" }, `${x.emoji ? x.emoji + " " : ""}${x.texto || "Botão"}`))));
+        }
+      }
+
+      caixaPreviaV2.replaceChildren(cartao);
+    }
+
+    function montarV2Corpo() {
+      return {
+        modo: "v2", nome: nomeEmbed.value, canal_id: canal.value || null,
+        cor: corV2.value.toUpperCase(), spoiler: spoiler.checked,
+        blocos: JSON.parse(JSON.stringify(blocos))
+      };
+    }
+
+    // ----- JSON (colar / copiar) -----
+    const caixaJson = el("textarea", { rows: "8", placeholder: "Cole aqui o JSON (do Discohook, de um embed do Discord, ou de uma mensagem V2) ou clique em “Gerar JSON do formulário”." });
+    caixaJson.spellcheck = false;
+
+    const importar = el("button", { class: "botao botao-pequeno", type: "button" }, "📥 Preencher o formulário com este JSON");
+    importar.addEventListener("click", () => {
+      try {
+        const r = converterJSON(caixaJson.value);
+        aviso(r.aviso || "JSON importado ✓ — confira e envie.", !!r.aviso && r.aviso.startsWith("⚠"));
+        editor(e, { ...r, canal: canal.value });
+      } catch (er) {
+        aviso(er.message, true);
+      }
+    });
+
+    const gerar = el("button", { class: "botao botao-pequeno botao-claro", type: "button" }, "📤 Gerar JSON do formulário");
+    gerar.addEventListener("click", () => {
+      caixaJson.value = JSON.stringify(modo === "v2" ? paraJsonV2(montarV2Corpo()) : paraJsonClassico(montarClassico()), null, 2);
+      aviso("JSON gerado ✓ — é só copiar.");
+    });
+
+    const copiar = el("button", { class: "botao botao-pequeno botao-claro", type: "button" }, "📋 Copiar");
+    copiar.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(caixaJson.value); aviso("Copiado ✓"); }
+      catch { caixaJson.select(); aviso("Selecionei o texto: use Ctrl+C.", true); }
+    });
+
+    // ----- abas e envio -----
+    const caixaClassico = el("div", {},
+      msg,
+      el("div", { class: "grade-campos" }, autor, autorIcone, autorUrl),
+      el("div", { class: "grade-campos" }, titulo, tituloUrl),
+      descricao,
+      el("div", { class: "grade-campos" }, thumb, imagem),
+      el("div", { class: "grade-campos" }, rodape, rodapeIcone),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "Cor")), cor),
+      el("div", { class: "opcao" },
+        el("div", { class: "txt" }, el("b", {}, "Mostrar horário"), el("span", {}, "Aparece no rodapé do embed.")),
+        el("label", { class: "interruptor" }, hora, el("i"))),
+      el("h2", {}, "Campos"), caixaCampos, addCampo,
+      el("h2", {}, "Botões de link"), caixaBotoes, addBotao,
+      el("h2", {}, "Prévia"), caixaPrevia);
+
+    const caixaV2 = el("div", {},
+      el("p", { class: "legenda" }, "Componentes V2: monte a mensagem com blocos (texto, separador, imagens, seção e botões de link) dentro de um cartão."),
+      el("div", { class: "opcao" }, el("div", { class: "txt" }, el("b", {}, "Cor do cartão")), corV2),
+      el("div", { class: "opcao" },
+        el("div", { class: "txt" }, el("b", {}, "Marcar como spoiler"), el("span", {}, "O conteúdo fica escondido até clicar.")),
+        el("label", { class: "interruptor" }, spoiler, el("i"))),
+      el("h2", {}, "Blocos"), listaBlocos,
+      el("div", { class: "acoes-cartao" },
+        mini("➕ Texto", () => novoBloco("texto")), mini("➕ Separador", () => novoBloco("separador")),
+        mini("➕ Imagens", () => novoBloco("imagens")), mini("➕ Seção", () => novoBloco("secao")),
+        mini("➕ Botões", () => novoBloco("botoes"))),
+      el("h2", {}, "Prévia"), caixaPreviaV2);
+
+    const abas = el("div", { class: "abas-msg", role: "tablist" });
+
+    function desenharAbas() {
+      abas.replaceChildren(...[["classico", "🧩 Embed clássico"], ["v2", "✨ Componentes V2"]].map(([m, nome]) =>
+        el("button", {
+          class: "aba", type: "button", role: "tab", "aria-selected": String(m === modo),
+          onclick: () => { modo = m; desenharAbas(); mostrar(); }
+        }, nome)));
+    }
+
+    function mostrar() {
+      caixaClassico.hidden = modo !== "classico";
+      caixaV2.hidden = modo !== "v2";
+    }
+
+    const enviar = el("button", { class: "botao", type: "button" }, novo ? "📤 Enviar" : "💾 Salvar e atualizar mensagem");
     const cancelar = el("button", { class: "botao botao-claro", type: "button", onclick: lista }, "← Voltar");
 
     enviar.addEventListener("click", async () => {
-      if (!ler.canal_id()) return aviso("Escolha o canal onde o embed será enviado.", true);
+      if (!canal.value) return aviso("Escolha o canal onde será enviado.", true);
 
       enviar.disabled = true;
 
       try {
-        d = await chamar(novo ? base : `${base}/${e.id}`, { method: novo ? "POST" : "PUT", body: JSON.stringify(montar()) });
-        aviso(novo ? "Embed enviado ✓" : "Embed atualizado ✓");
+        const corpo = modo === "v2" ? montarV2Corpo() : montarClassico();
+        d = await chamar(novo ? base_ : `${base_}/${e.id}`, { method: novo ? "POST" : "PUT", body: JSON.stringify(corpo) });
+        aviso(novo ? "Enviado ✓" : "Atualizado ✓");
         lista();
       } catch (er) {
         enviar.disabled = false;
@@ -1540,27 +1919,28 @@ async function secaoEmbeds(id, alvo) {
 
     alvo.replaceChildren(
       el("h2", {}, novo ? "Novo embed" : "Editar embed"),
-      el("div", { class: "grade-campos" }, nome, el("label", { class: "campo" }, el("b", {}, "Canal"), canal)),
-      msg,
-      el("div", { class: "grade-campos" }, autor, autorIcone, autorUrl),
-      el("div", { class: "grade-campos" }, titulo, tituloUrl),
-      descricao,
-      el("div", { class: "grade-campos" }, thumb, imagem),
-      el("div", { class: "grade-campos" }, rodape, rodapeIcone),
-      el("div", { class: "opcao" },
-        el("div", { class: "txt" }, el("b", {}, "Cor")), cor),
-      el("div", { class: "opcao" },
-        el("div", { class: "txt" }, el("b", {}, "Mostrar horário"), el("span", {}, "Aparece no rodapé do embed.")),
-        el("label", { class: "interruptor" }, hora, el("i"))),
-      el("h2", {}, "Campos"), caixaCampos, addCampo,
-      el("h2", {}, "Botões de link"), caixaBotoes, addBotao,
-      el("h2", {}, "Prévia"), caixaPrevia,
+      abas,
+      el("div", { class: "grade-campos" },
+        el("label", { class: "campo" }, el("b", {}, "Nome (só para você se organizar)"), nomeEmbed),
+        el("label", { class: "campo" }, el("b", {}, "Canal"), canal)),
+      !novo ? el("p", { class: "legenda" }, "Se trocar entre clássico e V2, a mensagem antiga é apagada e uma nova é enviada.") : "",
+      caixaClassico, caixaV2,
+      el("details", { class: "cartao-embed bloco" },
+        el("summary", {}, el("b", {}, "📥 Importar / exportar JSON")),
+        el("p", { class: "legenda" }, "Cole um JSON para preencher o formulário, ou gere o JSON do que você montou para guardar/compartilhar."),
+        caixaJson,
+        el("div", { class: "acoes-cartao" }, importar, gerar, copiar)),
       el("div", { class: "acoes" }, cancelar, enviar)
     );
+
+    if (sobre?.canal) canal.value = sobre.canal;
 
     desenharCampos();
     desenharBotoes();
     previa();
+    desenharBlocos();
+    desenharAbas();
+    mostrar();
   }
 
   lista();
