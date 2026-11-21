@@ -33,6 +33,7 @@ const painelSorteio = require("./painelSorteio.js");
 const painelCriarCall = require("./painelCriarCall.js");
 const painelEmbed = require("./painelEmbed.js");
 const painelYouTube = require("./painelYouTube.js");
+const painelRegistro = require("./painelRegistro.js");
 
 const API_URL = (process.env.API_URL || "https://miguelgamebp-bot.fadehost.app").replace(/\/+$/, "");
 const SITE_URL = (process.env.SITE_URL || "https://miguelbelardt.github.io").replace(/\/+$/, "");
@@ -740,6 +741,34 @@ function tratar(req, res) {
             if (r?.erro) return json(res, 400, r);
 
             return json(res, 200, { ...(await painelYouTube.ler(guild)), resultado: r || undefined });
+        }
+
+        const rg = caminho.match(/^\/api\/guilds\/(\d+)\/registro(?:\/(painel|publicar|paginas|botoes)(?:\/(\d+)(?:\/(botoes))?)?)?$/);
+
+        if (rg) {
+            const guild = await guildAutorizada(req, res, rg[1]);
+
+            if (!guild) return;
+
+            const [, , parte, num, sub] = rg;
+            const m = req.method;
+            let r = null;
+
+            if (m === "GET" && !parte) r = null;
+            else if (m === "DELETE" && !parte) r = await painelRegistro.excluirTudo(guild);
+            else if (m === "PUT" && parte === "painel" && !num) r = await painelRegistro.salvarPainel(guild, await lerCorpo(req));
+            else if (m === "POST" && parte === "publicar" && !num) r = await painelRegistro.publicar(guild);
+            else if (m === "POST" && parte === "paginas" && !num) r = await painelRegistro.adicionarPagina(guild);
+            else if (m === "PUT" && parte === "paginas" && num && !sub) r = await painelRegistro.salvarPagina(guild, num, await lerCorpo(req));
+            else if (m === "DELETE" && parte === "paginas" && num && !sub) r = await painelRegistro.removerPagina(guild, num);
+            else if (m === "POST" && parte === "paginas" && num && sub) r = await painelRegistro.adicionarBotao(guild, num, await lerCorpo(req));
+            else if (m === "PUT" && parte === "botoes" && num && !sub) r = await painelRegistro.editarBotao(guild, num, await lerCorpo(req));
+            else if (m === "DELETE" && parte === "botoes" && num && !sub) r = await painelRegistro.removerBotao(guild, num);
+            else return json(res, 405, { erro: "Método não permitido." });
+
+            if (r?.erro) return json(res, 400, r);
+
+            return json(res, 200, { ...(await painelRegistro.ler(guild)), resultado: r || undefined });
         }
 
         return json(res, 404, { erro: "Rota não encontrada." });
