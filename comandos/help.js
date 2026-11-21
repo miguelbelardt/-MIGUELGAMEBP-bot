@@ -100,7 +100,7 @@ const SECOES = [
         id: "suporte",
         nome: "Suporte",
         emoji: "🎫",
-        resumo: "Tickets, registro e sugestões",
+        resumo: "Tickets e sugestões",
         comandos: {
             sugestao: "Envia uma sugestão para o dono do bot."
         }
@@ -131,15 +131,6 @@ const SECOES = [
             lembrete: "O bot te avisa depois (criar, listar, remover).",
             afk: "Fica AFK e avisa quem te marcar.",
             config: "Liga ou desliga suas configurações pessoais."
-        }
-    },
-    {
-        id: "sistemas",
-        nome: "Sistemas",
-        emoji: "📦",
-        resumo: "Contador e ferramentas do servidor",
-        comandos: {
-            contador: "Canal que mostra membros, bots ou canais do servidor."
         }
     },
     {
@@ -239,7 +230,7 @@ function embedCentral(client, ehAdm) {
     return embedBase(client, SECOES[0])
         .setDescription(
             `**Bem-vindo à central de comandos.**\n` +
-            `Escolha uma seção no menu para explorar música, informação, economia, suporte, diversão e as ferramentas do servidor.\n\n` +
+            `Escolha uma seção no menu para explorar música, informação, economia, suporte e diversão.\n\n` +
 
             `⚡ **Acesso rápido**\n${atalhos}\n\n` +
 
