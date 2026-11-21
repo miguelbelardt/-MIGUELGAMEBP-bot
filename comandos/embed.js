@@ -277,7 +277,8 @@ function garantirColunasExtras() {
                 autor_url: "TEXT",
                 campos: "TEXT",
                 mensagem_texto: "TEXT",
-                botoes: "TEXT"
+                botoes: "TEXT",
+                v2: "MEDIUMTEXT"
             };
 
             for (const [coluna, definicao] of Object.entries(extras)) {
