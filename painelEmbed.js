@@ -24,7 +24,7 @@ const LIMITES = {
 const LINKS = ["titulo_url", "imagem", "thumbnail", "autor_icone", "autor_url", "rodape_icone"];
 
 const CHAVES = [
-    "nome", "mensagem", "titulo", "descricao", "autor", "rodape",
+    "modo", "nome", "mensagem", "titulo", "descricao", "autor", "rodape",
     ...LINKS, "cor", "timestamp", "campos", "botoes", "canal_id"
 ];
 
@@ -32,8 +32,22 @@ function ehTexto(canal) {
     return canal?.type === ChannelType.GuildText || canal?.type === ChannelType.GuildAnnouncement;
 }
 
+function lerV2(l) {
+    try {
+        const v = JSON.parse(l.v2);
+
+        return v && Array.isArray(v.blocos) ? v : null;
+    } catch {
+        return null;
+    }
+}
+
 function linhaParaApi(l) {
+    const v2 = l.v2 ? lerV2(l) : null;
+
     return {
+        modo: v2 ? "v2" : "classico",
+        v2: v2 ? { cor: v2.cor, spoiler: !!v2.spoiler, blocos: v2.blocos } : null,
         id: String(l.id),
         nome: l.nome || "Embed",
         mensagem: l.mensagem_texto || "",
@@ -77,9 +91,206 @@ async function ler(guild) {
     };
 }
 
-// Valida o corpo inteiro. Devolve { erro } ou { cfg, canalId }
+// ---------- Componentes V2 ----------
+
+const FLAG_V2 = 1 << 15;
+const MAX_BLOCOS = 20;
+const MAX_COMPONENTES = 40;
+const MAX_TEXTO_V2 = 4000;
+
+function emojiBotao(emoji) {
+    const m = /^<(a?):(\w{2,32}):(\d{15,25})>$/.exec(emoji || "");
+
+    if (m) return { id: m[3], name: m[2], animated: m[1] === "a" };
+
+    return emoji ? { name: emoji } : undefined;
+}
+
+function botaoLink(b) {
+    const o = { type: 2, style: 5, label: b.texto, url: b.url };
+    const e = emojiBotao(b.emoji);
+
+    if (e) o.emoji = e;
+
+    return o;
+}
+
+// Monta o JSON cru do Discord (funciona em qualquer versão do discord.js)
+function montarV2(v2) {
+    const filhos = v2.blocos.map(b => {
+        if (b.tipo === "texto") return { type: 10, content: b.texto };
+        if (b.tipo === "separador") return { type: 14, divider: !!b.linha, spacing: b.grande ? 2 : 1 };
+
+        if (b.tipo === "imagens") {
+            return { type: 12, items: b.imagens.map(i => ({ media: { url: i.url }, ...(i.descricao ? { description: i.descricao } : {}) })) };
+        }
+
+        if (b.tipo === "secao") {
+            return {
+                type: 9,
+                components: [{ type: 10, content: b.texto }],
+                accessory: b.acessorio.tipo === "imagem" ? { type: 11, media: { url: b.acessorio.url } } : botaoLink(b.acessorio)
+            };
+        }
+
+        return { type: 1, components: b.botoes.map(botaoLink) };
+    });
+
+    return [{
+        type: 17,
+        accent_color: parseInt(v2.cor.slice(1), 16),
+        ...(v2.spoiler ? { spoiler: true } : {}),
+        components: filhos
+    }];
+}
+
+function urlCurta(v, nome) {
+    if (typeof v !== "string") return { erro: `Link inválido em "${nome}".` };
+
+    const s = v.trim();
+
+    if (!s || s.length > 1000 || !E.validarURL(s)) return { erro: `"${nome}" precisa de um link começando com http:// ou https://` };
+
+    return { v: s };
+}
+
+function validarBotaoV2(b) {
+    if (!b || typeof b !== "object" || typeof b.texto !== "string") return { erro: "Botão inválido." };
+
+    const texto = b.texto.trim();
+
+    if (!texto || texto.length > 80) return { erro: "O texto de um botão precisa ter de 1 a 80 caracteres." };
+
+    const u = urlCurta(b.url, "Link do botão");
+
+    if (u.erro) return u;
+
+    const emoji = typeof b.emoji === "string" ? b.emoji.trim() : "";
+
+    if (emoji && !E.emojiValido(emoji)) return { erro: "Um dos emojis dos botões é inválido." };
+
+    return { v: { texto, url: u.v, emoji } };
+}
+
+function validarV2(guild, corpo) {
+    for (const k of Object.keys(corpo)) {
+        if (!["modo", "nome", "canal_id", "cor", "spoiler", "blocos"].includes(k)) return { erro: `Opção desconhecida: ${String(k).slice(0, 40)}` };
+    }
+
+    const nome = typeof corpo.nome === "string" && corpo.nome.trim() ? corpo.nome.trim() : "Embed";
+
+    if (nome.length > LIMITES.nome) return { erro: `"Nome" passou do limite de ${LIMITES.nome} caracteres.` };
+
+    const cor = typeof corpo.cor === "string" ? corpo.cor.trim() : "#5865F2";
+
+    if (!/^#[0-9a-f]{6}$/i.test(cor)) return { erro: "Cor inválida. Use o formato #RRGGBB." };
+
+    if (corpo.spoiler !== undefined && typeof corpo.spoiler !== "boolean") return { erro: "Opção de spoiler inválida." };
+
+    if (typeof corpo.canal_id !== "string" || !ehTexto(guild.channels.cache.get(corpo.canal_id))) return { erro: "Escolha um canal de texto válido." };
+
+    if (!Array.isArray(corpo.blocos) || !corpo.blocos.length) return { erro: "Adicione pelo menos um bloco." };
+    if (corpo.blocos.length > MAX_BLOCOS) return { erro: `O máximo é ${MAX_BLOCOS} blocos.` };
+
+    let textoTotal = 0;
+    let componentes = 1; // o container
+
+    const blocos = [];
+
+    for (const b of corpo.blocos) {
+        if (!b || typeof b !== "object") return { erro: "Bloco inválido." };
+
+        if (b.tipo === "texto") {
+            const texto = typeof b.texto === "string" ? b.texto.trim() : "";
+
+            if (!texto) return { erro: "Há um bloco de texto vazio (preencha ou remova)." };
+
+            textoTotal += texto.length;
+            componentes += 1;
+            blocos.push({ tipo: "texto", texto });
+        } else if (b.tipo === "separador") {
+            componentes += 1;
+            blocos.push({ tipo: "separador", linha: b.linha !== false, grande: b.grande === true });
+        } else if (b.tipo === "imagens") {
+            if (!Array.isArray(b.imagens) || !b.imagens.length) return { erro: "Um bloco de imagens está sem imagem." };
+            if (b.imagens.length > 10) return { erro: "Cada bloco de imagens aceita no máximo 10 imagens." };
+
+            const imagens = [];
+
+            for (const i of b.imagens) {
+                const u = urlCurta(i?.url, "Link da imagem");
+
+                if (u.erro) return u;
+
+                const descricao = typeof i.descricao === "string" ? i.descricao.trim() : "";
+
+                if (descricao.length > 1024) return { erro: "A descrição de uma imagem passou de 1024 caracteres." };
+
+                imagens.push({ url: u.v, descricao });
+            }
+
+            componentes += 1;
+            blocos.push({ tipo: "imagens", imagens });
+        } else if (b.tipo === "secao") {
+            const texto = typeof b.texto === "string" ? b.texto.trim() : "";
+
+            if (!texto) return { erro: "Há uma seção sem texto." };
+
+            const a = b.acessorio;
+
+            if (!a || typeof a !== "object") return { erro: "Toda seção precisa de uma imagem ou de um botão ao lado." };
+
+            let acessorio;
+
+            if (a.tipo === "imagem") {
+                const u = urlCurta(a.url, "Imagem da seção");
+
+                if (u.erro) return u;
+
+                acessorio = { tipo: "imagem", url: u.v };
+            } else if (a.tipo === "botao") {
+                const bt = validarBotaoV2(a);
+
+                if (bt.erro) return bt;
+
+                acessorio = { tipo: "botao", ...bt.v };
+            } else return { erro: "Acessório de seção inválido." };
+
+            textoTotal += texto.length;
+            componentes += 3;
+            blocos.push({ tipo: "secao", texto, acessorio });
+        } else if (b.tipo === "botoes") {
+            if (!Array.isArray(b.botoes) || !b.botoes.length) return { erro: "Há uma linha de botões vazia." };
+            if (b.botoes.length > 5) return { erro: "Cada linha aceita no máximo 5 botões." };
+
+            const botoes = [];
+
+            for (const x of b.botoes) {
+                const bt = validarBotaoV2(x);
+
+                if (bt.erro) return bt;
+
+                botoes.push(bt.v);
+            }
+
+            componentes += 1 + botoes.length;
+            blocos.push({ tipo: "botoes", botoes });
+        } else return { erro: "Tipo de bloco desconhecido." };
+    }
+
+    if (textoTotal > MAX_TEXTO_V2) return { erro: `Os textos passaram do limite de ${MAX_TEXTO_V2} caracteres somados (estão com ${textoTotal}).` };
+    if (componentes > MAX_COMPONENTES) return { erro: `Muitos itens: o Discord aceita no máximo ${MAX_COMPONENTES} componentes por mensagem (está com ${componentes}). Remova alguns botões ou blocos.` };
+
+    const v2 = { cor: cor.toUpperCase(), spoiler: corpo.spoiler === true, blocos };
+
+    return { canalId: corpo.canal_id, nome, v2 };
+}
+
+// Valida o corpo inteiro. Devolve { erro } ou { cfg, canalId } (clássico) / { v2, canalId } (V2)
 function validar(guild, corpo) {
     if (!corpo || typeof corpo !== "object" || Array.isArray(corpo)) return { erro: "Dados inválidos." };
+
+    if (corpo.modo === "v2") return validarV2(guild, corpo);
 
     for (const k of Object.keys(corpo)) {
         if (!CHAVES.includes(k)) return { erro: `Opção desconhecida: ${String(k).slice(0, 40)}` };
@@ -212,21 +423,29 @@ function validar(guild, corpo) {
     };
 }
 
-// Envia, edita ou move a mensagem. Devolve { mensagem } ou { erro }
-async function publicar(guild, linhaAntiga, canalId, cfg, nomeUsuario) {
+// Envia, edita ou move a mensagem. `conteudo` é { cfg } (clássico) ou { v2 } (Componentes V2).
+// Devolve { mensagem } ou { erro }
+async function publicar(guild, linhaAntiga, canalId, conteudo, nomeUsuario) {
     const canal = await guild.channels.fetch(canalId).catch(() => null);
 
     if (!canal || !ehTexto(canal)) return { erro: "O canal escolhido não existe ou não é um canal de texto." };
 
-    const resultado = E.criarEmbed(cfg, nomeUsuario ? { username: nomeUsuario } : null);
+    const ehV2 = !!conteudo.v2;
+    let payload;
+    let edicao;
 
-    if (!resultado.sucesso) return { erro: "Preencha pelo menos um campo do embed." };
+    if (ehV2) {
+        payload = { flags: FLAG_V2, components: montarV2(conteudo.v2) };
+        edicao = payload;
+    } else {
+        const cfg = conteudo.cfg;
+        const resultado = E.criarEmbed(cfg, nomeUsuario ? { username: nomeUsuario } : null);
 
-    const payload = {
-        content: cfg.mensagem || undefined,
-        embeds: [resultado.embed],
-        components: E.criarComponentesBotoes(cfg)
-    };
+        if (!resultado.sucesso) return { erro: "Preencha pelo menos um campo do embed." };
+
+        payload = { content: cfg.mensagem || undefined, embeds: [resultado.embed], components: E.criarComponentesBotoes(cfg) };
+        edicao = { ...payload, content: cfg.mensagem || null };
+    }
 
     try {
         let mensagem = null;
@@ -237,26 +456,29 @@ async function publicar(guild, linhaAntiga, canalId, cfg, nomeUsuario) {
             if (antigo?.isTextBased?.()) mensagem = await antigo.messages.fetch(linhaAntiga.mensagem_id).catch(() => null);
         }
 
-        if (mensagem && mensagem.channel.id !== canal.id) {
+        // mudou de canal ou de tipo (clássico <-> V2): o Discord não deixa converter, então apaga e reenvia
+        const eraV2 = !!linhaAntiga?.v2;
+
+        if (mensagem && (mensagem.channel.id !== canal.id || eraV2 !== ehV2)) {
             await mensagem.delete().catch(() => {});
             mensagem = null;
         }
 
         if (mensagem) {
-            await mensagem.edit({ ...payload, content: cfg.mensagem || null });
+            await mensagem.edit(edicao);
 
             return { mensagem, editado: true };
         }
 
         return { mensagem: await canal.send(payload), editado: false };
-    } catch {
-        return { erro: "Não consegui enviar o embed. Confira se o bot pode ver, enviar mensagens e inserir links nesse canal." };
+    } catch (e) {
+        console.error("❌ Painel (embed) ao enviar:", e?.message || e);
+
+        return { erro: ehV2
+            ? "Não consegui enviar a mensagem V2. Confira as permissões do bot no canal e se o discord.js do bot é a versão 14.19 ou mais nova."
+            : "Não consegui enviar o embed. Confira se o bot pode ver, enviar mensagens e inserir links nesse canal." };
     }
 }
-
-const COLUNAS_EXTRAS = (id, guildId, cfg) => [
-    cfg.tituloUrl || null, cfg.autorUrl || null, cfg.campos || null, cfg.mensagem || null, cfg.botoes || null, id, guildId
-];
 
 async function criar(guild, corpo, usuarioId, nomeUsuario) {
     const v = validar(guild, corpo);
@@ -272,11 +494,14 @@ async function criar(guild, corpo, usuarioId, nomeUsuario) {
 
     if (Number(total) >= MAX_EMBEDS) return { erro: `Limite de ${MAX_EMBEDS} embeds por servidor. Apague algum antes.` };
 
-    const env = await publicar(guild, null, v.canalId, v.cfg, nomeUsuario);
+    const env = await publicar(guild, null, v.canalId, v, nomeUsuario);
 
     if (env.erro) return env;
 
-    const c = v.cfg;
+    const c = v.cfg || {};
+    const v2 = v.v2 ? JSON.stringify(v.v2) : null;
+    const nome = v.v2 ? v.nome : c.nome;
+    const cor = v.v2 ? v.v2.cor : c.cor;
     const agora = Date.now();
 
     try {
@@ -284,13 +509,13 @@ async function criar(guild, corpo, usuarioId, nomeUsuario) {
             `INSERT INTO embeds_personalizados
                 (guild_id, nome, autor_nome, autor_icone, titulo, descricao, cor, imagem, thumbnail,
                  rodape, rodape_icone, timestamp, canal_id, mensagem_id, criado_por, criado_em, atualizado_em,
-                 titulo_url, autor_url, campos, mensagem_texto, botoes)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 titulo_url, autor_url, campos, mensagem_texto, botoes, v2)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                guild.id, c.nome, c.autor || null, c.autorIcone || null, c.titulo || null, c.descricao || null,
-                c.cor, c.imagem || null, c.thumbnail || null, c.footer || null, c.footerIcone || null,
+                guild.id, nome, c.autor || null, c.autorIcone || null, c.titulo || null, c.descricao || null,
+                cor, c.imagem || null, c.thumbnail || null, c.footer || null, c.footerIcone || null,
                 c.timestamp ? 1 : 0, env.mensagem.channel.id, env.mensagem.id, usuarioId || null, agora, agora,
-                c.tituloUrl || null, c.autorUrl || null, c.campos || null, c.mensagem || null, c.botoes || null
+                c.tituloUrl || null, c.autorUrl || null, c.campos || null, c.mensagem || null, c.botoes || null, v2
             ]
         );
 
@@ -325,23 +550,26 @@ async function salvar(guild, id, corpo, nomeUsuario) {
 
     if (v.erro) return v;
 
-    const env = await publicar(guild, antiga, v.canalId, v.cfg, nomeUsuario);
+    const env = await publicar(guild, antiga, v.canalId, v, nomeUsuario);
 
     if (env.erro) return env;
 
-    const c = v.cfg;
+    const c = v.cfg || {};
+    const v2 = v.v2 ? JSON.stringify(v.v2) : null;
+    const nome = v.v2 ? v.nome : c.nome;
+    const cor = v.v2 ? v.v2.cor : c.cor;
 
     await mysqlPool.query(
         `UPDATE embeds_personalizados SET
             nome = ?, autor_nome = ?, autor_icone = ?, titulo = ?, descricao = ?, cor = ?, imagem = ?, thumbnail = ?,
             rodape = ?, rodape_icone = ?, timestamp = ?, canal_id = ?, mensagem_id = ?, atualizado_em = ?,
-            titulo_url = ?, autor_url = ?, campos = ?, mensagem_texto = ?, botoes = ?
+            titulo_url = ?, autor_url = ?, campos = ?, mensagem_texto = ?, botoes = ?, v2 = ?
          WHERE id = ? AND guild_id = ?`,
         [
-            c.nome, c.autor || null, c.autorIcone || null, c.titulo || null, c.descricao || null, c.cor,
+            nome, c.autor || null, c.autorIcone || null, c.titulo || null, c.descricao || null, cor,
             c.imagem || null, c.thumbnail || null, c.footer || null, c.footerIcone || null, c.timestamp ? 1 : 0,
             env.mensagem.channel.id, env.mensagem.id, Date.now(),
-            c.tituloUrl || null, c.autorUrl || null, c.campos || null, c.mensagem || null, c.botoes || null,
+            c.tituloUrl || null, c.autorUrl || null, c.campos || null, c.mensagem || null, c.botoes || null, v2,
             id, guild.id
         ]
     );
@@ -369,4 +597,4 @@ async function excluir(guild, id) {
     return { ok: true };
 }
 
-module.exports = { ler, criar, salvar, excluir, _teste: { validar, linhaParaApi } };
+module.exports = { ler, criar, salvar, excluir, _teste: { validar, linhaParaApi, montarV2 } };
