@@ -201,3 +201,15 @@ h2{font-size:1.8rem;margin-bottom:22px;letter-spacing:-.01em}
 /* YouTube */
 .secao .cartao-embed.bloco{flex-direction:column;align-items:stretch}
 .secao .cartao-embed.bloco textarea,.secao .cartao-embed.bloco input[type=text]{padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;width:100%}
+
+/* Registro */
+.secao details.bloco>summary{cursor:pointer;list-style:none;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+.secao details.bloco>summary::-webkit-details-marker{display:none}
+.secao details.bloco>summary::before{content:"▸";color:var(--suave)}
+.secao details.bloco[open]>summary::before{content:"▾"}
+.secao details.bloco>*:not(summary){margin-top:10px}
+.secao .resumo{color:var(--suave);font-size:.85rem}
+.secao .campo select{width:100%}
+.secao .linha-botao{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr)) auto auto;gap:8px;align-items:center;margin-bottom:8px}
+.secao .linha-botao input[type=text],.secao .linha-botao select{padding:10px 12px;border-radius:10px;border:1px solid var(--borda);background:var(--fundo2);color:var(--texto);font:inherit;width:100%}
+.secao .linha-botao .botao{border:0;cursor:pointer;font:inherit;font-weight:600}

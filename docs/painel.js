@@ -57,7 +57,8 @@ const SECOES = [
   { chave: "sorteios", emoji: "🎉", nome: "Sorteios" },
   { chave: "criarcall", emoji: "📞", nome: "Criar Call" },
   { chave: "embeds", emoji: "🧩", nome: "Embeds" },
-  { chave: "youtube", emoji: "🎬", nome: "YouTube" }
+  { chave: "youtube", emoji: "🎬", nome: "YouTube" },
+  { chave: "registro", emoji: "📝", nome: "Registro" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -145,7 +146,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       else if (chave === "sorteios") await secaoSorteios(id, conteudo);
       else if (chave === "criarcall") await secaoCriarCall(id, conteudo);
       else if (chave === "embeds") await secaoEmbeds(id, conteudo);
-      else await secaoYouTube(id, conteudo);
+      else if (chave === "youtube") await secaoYouTube(id, conteudo);
+      else await secaoRegistro(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -1657,6 +1659,236 @@ async function secaoYouTube(id, alvo) {
       el("p", { class: "legenda" }, `Avisa no Discord quando um canal do YouTube posta vídeo novo. O bot confere a cada ${d.intervaloMin} minutos e só avisa vídeos publicados daqui pra frente. Até ${d.max} canais por servidor (${d.inscricoes.length}/${d.max}).`),
       ...d.inscricoes.map(cartao),
       d.inscricoes.length < d.max ? formularioAdicionar() : el("div", { class: "aviso" }, "Limite de canais atingido. Remova um para adicionar outro.")
+    );
+  }
+
+  desenhar();
+}
+
+
+// ---------- Registro ----------
+
+async function secaoRegistro(id, alvo) {
+  const base = `/api/guilds/${id}/registro`;
+  let d = await chamar(base);
+
+  const ESTILOS = { PRIMARY: "Azul", SECONDARY: "Cinza", SUCCESS: "Verde", DANGER: "Vermelho" };
+
+  function seletorCanal(valor) {
+    const s = el("select", {}, el("option", { value: "" }, "— escolha um canal —"),
+      ...d.canais.map(c => el("option", { value: c.id }, "#" + c.nome)));
+    s.value = valor || "";
+    return s;
+  }
+
+  function seletorCargo(valor, vazio) {
+    const s = el("select", {}, el("option", { value: "" }, vazio),
+      ...d.cargos.map(c => {
+        const o = el("option", { value: c.id }, c.nome + (c.gerenciavel ? "" : " (acima do meu cargo)"));
+        if (!c.gerenciavel) o.disabled = true;
+        return o;
+      }));
+    s.value = valor || "";
+    return s;
+  }
+
+  function campo(titulo, controle, dica) {
+    return el("label", { class: "campo" }, el("b", {}, titulo), controle, dica ? el("span", {}, dica) : "");
+  }
+
+  function texto(valor, max, ph = "") {
+    const c = el("input", { type: "text", maxlength: String(max) });
+    c.value = valor || "";
+    if (ph) c.placeholder = ph;
+    return c;
+  }
+
+  function area(valor, max) {
+    const c = el("textarea", { rows: "3", maxlength: String(max) });
+    c.value = valor || "";
+    return c;
+  }
+
+  function corInput(valor) {
+    const c = el("input", { type: "color" });
+    c.value = (valor || "#5865F2").toLowerCase();
+    return c;
+  }
+
+  // chama a API, atualiza os dados e redesenha tudo
+  async function agir(botao, caminho, metodo, corpo, ok, redesenhar = true) {
+    if (botao) botao.disabled = true;
+
+    try {
+      d = await chamar(`${base}${caminho}`, { method: metodo, body: corpo ? JSON.stringify(corpo) : undefined });
+      if (ok) aviso(typeof ok === "function" ? ok(d.resultado) : ok);
+      if (redesenhar) desenhar();
+      return true;
+    } catch (e) {
+      aviso(e.message, true);
+      return false;
+    } finally {
+      if (botao) botao.disabled = false;
+    }
+  }
+
+  function botaoAcao(rotulo, classe, onclick) {
+    const b = el("button", { class: `botao botao-pequeno ${classe}`.trim(), type: "button" }, rotulo);
+    b.addEventListener("click", () => onclick(b));
+    return b;
+  }
+
+  // ----- configurações gerais -----
+  function blocoGeral() {
+    const canal = seletorCanal(d.painel.canal_id);
+    const cargo = seletorCargo(d.painel.cargo_id, "— nenhum —");
+    const perguntas = el("input", { type: "checkbox", "aria-label": "Perguntas em sequência" });
+    perguntas.checked = d.painel.perguntas;
+
+    const salvar = botaoAcao("💾 Salvar", "", b => agir(b, "/painel", "PUT", {
+      canal_id: canal.value || null, cargo_id: cargo.value || null, perguntas: perguntas.checked
+    }, "Salvo ✓"));
+
+    const publicar = botaoAcao(d.painel.publicado ? "📢 Atualizar painel" : "📢 Publicar painel", "botao-claro", async b => {
+      if (!canal.value) return aviso("Escolha o canal do painel primeiro.", true);
+
+      b.disabled = true;
+
+      // salva as escolhas antes de publicar
+      const ok = await agir(null, "/painel", "PUT", { canal_id: canal.value, cargo_id: cargo.value || null, perguntas: perguntas.checked }, "", false);
+
+      if (ok) await agir(null, "/publicar", "POST", null, r => (r?.atualizado ? "Painel atualizado ✓" : "Painel publicado ✓"));
+
+      b.disabled = false;
+    });
+
+    return el("div", { class: "cartao-embed bloco" },
+      el("b", {}, "⚙️ Geral"),
+      el("p", { class: "legenda" }, d.painel.publicado ? "✅ O painel já está publicado." : "⚠️ O painel ainda não foi publicado."),
+      campo("Canal do painel", canal, "Onde a mensagem com o botão de registro fica."),
+      campo("Cargo depois do registro", cargo, "Dado a quem concluir o registro (o cargo do bot precisa estar acima dele)."),
+      el("div", { class: "opcao" },
+        el("div", { class: "txt" }, el("b", {}, "Perguntas em sequência"),
+          el("span", {}, "Ligado: cada página vira uma pergunta, uma por vez. Desligado: o 1º botão conclui o registro.")),
+        el("label", { class: "interruptor" }, perguntas, el("i"))),
+      el("div", { class: "acoes-cartao" }, salvar, publicar));
+  }
+
+  // ----- painel inicial -----
+  function blocoPainel() {
+    const p = d.painel;
+    const titulo = texto(p.titulo, 256), url = texto(p.titulo_url, 1000, "https://…"), desc = area(p.descricao, 4096);
+    const cor = corInput(p.cor), img = texto(p.imagem, 1000, "https://…"), thumb = texto(p.thumbnail, 1000, "https://…");
+    const rod = texto(p.rodape, 2048), rodIc = texto(p.rodape_icone, 1000, "https://…"), btn = texto(p.botao_texto, 80);
+
+    const salvar = botaoAcao("💾 Salvar painel inicial", "", b => agir(b, "/painel", "PUT", {
+      titulo: titulo.value, titulo_url: url.value, descricao: desc.value, cor: cor.value.toUpperCase(),
+      imagem: img.value, thumbnail: thumb.value, rodape: rod.value, rodape_icone: rodIc.value, botao_texto: btn.value
+    }, "Painel inicial salvo ✓ (a mensagem publicada também foi atualizada)"));
+
+    return el("details", { class: "cartao-embed bloco" },
+      el("summary", {}, el("b", {}, "🎨 Painel inicial (mensagem com o botão)")),
+      campo("Título", titulo), campo("Link do título", url),
+      campo("Descrição", desc, "Se ficar vazia, aparece o texto padrão."),
+      campo("Cor", cor), campo("Imagem grande (link)", img), campo("Miniatura (link)", thumb),
+      campo("Rodapé", rod), campo("Ícone do rodapé (link)", rodIc),
+      campo("Texto do botão", btn),
+      el("div", { class: "acoes-cartao" }, salvar));
+  }
+
+  // ----- páginas -----
+  function blocoPagina(pg) {
+    const titulo = texto(pg.titulo, 256), url = texto(pg.titulo_url, 1000, "https://…"), desc = area(pg.descricao, 4096);
+    const cor = corInput(pg.cor), img = texto(pg.imagem, 1000, "https://…"), thumb = texto(pg.thumbnail, 1000, "https://…");
+    const rod = texto(pg.rodape, 2048), rodIc = texto(pg.rodape_icone, 1000, "https://…");
+    const opc = el("input", { type: "checkbox", "aria-label": "Pergunta opcional" });
+    opc.checked = pg.opcional;
+
+    const salvar = botaoAcao("💾 Salvar página", "", b => agir(b, `/paginas/${pg.numero}`, "PUT", {
+      titulo: titulo.value, titulo_url: url.value, descricao: desc.value, cor: cor.value.toUpperCase(),
+      imagem: img.value, thumbnail: thumb.value, rodape: rod.value, rodape_icone: rodIc.value, opcional: opc.checked
+    }, `Página ${pg.numero} salva ✓`));
+
+    const ultima = d.paginas[d.paginas.length - 1].numero === pg.numero && pg.numero > 1;
+    const remover = ultima ? botaoAcao("🗑️ Remover página", "botao-claro", b => {
+      if (!confirm(`Remover a página ${pg.numero} e os botões dela?`)) return;
+      agir(b, `/paginas/${pg.numero}`, "DELETE", null, "Página removida ✓");
+    }) : "";
+
+    return el("details", { class: "cartao-embed bloco" },
+      el("summary", {}, el("b", {}, `📄 Página ${pg.numero}`), el("span", { class: "resumo" }, ` — ${pg.titulo || "sem título"} • ${pg.botoes.length} botão(ões)`)),
+      campo("Título", titulo), campo("Link do título", url), campo("Descrição", desc),
+      campo("Cor", cor), campo("Imagem grande (link)", img), campo("Miniatura (link)", thumb),
+      campo("Rodapé", rod), campo("Ícone do rodapé (link)", rodIc),
+      el("div", { class: "opcao" },
+        el("div", { class: "txt" }, el("b", {}, "Pergunta opcional"), el("span", {}, "No modo perguntas, aparece o botão “Pular”.")),
+        el("label", { class: "interruptor" }, opc, el("i"))),
+      el("div", { class: "acoes-cartao" }, salvar, remover),
+      el("h2", {}, "Botões desta página"),
+      ...pg.botoes.map(b => linhaBotao(pg, b)),
+      pg.botoes.length < d.maxBotoes ? novoBotao(pg) : el("p", { class: "legenda" }, `Limite de ${d.maxBotoes} botões nesta página.`));
+  }
+
+  function controlesBotao(b) {
+    const t = texto(b?.texto, 80), e = texto(b?.emoji, 100, "Emoji");
+    const est = el("select", {}, ...d.estilos.map(s => el("option", { value: s }, ESTILOS[s] || s)));
+    est.value = b?.estilo || "PRIMARY";
+    const car = seletorCargo(b?.cargo_id, "Sem cargo");
+    return { t, e, est, car, corpo: () => ({ texto: t.value, emoji: e.value, estilo: est.value, cargo_id: car.value || null }) };
+  }
+
+  function linhaBotao(pg, b) {
+    const c = controlesBotao(b);
+
+    return el("div", { class: "linha-botao" },
+      c.t, c.e, c.est, c.car,
+      botaoAcao("💾", "", x => agir(x, `/botoes/${b.id}`, "PUT", c.corpo(), "Botão salvo ✓", false)),
+      botaoAcao("🗑️", "botao-claro", x => {
+        if (!confirm(`Remover o botão “${b.texto}”?`)) return;
+        agir(x, `/botoes/${b.id}`, "DELETE", null, "Botão removido ✓");
+      }));
+  }
+
+  function novoBotao(pg) {
+    const c = controlesBotao(null);
+    c.t.placeholder = "Texto do botão";
+
+    return el("div", { class: "linha-botao novo" },
+      c.t, c.e, c.est, c.car,
+      botaoAcao("➕ Adicionar", "", x => {
+        if (!c.t.value.trim()) return aviso("Escreva o texto do botão.", true);
+        agir(x, `/paginas/${pg.numero}/botoes`, "POST", c.corpo(), "Botão criado ✓");
+      }));
+  }
+
+  function desenhar() {
+    // lembra quais blocos estavam abertos
+    const abertos = new Set([...alvo.querySelectorAll("details[open]")].map(x => x.dataset.chave));
+
+    const paginas = d.paginas.map(blocoPagina);
+    const painel = blocoPainel();
+
+    painel.dataset.chave = "painel";
+    paginas.forEach((p, i) => { p.dataset.chave = `p${d.paginas[i].numero}`; });
+    [painel, ...paginas].forEach(x => { if (abertos.has(x.dataset.chave)) x.open = true; });
+
+    const adicionar = botaoAcao("➕ Adicionar página", "", b => agir(b, "/paginas", "POST", null, r => `Página ${r?.numero} criada ✓`));
+    if (d.paginas.length >= d.maxPaginas) adicionar.disabled = true;
+
+    const excluir = botaoAcao("🗑️ Excluir todo o sistema de registro", "botao-claro", b => {
+      if (!confirm("Excluir TODAS as páginas, botões e o registro dos membros, e apagar o painel publicado? Isso não pode ser desfeito.")) return;
+      agir(b, "", "DELETE", null, "Sistema de registro excluído ✓");
+    });
+
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, "Configure o registro de membros: o painel inicial, as páginas (ou perguntas) e os botões que dão cargos. É o antigo /registrar, agora aqui no site."),
+      blocoGeral(),
+      painel,
+      el("h2", {}, `Páginas (${d.paginas.length}/${d.maxPaginas})`),
+      ...paginas,
+      el("div", { class: "acoes-cartao" }, adicionar),
+      el("h2", {}, "Zona de perigo"),
+      el("div", { class: "acoes-cartao" }, excluir)
     );
   }
 

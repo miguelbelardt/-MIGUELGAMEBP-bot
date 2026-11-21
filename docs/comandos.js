@@ -362,11 +362,6 @@ window.CATEGORIAS = [
   "nome": "Administração",
   "comandos": [
    [
-    "registrar",
-    "Cria e configura o sistema de registro.",
-    1
-   ],
-   [
     "contador",
     "Canal que mostra membros, bots ou canais do servidor.",
     1
