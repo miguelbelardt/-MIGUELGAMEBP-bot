@@ -58,7 +58,8 @@ const SECOES = [
   { chave: "criarcall", emoji: "📞", nome: "Criar Call" },
   { chave: "embeds", emoji: "🧩", nome: "Embeds" },
   { chave: "youtube", emoji: "🎬", nome: "YouTube" },
-  { chave: "registro", emoji: "📝", nome: "Registro" }
+  { chave: "registro", emoji: "📝", nome: "Registro" },
+  { chave: "contadores", emoji: "📊", nome: "Contadores" }
 ];
 
 async function telaServidor(id, secaoInicial = "geral") {
@@ -147,7 +148,8 @@ async function telaServidor(id, secaoInicial = "geral") {
       else if (chave === "criarcall") await secaoCriarCall(id, conteudo);
       else if (chave === "embeds") await secaoEmbeds(id, conteudo);
       else if (chave === "youtube") await secaoYouTube(id, conteudo);
-      else await secaoRegistro(id, conteudo);
+      else if (chave === "registro") await secaoRegistro(id, conteudo);
+      else await secaoContadores(id, conteudo);
     } catch (e) {
       if (logado()) conteudo.replaceChildren(el("div", { class: "aviso erro" }, e.message));
     }
@@ -1889,6 +1891,103 @@ async function secaoRegistro(id, alvo) {
       el("div", { class: "acoes-cartao" }, adicionar),
       el("h2", {}, "Zona de perigo"),
       el("div", { class: "acoes-cartao" }, excluir)
+    );
+  }
+
+  desenhar();
+}
+
+
+// ---------- Contadores ----------
+
+async function secaoContadores(id, alvo) {
+  const base = `/api/guilds/${id}/contadores`;
+  let d = await chamar(base);
+
+  function seletorTipo(valor) {
+    const s = el("select", {}, ...d.tipos.map(t => el("option", { value: t.valor }, t.nome)));
+    s.value = valor || "membros";
+    return s;
+  }
+
+  function textoCampo(valor) {
+    const c = el("input", { type: "text", maxlength: "80", placeholder: "👤 Membros:" });
+    c.value = valor || "";
+    return c;
+  }
+
+  async function agir(botao, caminho, metodo, corpo, ok) {
+    botao.disabled = true;
+
+    try {
+      d = await chamar(`${base}${caminho}`, { method: metodo, body: corpo ? JSON.stringify(corpo) : undefined });
+      const r = d.resultado;
+      aviso(r?.aviso || (typeof ok === "function" ? ok(r) : ok), !!r?.aviso);
+      desenhar();
+    } catch (e) {
+      aviso(e.message, true);
+    } finally {
+      botao.disabled = false;
+    }
+  }
+
+  function botao(rotulo, classe, onclick) {
+    const b = el("button", { class: `botao botao-pequeno ${classe}`.trim(), type: "button" }, rotulo);
+    b.addEventListener("click", () => onclick(b));
+    return b;
+  }
+
+  function cartao(c) {
+    const tipo = seletorTipo(c.tipo);
+    const texto = textoCampo(c.texto);
+
+    return el("div", { class: "cartao-embed bloco" },
+      el("b", {}, c.existe ? `${c.canal_tipo === "Categoria" ? "📁" : "🔊"} ${c.canal_nome}` : "⚠️ Canal apagado"),
+      c.existe ? "" : el("p", { class: "legenda" }, "Esse canal não existe mais. O bot vai esquecer este contador na próxima atualização, ou remova agora."),
+      el("label", { class: "campo" }, el("b", {}, "O que contar"), tipo),
+      el("label", { class: "campo" }, el("b", {}, "Texto do começo"), texto,
+        el("span", {}, "O número entra depois do texto. Se usar {numero}, ele entra naquele lugar.")),
+      el("div", { class: "acoes-cartao" },
+        c.existe ? botao("💾 Salvar", "", b => {
+          if (!texto.value.trim()) return aviso("Escreva o texto do começo.", true);
+          agir(b, `/${c.canal_id}`, "PUT", { tipo: tipo.value, texto: texto.value }, r => `Salvo ✓ — o canal agora se chama “${r?.nome}”`);
+        }) : "",
+        botao("🗑️ Remover", "botao-claro", b => {
+          if (!confirm("Remover este contador? O canal continua existindo, só para de ser atualizado.")) return;
+          agir(b, `/${c.canal_id}`, "DELETE", null, "Contador removido ✓");
+        })));
+  }
+
+  function formulario() {
+    const canal = el("select", {}, el("option", { value: "" }, "— escolha um canal de voz ou categoria —"),
+      ...d.canais.map(c => el("option", { value: c.id }, `${c.tipo === "Categoria" ? "📁" : "🔊"} ${c.nome}`)));
+    const tipo = seletorTipo("membros");
+    const texto = textoCampo("");
+
+    return el("div", { class: "cartao-embed bloco" },
+      el("b", {}, "Novo contador"),
+      el("label", { class: "campo" }, el("b", {}, "Canal"), canal,
+        el("span", {}, "Crie antes um canal de voz (ou categoria) no Discord; ele vai virar o contador. Canais de texto não servem.")),
+      el("label", { class: "campo" }, el("b", {}, "O que contar"), tipo),
+      el("label", { class: "campo" }, el("b", {}, "Texto do começo"), texto,
+        el("span", {}, "Ex.: 👤 Membros:  → o canal vira “👤 Membros: 128”.")),
+      el("div", { class: "acoes-cartao" },
+        botao("➕ Criar contador", "", b => {
+          if (!canal.value) return aviso("Escolha o canal.", true);
+          if (!texto.value.trim()) return aviso("Escreva o texto do começo.", true);
+          agir(b, "", "POST", { canal_id: canal.value, tipo: tipo.value, texto: texto.value }, r => `Contador criado ✓ — “${r?.nome}”`);
+        })));
+  }
+
+  function desenhar() {
+    alvo.replaceChildren(
+      el("p", { class: "legenda" }, `Canais que mostram números do servidor (membros, bots, canais…) e se atualizam sozinhos a cada 10 minutos — limite do Discord para renomear canais. Até ${d.max} por servidor (${d.contadores.length}/${d.max}).`),
+      ...(d.contadores.length ? [el("div", { class: "acoes-topo" },
+        botao("🔄 Atualizar agora", "botao-claro", b => agir(b, "/atualizar", "POST", null, "Contadores atualizados ✓")))] : []),
+      ...d.contadores.map(cartao),
+      d.contadores.length < d.max
+        ? (d.canais.length ? formulario() : el("div", { class: "aviso" }, "Não há canais de voz ou categorias livres. Crie um no Discord para virar contador."))
+        : el("div", { class: "aviso" }, "Limite de contadores atingido. Remova um para criar outro.")
     );
   }
 

@@ -362,11 +362,6 @@ window.CATEGORIAS = [
   "nome": "Administração",
   "comandos": [
    [
-    "contador",
-    "Canal que mostra membros, bots ou canais do servidor.",
-    1
-   ],
-   [
     "say",
     "Faz o bot enviar uma mensagem.",
     1
