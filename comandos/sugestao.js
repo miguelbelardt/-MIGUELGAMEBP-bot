@@ -1,6 +1,13 @@
 const {
     SlashCommandBuilder,
-    EmbedBuilder
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    MessageFlags
 } = require("discord.js");
 const { nomeBot } = require("../botNome.js");
 
@@ -156,6 +163,10 @@ async function enviarSugestao(client, autor, guild, canal, texto) {
                     inline: true
                 }
             )
+            .addFields({
+                name: CAMPO_STATUS,
+                value: STATUS.nova
+            })
             .setFooter({
                 text: nomeBot()
             });
@@ -164,6 +175,7 @@ async function enviarSugestao(client, autor, guild, canal, texto) {
         await dono.send({
             content: `${EMOJIS.sugestao} Sugestão de <@${autor.id}>`,
             embeds: [embed],
+            components: criarBotoes(autor.id),
             allowedMentions: {
                 parse: []
             }
@@ -188,6 +200,273 @@ async function enviarSugestao(client, autor, guild, canal, texto) {
 }
 
 // =====================================================
+// 🔘 BOTÕES DA SUGESTÃO (na DM do dono)
+// =====================================================
+// Responder: o dono escreve e o bot entrega a resposta para quem sugeriu.
+// Marcar como lida / Feito: só mudam o status do embed.
+// Tudo fica guardado no próprio embed, então continua funcionando
+// mesmo depois de reiniciar o bot.
+
+const CAMPO_STATUS = "📌 Status";
+const CAMPO_RESPOSTA = "💬 Sua resposta";
+
+const COR_LIDA = 0x5865F2;
+const COR_FEITO = 0x57F287;
+
+const STATUS = {
+    nova: "🆕 Nova",
+    lida: "👁️ Lida",
+    feito: "✅ Feito"
+};
+
+function criarBotoes(autorId, estado = "nova") {
+    return [
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`sugestao_responder_${autorId}`)
+                .setLabel("Responder")
+                .setEmoji("💬")
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId("sugestao_lida")
+                .setLabel("Marcar como lida")
+                .setEmoji("👁️")
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(estado !== "nova"),
+            new ButtonBuilder()
+                .setCustomId("sugestao_feito")
+                .setLabel("Feito")
+                .setEmoji("✅")
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(estado === "feito")
+        )
+    ];
+}
+
+// Descobre o estado atual pelo campo de status do embed
+function estadoDoEmbed(embed) {
+    const valor = embed?.fields?.find(f => f.name === CAMPO_STATUS)?.value || "";
+
+    if (valor.startsWith("✅")) return "feito";
+    if (valor.startsWith("👁️")) return "lida";
+
+    return "nova";
+}
+
+// Troca (ou cria) um campo do embed pelo nome
+function definirCampo(embedBuilder, nome, valor) {
+    const campos = [...(embedBuilder.data.fields || [])];
+    const i = campos.findIndex(f => f.name === nome);
+
+    if (i >= 0) {
+        campos[i] = { ...campos[i], value: valor };
+    } else {
+        campos.push({ name: nome, value: valor, inline: false });
+    }
+
+    embedBuilder.setFields(campos);
+}
+
+async function ehDono(interaction) {
+    const dono = await pegarDono(interaction.client);
+
+    return Boolean(dono && dono.id === interaction.user.id);
+}
+
+async function mudarStatus(interaction, estado) {
+    const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+    const agora = Math.floor(Date.now() / 1000);
+
+    definirCampo(embed, CAMPO_STATUS, `${STATUS[estado]} em <t:${agora}:f>`);
+    embed.setColor(estado === "feito" ? COR_FEITO : COR_LIDA);
+
+    return interaction.update({
+        embeds: [embed],
+        components: criarBotoes(interaction.customId.split("_")[2] || idDoAutor(interaction.message), estado)
+    });
+}
+
+// O ID de quem sugeriu fica no botão "Responder" (e também no campo "ID" do embed)
+function idDoAutor(mensagem) {
+    const botao = mensagem.components?.[0]?.components?.find(c =>
+        String(c.customId || c.data?.customId || "").startsWith("sugestao_responder_")
+    );
+
+    const doBotao = String(botao?.customId || botao?.data?.customId || "").split("_")[2];
+
+    if (/^\d{15,25}$/.test(doBotao || "")) return doBotao;
+
+    const campo = mensagem.embeds?.[0]?.fields?.find(f => f.name === "🆔 ID")?.value || "";
+
+    return campo.replace(/\D/g, "") || "0";
+}
+
+async function tratarInteracao(interaction) {
+    const id = interaction.customId || "";
+
+    if (!id.startsWith("sugestao_")) return false;
+
+    if (!(await ehDono(interaction))) {
+        await interaction.reply({
+            content: `${EMOJIS.erro} Só o dono do bot pode usar esses botões.`,
+            flags: MessageFlags.Ephemeral
+        }).catch(() => { });
+
+        return true;
+    }
+
+    // ----- botões -----
+    if (interaction.isButton()) {
+        if (id === "sugestao_lida") {
+            if (estadoDoEmbed(interaction.message.embeds[0]) !== "nova") {
+                return interaction.deferUpdate().catch(() => { }), true;
+            }
+
+            await mudarStatus(interaction, "lida");
+
+            return true;
+        }
+
+        if (id === "sugestao_feito") {
+            const original = interaction.message.embeds[0];
+            const autorId = idDoAutor(interaction.message);
+
+            // Avisa quem sugeriu (se a DM estiver fechada, só marca como feito mesmo)
+            let avisou = true;
+
+            try {
+                const autor = await interaction.client.users.fetch(autorId);
+
+                await autor.send({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(COR_FEITO)
+                            .setTitle(`${EMOJIS.sucesso} Sua sugestão foi feita!`)
+                            .setDescription("Obrigado por ajudar a melhorar o bot! 💡")
+                            .addFields({
+                                name: "Sua sugestão",
+                                value: String(original?.description || "—").slice(0, 1000)
+                            })
+                            .setFooter({ text: nomeBot() })
+                    ]
+                });
+            } catch {
+                avisou = false;
+            }
+
+            await mudarStatus(interaction, "feito");
+
+            if (!avisou) {
+                await interaction.followUp({
+                    content: `${EMOJIS.erro} Marquei como feito, mas não consegui avisar a pessoa: ela está com as DMs fechadas (ou não divide servidor com o bot).`,
+                    flags: MessageFlags.Ephemeral
+                }).catch(() => { });
+            }
+
+            return true;
+        }
+
+        if (id.startsWith("sugestao_responder_")) {
+            const autorId = id.split("_")[2];
+
+            const modal = new ModalBuilder()
+                .setCustomId(`sugestao_modal_${autorId}`)
+                .setTitle("Responder à sugestão")
+                .addComponents(
+                    new ActionRowBuilder().addComponents(
+                        new TextInputBuilder()
+                            .setCustomId("resposta")
+                            .setLabel("Sua resposta (vai por DM para quem sugeriu)")
+                            .setStyle(TextInputStyle.Paragraph)
+                            .setRequired(true)
+                            .setMaxLength(1000)
+                    )
+                );
+
+            await interaction.showModal(modal);
+
+            return true;
+        }
+
+        return true;
+    }
+
+    // ----- resposta enviada pelo modal -----
+    if (interaction.isModalSubmit() && id.startsWith("sugestao_modal_")) {
+        const autorId = id.split("_")[2];
+        const resposta = interaction.fields.getTextInputValue("resposta").trim();
+
+        if (!resposta) {
+            await interaction.reply({
+                content: `${EMOJIS.erro} Escreva a resposta.`,
+                flags: MessageFlags.Ephemeral
+            });
+
+            return true;
+        }
+
+        const original = interaction.message?.embeds?.[0];
+        const textoOriginal = String(original?.description || "").slice(0, 1000);
+
+        let autor = null;
+
+        try {
+            autor = await interaction.client.users.fetch(autorId);
+
+            await autor.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(COR)
+                        .setTitle(`${EMOJIS.sugestao} Resposta à sua sugestão`)
+                        .setDescription(resposta)
+                        .addFields({
+                            name: "Sua sugestão",
+                            value: textoOriginal || "—"
+                        })
+                        .setFooter({ text: nomeBot() })
+                ]
+            });
+        } catch {
+            await interaction.reply({
+                content: `${EMOJIS.erro} Não consegui mandar a resposta: ${autor ? `**${autor.username}**` : "essa pessoa"} está com as DMs fechadas (ou não divide servidor com o bot).`,
+                flags: MessageFlags.Ephemeral
+            }).catch(() => { });
+
+            return true;
+        }
+
+        // Atualiza o embed da DM do dono: guarda a resposta e marca como lida
+        if (interaction.isFromMessage() && original) {
+            const embed = EmbedBuilder.from(original);
+            const agora = Math.floor(Date.now() / 1000);
+            let estado = estadoDoEmbed(original);
+
+            if (estado === "nova") {
+                estado = "lida";
+                definirCampo(embed, CAMPO_STATUS, `${STATUS.lida} em <t:${agora}:f>`);
+                embed.setColor(COR_LIDA);
+            }
+
+            definirCampo(embed, CAMPO_RESPOSTA, `${resposta.slice(0, 900)}\n*(enviada <t:${agora}:R>)*`);
+
+            await interaction.update({
+                embeds: [embed],
+                components: criarBotoes(autorId, estado)
+            });
+        } else {
+            await interaction.reply({
+                content: `${EMOJIS.sucesso} Resposta enviada.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        return true;
+    }
+
+    return true;
+}
+
+// =====================================================
 // 💡 COMANDO
 // =====================================================
 
@@ -207,6 +486,7 @@ module.exports = {
 
     pegarDono,
     enviarSugestao,
+    tratarInteracao,
 
     async execute(interaction) {
         try {
