@@ -2963,6 +2963,36 @@ client.on("messageReactionAdd", async (reaction, user) => {
 });
 
 // =====================================================
+// 💡 SUGESTÕES - BOTÕES NA DM DO DONO
+// =====================================================
+
+client.on("interactionCreate", async interaction => {
+    try {
+        if (
+            (interaction.isButton() || interaction.isModalSubmit()) &&
+            interaction.customId.startsWith("sugestao_")
+        ) {
+            const comando = client.commands.get("sugestao");
+
+            if (comando && typeof comando.tratarInteracao === "function") {
+                await comando.tratarInteracao(interaction);
+            }
+        }
+    } catch (erro) {
+        console.error("❌ Erro nos botões da sugestão:", erro);
+
+        try {
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: "❌ Não foi possível concluir essa ação.",
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        } catch { }
+    }
+});
+
+// =====================================================
 // 🎭 REACTION ROLE - PAINEL
 // =====================================================
 
